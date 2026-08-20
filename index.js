@@ -4,19 +4,9 @@ const http = require("http");
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const PORT = process.env.PORT || 3000;
 
-// =====================================================
-// PulseGroupManager
-// =====================================================
-
-// اطلاعات موقت گروه‌ها
-const groups = new Map();
-
-// پنل‌های باز شده
-const panels = new Map();
-
-// =====================================================
+// ==================================================
 // Render Web Server
-// =====================================================
+// ==================================================
 
 http.createServer((req, res) => {
   res.writeHead(200, {
@@ -28,9 +18,9 @@ http.createServer((req, res) => {
   console.log(`Web server running on port ${PORT}`);
 });
 
-// =====================================================
+// ==================================================
 // متن دکمه‌ها
-// =====================================================
+// ==================================================
 
 const B = {
   panel: "『𓆩 پنل مدیریت 𓆪』",
@@ -45,283 +35,268 @@ const B = {
   rules: "『𓆩 قوانین گروه 𓆪』",
   stats: "『𓆩 آمار گروه 𓆪』",
 
-  admins: "『𓆩 دسترسی مدیران 𓆪』",
-
   back: "『𓆩 بازگشت 𓆪』"
 };
 
-// =====================================================
-// دریافت تنظیمات گروه
-// =====================================================
+// ==================================================
+// اطلاعات موقت گروه‌ها
+// ==================================================
 
-function getGroup(chatId) {
-  if (!groups.has(chatId)) {
-    groups.set(chatId, {
-      owners: new Set(),
+const groupData = new Map();
 
-      admins: new Map(),
-
-      warns: new Map(),
-
-      locks: {
-        links: false,
-        files: false,
-        media: false,
-        gif: false,
-        sticker: false
-      },
-
-      settings: {
-        welcome: false,
-        goodbye: false,
-        antiSpam: false,
-        filterWords: false,
-        autoDelete: false
-      }
+function getGroupData(chatId) {
+  if (!groupData.has(chatId)) {
+    groupData.set(chatId, {
+      panelOwner: null,
+      fakeOwners: new Set(),
+      warns: new Map()
     });
   }
 
-  return groups.get(chatId);
+  return groupData.get(chatId);
 }
 
-// =====================================================
-// تشخیص چت گروه
-// =====================================================
+// ==================================================
+// ابزارهای کمکی
+// ==================================================
 
 function isGroup(ctx) {
   return (
     ctx.chat &&
-    ["group", "supergroup"].includes(ctx.chat.type)
+    (ctx.chat.type === "group" || ctx.chat.type === "supergroup")
   );
 }
 
-// =====================================================
-// اطلاعات عضو
-// =====================================================
+function getTargetUser(ctx) {
+  if (
+    ctx.message &&
+    ctx.message.reply_to_message &&
+    ctx.message.reply_to_message.from
+  ) {
+    return ctx.message.reply_to_message.from;
+  }
 
-async function getMember(ctx, userId) {
+  return null;
+}
+
+function getUserName(user) {
+  if (!user) return "کاربر";
+
+  if (user.username) {
+    return `@${user.username}`;
+  }
+
+  return (
+    [user.first_name, user.last_name]
+      .filter(Boolean)
+      .join(" ") || "کاربر"
+  );
+}
+
+function normalizeText(text) {
+  return String(text || "")
+    .trim()
+    .replace(/\u200c/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+function isAdminRole(role) {
+  return role === "creator" || role === "administrator";
+}
+
+async function getMemberRole(ctx, userId) {
+  if (!isGroup(ctx)) return "unknown";
+
   try {
-    return await ctx.telegram.getChatMember(
+    const member = await ctx.telegram.getChatMember(
       ctx.chat.id,
       userId
     );
+
+    return member.status;
   } catch (err) {
-    return null;
+    console.error("getChatMember error:", err.message);
+    return "unknown";
   }
 }
-
-// =====================================================
-// مالک واقعی گروه
-// =====================================================
-
-async function isRealOwner(ctx, userId) {
-  if (!isGroup(ctx)) return false;
-
-  const member = await getMember(ctx, userId);
-
-  return member && member.status === "creator";
-}
-
-// =====================================================
-// ادمین گروه
-// =====================================================
 
 async function isAdmin(ctx, userId) {
-  if (!isGroup(ctx)) return false;
-
-  const member = await getMember(ctx, userId);
-
-  return (
-    member &&
-    ["creator", "administrator"].includes(member.status)
-  );
+  const role = await getMemberRole(ctx, userId);
+  return isAdminRole(role);
 }
 
-// =====================================================
-// مالک ربات
-// =====================================================
-
-async function isBotOwner(ctx, userId) {
-  const group = getGroup(ctx.chat.id);
-
-  if (await isRealOwner(ctx, userId)) {
-    return true;
-  }
-
-  return group.owners.has(userId);
+async function isOwner(ctx, userId) {
+  const role = await getMemberRole(ctx, userId);
+  return role === "creator";
 }
 
-// =====================================================
-// دسترسی مدیر
-// =====================================================
+// ==================================================
+// بررسی دسترسی برای مدیریت کاربران
+// ==================================================
 
-function getAdminPermissions(ctx, userId) {
-  const group = getGroup(ctx.chat.id);
-
-  return (
-    group.admins.get(userId) || {
-      ban: false,
-      mute: false,
-      warn: false,
-      locks: false,
-      clean: false,
-      rules: false,
-      settings: false,
-      panel: false
-    }
-  );
-}
-
-// =====================================================
-// آیا مدیر اجازه دارد؟
-// =====================================================
-
-async function hasPermission(ctx, userId, permission) {
-  if (await isRealOwner(ctx, userId)) {
-    return true;
-  }
-
-  if (getGroup(ctx.chat.id).owners.has(userId)) {
-    return true;
-  }
-
-  if (!(await isAdmin(ctx, userId))) {
-    return false;
-  }
-
-  const permissions = getAdminPermissions(ctx, userId);
-
-  return permissions[permission] === true;
-}
-
-// =====================================================
-// پیام عدم دسترسی
-// =====================================================
-
-async function noAccess(ctx) {
-  return ctx.reply(
-    "『𓆩 دسترسی غیرمجاز 𓆪』\n\n" +
-    "⛔ شما اجازه استفاده از این بخش را ندارید."
-  );
-}
-
-// =====================================================
-// کنترل مالک پنل
-// =====================================================
-
-async function checkPanelOwner(ctx, panelId) {
-  const ownerId = panels.get(panelId);
-
-  if (!ownerId) {
-    return true;
-  }
-
-  if (ownerId === ctx.from.id) {
-    return true;
-  }
-
-  await ctx.answerCbQuery(
-    "⛔ این پنل برای مدیر دیگری باز شده است.",
-    { show_alert: true }
-  );
-
-  return false;
-}
-
-// =====================================================
-// ساخت پنل اختصاصی
-// =====================================================
-
-function createPanelId(chatId, messageId) {
-  return `${chatId}:${messageId}`;
-}
-
-// =====================================================
-// ارسال پنل
-// =====================================================
-
-async function sendPanel(ctx) {
+async function canManageTarget(ctx, targetId) {
   if (!isGroup(ctx)) {
-    return ctx.reply(
-      "『𓆩 پنل مدیریت 𓆪』\n\n" +
-      "پنل مدیریت را می‌توانید داخل گروه استفاده کنید."
-    );
+    return {
+      allowed: false,
+      message: "این دستور فقط داخل گروه قابل استفاده است."
+    };
   }
 
-  if (!(await hasPermission(ctx, ctx.from.id, "panel"))) {
-    return noAccess(ctx);
+  const executorId = ctx.from.id;
+
+  const executorRole = await getMemberRole(ctx, executorId);
+  const targetRole = await getMemberRole(ctx, targetId);
+
+  // عضو عادی نمی‌تواند مدیریت کند
+  if (!isAdminRole(executorRole)) {
+    return {
+      allowed: false,
+      message:
+        "『𓆩 دسترسی غیرمجاز 𓆪』\n\n" +
+        "شما دسترسی مدیریتی برای انجام این عملیات را ندارید. ⚠️"
+    };
   }
 
-  const message = await ctx.reply(
-    "『𓆩 پنل مدیریت گروه 𓆪』\n\n" +
-    "✯ این پنل مخصوص شماست.\n" +
-    "از بخش موردنظر استفاده کنید.",
+  // مدیر عادی نمی‌تواند مالک اصلی را مدیریت کند
+  if (targetRole === "creator") {
+    return {
+      allowed: false,
+      message:
+        "『𓆩 دسترسی غیرمجاز 𓆪』\n\n" +
+        "امکان مدیریت مالک اصلی گروه وجود ندارد. 👑"
+    };
+  }
+
+  // مدیر معمولی نمی‌تواند مدیر دیگر را مدیریت کند
+  if (
+    targetRole === "administrator" &&
+    executorRole !== "creator"
+  ) {
+    return {
+      allowed: false,
+      message:
+        "『𓆩 دسترسی غیرمجاز 𓆪』\n\n" +
+        "شما اجازه مدیریت مدیران دیگر را ندارید. ⚠️"
+    };
+  }
+
+  return {
+    allowed: true
+  };
+}
+
+// ==================================================
+// صفحه شروع
+// ==================================================
+
+bot.start(async (ctx) => {
+  await ctx.reply(
+    "سلام 👋\n\n" +
+    "به PulseGroupManager خوش آمدید.\n\n" +
+    "برای مدیریت گروه، راهنما یا تنظیمات یکی را انتخاب کنید:",
     Markup.inlineKeyboard([
       [
-        Markup.button.callback(B.users, "panel_users")
+        Markup.button.callback(B.panel, "panel")
       ],
       [
-        Markup.button.callback(B.locks, "panel_locks")
-      ],
-      [
-        Markup.button.callback(B.messages, "panel_messages")
-      ],
-      [
-        Markup.button.callback(B.warns, "panel_warn")
-      ],
-      [
-        Markup.button.callback(B.welcome, "panel_welcome")
-      ],
-      [
-        Markup.button.callback(B.rules, "panel_rules")
-      ],
-      [
-        Markup.button.callback(B.stats, "panel_stats")
-      ],
-      [
+        Markup.button.callback(B.help, "help"),
         Markup.button.callback(B.settings, "settings")
       ]
     ])
   );
-
-  const panelId = createPanelId(
-    ctx.chat.id,
-    message.message_id
-  );
-
-  panels.set(panelId, ctx.from.id);
-}
-
-// =====================================================
-// پنل فارسی
-// =====================================================
-
-bot.hears(/^پنل$/i, async (ctx) => {
-  await sendPanel(ctx);
 });
+
+// ==================================================
+// دستورات فارسی
+// ==================================================
+
+// پنل
+bot.hears(/^پنل$/i, async (ctx) => {
+  await showPanel(ctx);
+});
+
+// راهنما
+bot.hears(/^راهنما$/i, async (ctx) => {
+  await showHelp(ctx);
+});
+
+// تنظیمات
+bot.hears(/^تنظیمات$/i, async (ctx) => {
+  await showSettings(ctx);
+});
+
+// ==================================================
+// دستورات انگلیسی
+// ==================================================
 
 bot.command("panel", async (ctx) => {
-  await sendPanel(ctx);
+  await showPanel(ctx);
 });
 
-// =====================================================
-// راهنما
-// =====================================================
+bot.command("help", async (ctx) => {
+  await showHelp(ctx);
+});
 
-async function sendHelp(ctx) {
-  const message = await ctx.reply(
+bot.command("settings", async (ctx) => {
+  await showSettings(ctx);
+});
+
+// ==================================================
+// پنل اصلی
+// ==================================================
+
+async function showPanel(ctx) {
+  if (isGroup(ctx)) {
+    const data = getGroupData(ctx.chat.id);
+
+    // اگر پنل قبلاً توسط مدیر دیگری باز شده
+    if (
+      data.panelOwner &&
+      data.panelOwner !== ctx.from.id
+    ) {
+      return ctx.reply(
+        "『𓆩 پنل در اختیار مدیر دیگری است 𓆪』\n\n" +
+        "این پنل توسط مدیر دیگری باز شده و شما اجازه استفاده از آن را ندارید. ⚠️"
+      );
+    }
+
+    data.panelOwner = ctx.from.id;
+  }
+
+  return ctx.reply(
+    "『𓆩 پنل مدیریت گروه 𓆪』\n\n" +
+    "بخش موردنظر را انتخاب کنید:",
+    Markup.inlineKeyboard([
+      [Markup.button.callback(B.users, "panel_users")],
+      [Markup.button.callback(B.locks, "panel_locks")],
+      [Markup.button.callback(B.messages, "panel_messages")],
+      [Markup.button.callback(B.warns, "panel_warn")],
+      [Markup.button.callback(B.welcome, "panel_welcome")],
+      [Markup.button.callback(B.rules, "panel_rules")],
+      [Markup.button.callback(B.stats, "panel_stats")],
+      [Markup.button.callback(B.settings, "settings")]
+    ])
+  );
+}
+
+// ==================================================
+// راهنمای اصلی
+// ==================================================
+
+async function showHelp(ctx) {
+  return ctx.reply(
     "『𓆩 راهنمای PulseGroupManager 𓆪』\n\n" +
     "بخش موردنظر را انتخاب کنید:",
     Markup.inlineKeyboard([
       [
         Markup.button.callback(
-          "『𓆩 راهنمای مدیریت کاربران 𓆪』",
+          "『𓆩 راهنمای کاربران 𓆪』",
           "help_users"
         )
       ],
       [
         Markup.button.callback(
-          "『𓆩 راهنمای قفل‌ها 𓆩』",
+          "『𓆩 راهنمای قفل‌ها 𓆪』",
           "help_locks"
         )
       ],
@@ -351,37 +326,16 @@ async function sendHelp(ctx) {
       ]
     ])
   );
-
-  const panelId = createPanelId(
-    ctx.chat.id,
-    message.message_id
-  );
-
-  panels.set(panelId, ctx.from.id);
 }
 
-bot.hears(/^راهنما$/i, async (ctx) => {
-  await sendHelp(ctx);
-});
+// ==================================================
+// تنظیمات اصلی
+// ==================================================
 
-bot.command("help", async (ctx) => {
-  await sendHelp(ctx);
-});
-
-// =====================================================
-// تنظیمات
-// =====================================================
-
-async function sendSettings(ctx) {
-  if (isGroup(ctx)) {
-    if (!(await hasPermission(ctx, ctx.from.id, "settings"))) {
-      return noAccess(ctx);
-    }
-  }
-
-  const message = await ctx.reply(
+async function showSettings(ctx) {
+  return ctx.reply(
     "『𓆩 تنظیمات گروه 𓆪』\n\n" +
-    "بخش تنظیمات را انتخاب کنید:",
+    "یک بخش را انتخاب کنید:",
     Markup.inlineKeyboard([
       [
         Markup.button.callback(
@@ -421,182 +375,135 @@ async function sendSettings(ctx) {
       ],
       [
         Markup.button.callback(
-          B.admins,
+          "『𓆩 دسترسی مدیران 𓆪』",
           "settings_admins"
         )
       ]
     ])
   );
-
-  const panelId = createPanelId(
-    ctx.chat.id,
-    message.message_id
-  );
-
-  panels.set(panelId, ctx.from.id);
 }
 
-bot.hears(/^تنظیمات$/i, async (ctx) => {
-  await sendSettings(ctx);
+// ==================================================
+// مدیریت کاربران
+// ==================================================
+
+bot.action("panel_users", async (ctx) => {
+  await ctx.answerCbQuery();
+
+  await ctx.editMessageText(
+    "『𓆩 مدیریت کاربران 𓆪』\n\n" +
+    "عملیات موردنظر را انتخاب کنید:",
+    Markup.inlineKeyboard([
+      [
+        Markup.button.callback("『𓆩 بن 𓆪』", "user_ban")
+      ],
+      [
+        Markup.button.callback("『𓆩 میوت 𓆪", "user_mute")
+      ],
+      [
+        Markup.button.callback("『𓆩 آن‌بن 𓆪』", "user_unban")
+      ],
+      [
+        Markup.button.callback(
+          "『𓆩 آن‌میوت 𓆪』",
+          "user_unmute"
+        )
+      ],
+      [
+        Markup.button.callback(
+          "『𓆩 اخطار 𓆪",
+          "user_warn"
+        )
+      ],
+      [
+        Markup.button.callback(
+          "『𓆩 اطلاعات کاربر 𓆪』",
+          "user_info"
+        )
+      ],
+      [
+        Markup.button.callback(B.back, "panel")
+      ]
+    ])
+  );
 });
 
-bot.command("settings", async (ctx) => {
-  await sendSettings(ctx);
-});
+// ==================================================
+// عملیات واقعی مدیریت کاربر با ریپلای
+// ==================================================
 
-// =====================================================
-// گرفتن کاربر هدف
-// =====================================================
-
-function getTargetId(ctx) {
-  if (ctx.message && ctx.message.reply_to_message) {
-    return ctx.message.reply_to_message.from.id;
-  }
-
-  const text = ctx.message?.text || "";
-
-  const parts = text.trim().split(/\s+/);
-
-  if (parts.length >= 2) {
-    const id = Number(parts[1]);
-
-    if (Number.isInteger(id)) {
-      return id;
-    }
-  }
-
-  return null;
-}
-
-// =====================================================
-// نام کاربر
-// =====================================================
-
-function getUserName(user) {
-  if (!user) return "کاربر";
-
-  return (
-    user.first_name ||
-    user.username ||
-    `کاربر ${user.id}`
-  );
-}
-
-// =====================================================
-// بررسی دسترسی ربات
-// =====================================================
-
-async function botHasPermission(ctx, permission) {
-  try {
-    const me = await ctx.telegram.getMe();
-
-    const member = await getMember(ctx, me.id);
-
-    if (!member || member.status !== "administrator") {
-      return false;
-    }
-
-    const required = {
-      ban: member.can_restrict_members,
-      delete: member.can_delete_messages
-    };
-
-    return required[permission] === true;
-  } catch (err) {
-    return false;
-  }
-}
-
-// =====================================================
 // بن
-// =====================================================
-
-async function banUser(ctx) {
+bot.hears(/^بن$/i, async (ctx) => {
   if (!isGroup(ctx)) return;
 
-  if (!(await hasPermission(ctx, ctx.from.id, "ban"))) {
-    return noAccess(ctx);
-  }
+  const target = getTargetUser(ctx);
 
-  const targetId = getTargetId(ctx);
-
-  if (!targetId) {
+  if (!target) {
     return ctx.reply(
-      "『𓆩 بن کردن 𓆪』\n\n" +
-      "برای بن کردن، روی پیام کاربر ریپلای کنید یا بنویسید:\n\n" +
-      "بن 123456789"
+      "『𓆩 نحوه استفاده 𓆪』\n\n" +
+      "برای بن کردن، روی پیام کاربر ریپلای کنید و بنویسید:\n\n" +
+      "بن"
     );
   }
 
-  if (targetId === ctx.from.id) {
-    return ctx.reply("⛔ نمی‌توانید خودتان را بن کنید.");
-  }
+  const permission = await canManageTarget(
+    ctx,
+    target.id
+  );
 
-  if (await isRealOwner(ctx, targetId)) {
-    return ctx.reply("⛔ مالک اصلی گروه قابل بن کردن نیست.");
-  }
-
-  if (!(await botHasPermission(ctx, "ban"))) {
-    return ctx.reply(
-      "⛔ ربات مجوز بن کردن کاربران را ندارد."
-    );
+  if (!permission.allowed) {
+    return ctx.reply(permission.message);
   }
 
   try {
     await ctx.telegram.banChatMember(
       ctx.chat.id,
-      targetId
+      target.id
     );
 
     return ctx.reply(
-      "『𓆩 بن کاربر 𓆪』\n\n" +
-      "✯ کاربر با موفقیت بن شد.\n" +
-      `🆔 ID: ${targetId}`
+      "『𓆩 کاربر بن شد 𓆪』\n\n" +
+      `👤 ${getUserName(target)}\n` +
+      `🆔 ${target.id}\n\n` +
+      `👮 توسط: ${getUserName(ctx.from)}`
     );
   } catch (err) {
-    console.error(err);
+    console.error("Ban error:", err.message);
 
     return ctx.reply(
-      "⛔ انجام عملیات بن ناموفق بود."
+      "『𓆩 خطا 𓆪\n\n" +
+      "ربات نتوانست این کاربر را بن کند.\n" +
+      "دسترسی‌های مدیریتی ربات را بررسی کنید."
     );
   }
-}
+});
 
-// =====================================================
 // میوت
-// =====================================================
-
-async function muteUser(ctx) {
+bot.hears(/^میوت$/i, async (ctx) => {
   if (!isGroup(ctx)) return;
 
-  if (!(await hasPermission(ctx, ctx.from.id, "mute"))) {
-    return noAccess(ctx);
-  }
+  const target = getTargetUser(ctx);
 
-  const targetId = getTargetId(ctx);
-
-  if (!targetId) {
+  if (!target) {
     return ctx.reply(
-      "『𓆩 میوت کردن 𓆪』\n\n" +
-      "روی پیام کاربر ریپلای کنید یا بنویسید:\n\n" +
-      "میوت 123456789"
+      "برای میوت کردن، روی پیام کاربر ریپلای کنید و بنویسید:\n\n" +
+      "میوت"
     );
   }
 
-  if (await isRealOwner(ctx, targetId)) {
-    return ctx.reply("⛔ مالک اصلی گروه قابل میوت نیست.");
-  }
+  const permission = await canManageTarget(
+    ctx,
+    target.id
+  );
 
-  if (!(await botHasPermission(ctx, "ban"))) {
-    return ctx.reply(
-      "⛔ ربات مجوز محدود کردن کاربران را ندارد."
-    );
+  if (!permission.allowed) {
+    return ctx.reply(permission.message);
   }
 
   try {
     await ctx.telegram.restrictChatMember(
       ctx.chat.id,
-      targetId,
+      target.id,
       {
         permissions: {
           can_send_messages: false,
@@ -617,84 +524,93 @@ async function muteUser(ctx) {
     );
 
     return ctx.reply(
-      "『𓆩 میوت کاربر 𓆪』\n\n" +
-      "🔇 کاربر میوت شد."
+      "『𓆩 کاربر میوت شد 𓆪』\n\n" +
+      `👤 ${getUserName(target)}\n` +
+      `🆔 ${target.id}\n\n` +
+      `👮 توسط: ${getUserName(ctx.from)}`
     );
   } catch (err) {
-    console.error(err);
+    console.error("Mute error:", err.message);
 
     return ctx.reply(
-      "⛔ انجام عملیات میوت ناموفق بود."
+      "『𓆩 خطا 𓆪』\n\n" +
+      "ربات نتوانست کاربر را میوت کند."
     );
   }
-}
+});
 
-// =====================================================
 // آن‌بن
-// =====================================================
-
-async function unbanUser(ctx) {
+bot.hears(/^آن‌بن$/i, async (ctx) => {
   if (!isGroup(ctx)) return;
 
-  if (!(await hasPermission(ctx, ctx.from.id, "ban"))) {
-    return noAccess(ctx);
+  const target = getTargetUser(ctx);
+
+  if (!target) {
+    return ctx.reply(
+      "برای آن‌بن کردن، روی پیام کاربر ریپلای کنید و بنویسید:\n\n" +
+      "آن‌بن"
+    );
   }
 
-  const targetId = getTargetId(ctx);
+  const permission = await canManageTarget(
+    ctx,
+    target.id
+  );
 
-  if (!targetId) {
-    return ctx.reply(
-      "روی پیام کاربر ریپلای کنید یا بنویسید:\n\n" +
-      "آن‌بن 123456789"
-    );
+  if (!permission.allowed) {
+    return ctx.reply(permission.message);
   }
 
   try {
     await ctx.telegram.unbanChatMember(
       ctx.chat.id,
-      targetId,
+      target.id,
       {
         only_if_banned: false
       }
     );
 
     return ctx.reply(
-      "『𓆩 آن‌بن کاربر 𓆪』\n\n" +
-      "✯ محدودیت بن کاربر برداشته شد."
+      "『𓆩 بن کاربر برداشته شد 𓆪』\n\n" +
+      `👤 ${getUserName(target)}\n` +
+      `🆔 ${target.id}`
     );
   } catch (err) {
-    console.error(err);
+    console.error("Unban error:", err.message);
 
     return ctx.reply(
-      "⛔ انجام آن‌بن ناموفق بود."
+      "『𓆩 خطا 𓆪』\n\n" +
+      "ربات نتوانست بن کاربر را بردارد."
     );
   }
-}
+});
 
-// =====================================================
 // آن‌میوت
-// =====================================================
-
-async function unmuteUser(ctx) {
+bot.hears(/^آن‌میوت$/i, async (ctx) => {
   if (!isGroup(ctx)) return;
 
-  if (!(await hasPermission(ctx, ctx.from.id, "mute"))) {
-    return noAccess(ctx);
+  const target = getTargetUser(ctx);
+
+  if (!target) {
+    return ctx.reply(
+      "برای آن‌میوت کردن، روی پیام کاربر ریپلای کنید و بنویسید:\n\n" +
+      "آن‌میوت"
+    );
   }
 
-  const targetId = getTargetId(ctx);
+  const permission = await canManageTarget(
+    ctx,
+    target.id
+  );
 
-  if (!targetId) {
-    return ctx.reply(
-      "روی پیام کاربر ریپلای کنید یا بنویسید:\n\n" +
-      "آن‌میوت 123456789"
-    );
+  if (!permission.allowed) {
+    return ctx.reply(permission.message);
   }
 
   try {
     await ctx.telegram.restrictChatMember(
       ctx.chat.id,
-      targetId,
+      target.id,
       {
         permissions: {
           can_send_messages: true,
@@ -707,210 +623,242 @@ async function unmuteUser(ctx) {
           can_send_polls: true,
           can_send_other_messages: true,
           can_add_web_page_previews: true,
-          can_change_info: false,
-          can_invite_users: true,
-          can_pin_messages: false
+          can_invite_users: true
         }
       }
     );
 
     return ctx.reply(
-      "『𓆩 آن‌میوت کاربر 𓆪』\n\n" +
-      "✯ محدودیت ارسال پیام برداشته شد."
+      "『𓆩 میوت کاربر برداشته شد 𓆪』\n\n" +
+      `👤 ${getUserName(target)}\n` +
+      `🆔 ${target.id}`
     );
   } catch (err) {
-    console.error(err);
+    console.error("Unmute error:", err.message);
 
     return ctx.reply(
-      "⛔ انجام آن‌میوت ناموفق بود."
+      "『𓆩 خطا 𓆪』\n\n" +
+      "ربات نتوانست میوت کاربر را بردارد."
     );
   }
-}
+});
 
-// =====================================================
+// ==================================================
+// اخطار با ریپلای
+// ==================================================
+
+bot.hears(/^اخطار$/i, async (ctx) => {
+  if (!isGroup(ctx)) return;
+
+  const target = getTargetUser(ctx);
+
+  if (!target) {
+    return ctx.reply(
+      "برای اخطار دادن، روی پیام کاربر ریپلای کنید و بنویسید:\n\n" +
+      "اخطار"
+    );
+  }
+
+  const permission = await canManageTarget(
+    ctx,
+    target.id
+  );
+
+  if (!permission.allowed) {
+    return ctx.reply(permission.message);
+  }
+
+  const data = getGroupData(ctx.chat.id);
+
+  const oldWarn =
+    data.warns.get(target.id) || 0;
+
+  const newWarn = oldWarn + 1;
+
+  data.warns.set(target.id, newWarn);
+
+  return ctx.reply(
+    "『𓆩 اخطار ثبت شد 𓆪』\n\n" +
+    `👤 ${getUserName(target)}\n` +
+    `🆔 ${target.id}\n\n` +
+    `⚠️ تعداد اخطار: ${newWarn}\n` +
+    `👮 توسط: ${getUserName(ctx.from)}`
+  );
+});
+
+// ==================================================
+// اطلاعات کاربر با ریپلای
+// ==================================================
+
+bot.hears(/^اطلاعات$/i, async (ctx) => {
+  if (!isGroup(ctx)) return;
+
+  const target = getTargetUser(ctx);
+
+  if (!target) {
+    return ctx.reply(
+      "برای دیدن اطلاعات، روی پیام کاربر ریپلای کنید و بنویسید:\n\n" +
+      "اطلاعات"
+    );
+  }
+
+  const role = await getMemberRole(
+    ctx,
+    target.id
+  );
+
+  const roleText = {
+    creator: "👑 مالک اصلی",
+    administrator: "🛡 مدیر",
+    member: "👤 عضو",
+    restricted: "🔇 محدودشده",
+    left: "🚪 خارج‌شده",
+    kicked: "🚫 اخراج‌شده"
+  }[role] || "❓ نامشخص";
+
+  return ctx.reply(
+    "『𓆩 اطلاعات کاربر 𓆪』\n\n" +
+    `👤 نام: ${getUserName(target)}\n` +
+    `🆔 آیدی: ${target.id}\n` +
+    `🔰 وضعیت: ${roleText}`
+  );
+});
+
+// ==================================================
+// قفل‌ها
+// ==================================================
+
+bot.action("panel_locks", async (ctx) => {
+  await ctx.answerCbQuery();
+
+  await ctx.editMessageText(
+    "『𓆩 قفل‌های گروه 𓆪』\n\n" +
+    "نوع محتوای موردنظر را انتخاب کنید:",
+    Markup.inlineKeyboard([
+      [Markup.button.callback("『𓆩 لینک 𓆪』", "lock_links")],
+      [Markup.button.callback("『𓆩 فایل 𓆪』", "lock_files")],
+      [Markup.button.callback("『𓆩 رسانه 𓆪』", "lock_media")],
+      [Markup.button.callback("『𓆩 گیف 𓆪", "lock_gif")],
+      [Markup.button.callback("『𓆩 استیکر 𓆪", "lock_sticker")],
+      [Markup.button.callback("『𓆩 نظرسنجی 𓆪", "lock_poll")],
+      [Markup.button.callback(B.back, "panel")]
+    ])
+  );
+});
+
+// ==================================================
+// مدیریت پیام‌ها
+// ==================================================
+
+bot.action("panel_messages", async (ctx) => {
+  await ctx.answerCbQuery();
+
+  await ctx.editMessageText(
+    "『𓆩 مدیریت پیام‌ها 𓆪』\n\n" +
+    "بخش موردنظر را انتخاب کنید:",
+    Markup.inlineKeyboard([
+      [Markup.button.callback("『𓆩 فیلتر کلمات 𓆪』", "filter_words")],
+      [Markup.button.callback("『𓆩 پاکسازی 𓆪", "message_clean")],
+      [Markup.button.callback("『𓆩 ضداسپم 𓆪", "anti_spam")],
+      [Markup.button.callback("『𓆩 حذف خودکار 𓆪", "auto_delete")],
+      [Markup.button.callback(B.back, "panel")]
+    ])
+  );
+});
+
+// ==================================================
 // اخطار
-// =====================================================
+// ==================================================
 
-async function warnUser(ctx) {
-  if (!isGroup(ctx)) return;
+bot.action("panel_warn", async (ctx) => {
+  await ctx.answerCbQuery();
 
-  if (!(await hasPermission(ctx, ctx.from.id, "warn"))) {
-    return noAccess(ctx);
-  }
-
-  const targetId = getTargetId(ctx);
-
-  if (!targetId) {
-    return ctx.reply(
-      "روی پیام کاربر ریپلای کنید یا بنویسید:\n\n" +
-      "اخطار 123456789"
-    );
-  }
-
-  const group = getGroup(ctx.chat.id);
-
-  const count =
-    (group.warns.get(targetId) || 0) + 1;
-
-  group.warns.set(targetId, count);
-
-  return ctx.reply(
-    "『𓆩 اخطار کاربر 𓆪』\n\n" +
-    `⚠️ تعداد اخطار: ${count}\n` +
-    `🆔 ID: ${targetId}`
-  );
-}
-
-// =====================================================
-// دستورات مدیریت کاربران
-// =====================================================
-
-bot.hears(/^بن(?:\s+\d+)?$/i, banUser);
-bot.hears(/^میوت(?:\s+\d+)?$/i, muteUser);
-bot.hears(/^(?:آن‌بن|آن-بن|انبن)(?:\s+\d+)?$/i, unbanUser);
-bot.hears(/^(?:آن‌میوت|آن-میوت|انمیوت)(?:\s+\d+)?$/i, unmuteUser);
-bot.hears(/^اخطار(?:\s+\d+)?$/i, warnUser);
-
-// =====================================================
-// مالک+
-// =====================================================
-
-bot.hears(/^مالک\+$/i, async (ctx) => {
-  if (!isGroup(ctx)) return;
-
-  if (!(await isRealOwner(ctx, ctx.from.id))) {
-    return noAccess(ctx);
-  }
-
-  if (!ctx.message.reply_to_message) {
-    return ctx.reply(
-      "⛔ برای استفاده از مالک+ باید روی پیام کاربر ریپلای کنید."
-    );
-  }
-
-  const target = ctx.message.reply_to_message.from;
-
-  if (target.is_bot) {
-    return ctx.reply("⛔ نمی‌توانید ربات را مالک ربات کنید.");
-  }
-
-  const group = getGroup(ctx.chat.id);
-
-  group.owners.add(target.id);
-
-  return ctx.reply(
-    "『𓆩 مالکیت گروه 𓆪』\n\n" +
-    "👤 کاربر به فهرست مالکین ربات اضافه شد. 👑\n\n" +
-    `🆔 ID: ${target.id}`
+  await ctx.editMessageText(
+    "『𓆩 سیستم اخطار 𓆪』\n\n" +
+    "سیستم اخطار گروه:",
+    Markup.inlineKeyboard([
+      [Markup.button.callback("『𓆩 حد اخطار 𓆪", "warn_limit")],
+      [Markup.button.callback("『𓆩 مجازات اخطار 𓆪", "warn_action")],
+      [Markup.button.callback("『𓆩 لیست اخطارها 𓆪", "warn_list")],
+      [Markup.button.callback("『𓆩 پاک کردن اخطار 𓆪", "warn_clear")],
+      [Markup.button.callback(B.back, "panel")]
+    ])
   );
 });
 
-// =====================================================
-// مالک-
-// =====================================================
+// ==================================================
+// ورود و خروج
+// ==================================================
 
-bot.hears(/^مالک-$/i, async (ctx) => {
-  if (!isGroup(ctx)) return;
+bot.action("panel_welcome", async (ctx) => {
+  await ctx.answerCbQuery();
 
-  if (!(await isRealOwner(ctx, ctx.from.id))) {
-    return noAccess(ctx);
-  }
-
-  if (!ctx.message.reply_to_message) {
-    return ctx.reply(
-      "⛔ برای استفاده از مالک- باید روی پیام کاربر ریپلای کنید."
-    );
-  }
-
-  const target = ctx.message.reply_to_message.from;
-
-  const group = getGroup(ctx.chat.id);
-
-  group.owners.delete(target.id);
-
-  return ctx.reply(
-    "『𓆩 مالکیت گروه 𓆪』\n\n" +
-    "👤 کاربر از فهرست مالکین ربات حذف شد.\n\n" +
-    `🆔 ID: ${target.id}`
+  await ctx.editMessageText(
+    "『𓆩 ورود و خروج 𓆪』\n\n" +
+    "تنظیمات ورود و خروج اعضا:",
+    Markup.inlineKeyboard([
+      [Markup.button.callback("『𓆩 خوش‌آمدگویی 𓆪", "welcome_toggle")],
+      [Markup.button.callback("『𓆩 خداحافظی 𓆪", "goodbye_toggle")],
+      [Markup.button.callback("『𓆩 متن خوش‌آمدگویی 𓆪", "welcome_text")],
+      [Markup.button.callback(B.back, "panel")]
+    ])
   );
 });
 
-// =====================================================
-// مدیریت مدیران
-// =====================================================
+// ==================================================
+// قوانین
+// ==================================================
 
-bot.hears(/^مدیر\+$/i, async (ctx) => {
-  if (!isGroup(ctx)) return;
+bot.action("panel_rules", async (ctx) => {
+  await ctx.answerCbQuery();
 
-  if (!(await isBotOwner(ctx, ctx.from.id))) {
-    return noAccess(ctx);
-  }
-
-  if (!ctx.message.reply_to_message) {
-    return ctx.reply(
-      "⛔ روی پیام مدیر ریپلای کنید."
-    );
-  }
-
-  const target = ctx.message.reply_to_message.from;
-
-  if (!(await isAdmin(ctx, target.id))) {
-    return ctx.reply(
-      "⛔ این کاربر مدیر گروه نیست."
-    );
-  }
-
-  const group = getGroup(ctx.chat.id);
-
-  group.admins.set(target.id, {
-    ban: false,
-    mute: false,
-    warn: false,
-    locks: false,
-    clean: false,
-    rules: false,
-    settings: false,
-    panel: true
-  });
-
-  return ctx.reply(
-    "『𓆩 مدیر ربات 𓆪』\n\n" +
-    "✯ مدیر به سیستم مدیریت ربات اضافه شد.\n\n" +
-    `🆔 ID: ${target.id}`
+  await ctx.editMessageText(
+    "『𓆩 قوانین گروه 𓆪』\n\n" +
+    "مدیریت قوانین گروه:",
+    Markup.inlineKeyboard([
+      [Markup.button.callback("『𓆩 نمایش قوانین 𓆪", "show_rules")],
+      [Markup.button.callback("『𓆩 تنظیم قوانین 𓆪", "set_rules")],
+      [Markup.button.callback(B.back, "panel")]
+    ])
   );
 });
 
-// =====================================================
-// حذف مدیر از سیستم ربات
-// =====================================================
+// ==================================================
+// آمار
+// ==================================================
 
-bot.hears(/^مدیر-$/i, async (ctx) => {
-  if (!isGroup(ctx)) return;
+bot.action("panel_stats", async (ctx) => {
+  await ctx.answerCbQuery();
 
-  if (!(await isBotOwner(ctx, ctx.from.id))) {
-    return noAccess(ctx);
-  }
+  let members = "نامشخص";
 
-  if (!ctx.message.reply_to_message) {
-    return ctx.reply(
-      "⛔ روی پیام مدیر ریپلای کنید."
-    );
-  }
+  try {
+    const count =
+      await ctx.telegram.getChatMemberCount(
+        ctx.chat.id
+      );
 
-  const target = ctx.message.reply_to_message.from;
+    members = count;
+  } catch (err) {}
 
-  const group = getGroup(ctx.chat.id);
-
-  group.admins.delete(target.id);
-
-  return ctx.reply(
-    "『𓆩 مدیر ربات 𓆪』\n\n" +
-    "✯ دسترسی مدیریتی ربات از کاربر حذف شد."
+  await ctx.editMessageText(
+    "『𓆩 آمار گروه 𓆪』\n\n" +
+    `👥 تعداد اعضا: ${members}`,
+    Markup.inlineKeyboard([
+      [Markup.button.callback(B.back, "panel")]
+    ])
   );
 });
 
-// =====================================================
-// نمایش دسترسی مدیر
-// =====================================================
+// ==================================================
+// تنظیمات کاربران
+// ==================================================
 
-bot.hears(/^دسترسی 
+bot.action("settings_users", async (ctx) => {
+  await ctx.answerCbQuery();
+
+  await ctx.editMessageText(
+    "『𓆩 تنظیمات کاربران 𓆪』\n\n" +
+    "تنظیم رفتار مدیریت کاربران:",
+    Markup.inlineKeyboard([
+      [Markup.button.callback("『𓆩 تنظیمات اخطار 𓆪", "se
