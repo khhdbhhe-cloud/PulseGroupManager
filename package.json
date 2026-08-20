@@ -1,7 +1,7 @@
 {
   "name": "pulse-group-manager",
   "version": "1.0.0",
-  "description": "Telegram group management bot",
+  "description": "Telegram Group Management Bot",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
