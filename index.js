@@ -6,7 +6,7 @@ const http = require("http");
 // =====================================================
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT || 3000;
 
 if (!BOT_TOKEN) {
   console.error("❌ BOT_TOKEN پیدا نشد!");
@@ -24,7 +24,7 @@ const server = http.createServer((req, res) => {
     "Content-Type": "text/plain; charset=utf-8"
   });
 
-  res.end("PulseGroupManager is running ✅");
+  res.end("PulseGroupManager is running!");
 });
 
 server.listen(PORT, "0.0.0.0", () => {
@@ -32,38 +32,44 @@ server.listen(PORT, "0.0.0.0", () => {
 });
 
 // =====================================================
-// PANEL STORAGE
+// DATA
 // =====================================================
 
-// هر پنل:
-// messageId -> ownerId
-const activePanels = new Map();
+const panels = new Map();
+
+function getPanel(chatId) {
+  return panels.get(String(chatId));
+}
+
+function setPanel(chatId, userId) {
+  panels.set(String(chatId), {
+    ownerId: Number(userId),
+    createdAt: Date.now()
+  });
+}
+
+function deletePanel(chatId) {
+  panels.delete(String(chatId));
+}
 
 // =====================================================
-// BASIC HELPERS
+// HELPERS
 // =====================================================
 
 function isGroup(ctx) {
   return (
     ctx.chat &&
-    (
-      ctx.chat.type === "group" ||
-      ctx.chat.type === "supergroup"
-    )
+    (ctx.chat.type === "group" ||
+      ctx.chat.type === "supergroup")
   );
 }
 
-function isAdminStatus(status) {
-  return (
-    status === "administrator" ||
-    status === "creator"
-  );
+function isPrivate(ctx) {
+  return ctx.chat && ctx.chat.type === "private";
 }
 
 function replyOptions(ctx) {
-  if (!ctx.message) {
-    return {};
-  }
+  if (!ctx.message) return {};
 
   return {
     reply_parameters: {
@@ -73,28 +79,43 @@ function replyOptions(ctx) {
   };
 }
 
+function userName(user) {
+  if (!user) return "کاربر";
+
+  if (user.username) {
+    return "@" + user.username;
+  }
+
+  return (
+    [user.first_name, user.last_name]
+      .filter(Boolean)
+      .join(" ") || "کاربر"
+  );
+}
+
+function getReplyUser(ctx) {
+  return (
+    ctx.message &&
+    ctx.message.reply_to_message &&
+    ctx.message.reply_to_message.from
+  ) || null;
+}
+
 // =====================================================
-// GET ROLE
+// ROLE
 // =====================================================
 
 async function getRole(ctx, userId) {
-
-  if (!isGroup(ctx)) {
-    return "unknown";
-  }
+  if (!isGroup(ctx)) return "unknown";
 
   try {
-
-    const member =
-      await ctx.telegram.getChatMember(
-        ctx.chat.id,
-        userId
-      );
+    const member = await ctx.telegram.getChatMember(
+      ctx.chat.id,
+      userId
+    );
 
     return member.status;
-
   } catch (error) {
-
     console.error(
       "❌ getChatMember:",
       error.message
@@ -104,43 +125,44 @@ async function getRole(ctx, userId) {
   }
 }
 
+function isAdmin(role) {
+  return (
+    role === "administrator" ||
+    role === "creator"
+  );
+}
+
 // =====================================================
 // PANEL ACCESS
 // =====================================================
 
-async function checkPanelAccess(ctx) {
-
+async function checkAdmin(ctx) {
   if (!isGroup(ctx)) {
-
     return {
       ok: false,
       text:
-        "❌ پنل مدیریت فقط داخل گروه قابل استفاده است."
+        "❌ این بخش فقط داخل گروه قابل استفاده است."
     };
   }
 
   if (!ctx.from) {
-
     return {
       ok: false,
-      text:
-        "❌ کاربر شناسایی نشد."
+      text: "❌ کاربر شناسایی نشد."
     };
   }
 
-  const role =
-    await getRole(
-      ctx,
-      ctx.from.id
-    );
+  const role = await getRole(
+    ctx,
+    ctx.from.id
+  );
 
-  if (!isAdminStatus(role)) {
-
+  if (!isAdmin(role)) {
     return {
       ok: false,
       text:
         "『𓆩 دسترسی غیرمجاز 𓆪』\n\n" +
-        "❌ فقط مدیران و مالک گروه می‌توانند پنل را باز کنند."
+        "❌ فقط مدیران و مالک گروه اجازه استفاده از پنل را دارند."
     };
   }
 
@@ -151,11 +173,31 @@ async function checkPanelAccess(ctx) {
 }
 
 // =====================================================
+// CHECK PANEL OWNER
+// =====================================================
+
+function isPanelOwner(ctx) {
+  if (!isGroup(ctx) || !ctx.from) {
+    return false;
+  }
+
+  const panel = getPanel(ctx.chat.id);
+
+  if (!panel) {
+    return false;
+  }
+
+  return (
+    Number(panel.ownerId) ===
+    Number(ctx.from.id)
+  );
+}
+
+// =====================================================
 // PANEL TEXT
 // =====================================================
 
 function panelText() {
-
   return (
     "『𓆩 PulseGroupManager 𓆪』\n\n" +
     "『𓆩 پنل مدیریت گروه 𓆪』\n\n" +
@@ -164,73 +206,77 @@ function panelText() {
 }
 
 // =====================================================
-// PANEL KEYBOARD
+// MAIN PANEL
 // =====================================================
 
-function panelKeyboard() {
-
+function mainPanelKeyboard() {
   return Markup.inlineKeyboard([
 
     [
       Markup.button.callback(
-        "👥 مدیریت کاربران",
-        "panel_users"
+        "『𓆩 مدیریت کاربران 𓆪』",
+        "users"
       )
     ],
 
     [
       Markup.button.callback(
-        "🔒 قفل‌های گروه",
-        "panel_locks"
+        "『𓆩 قفل‌های گروه 𓆪』",
+        "locks"
       )
     ],
 
     [
       Markup.button.callback(
-        "⚠️ سیستم اخطار",
-        "panel_warns"
+        "『𓆩 مدیریت پیام‌ها 𓆪』",
+        "messages"
       )
     ],
 
     [
       Markup.button.callback(
-        "👋 ورود و خروج",
-        "panel_welcome"
+        "『𓆩 سیستم اخطار 𓆪'",
+        "warns"
       )
     ],
 
     [
       Markup.button.callback(
-        "📜 قوانین",
-        "panel_rules"
+        "『𓆩 ورود و خروج 𓆪』",
+        "welcome"
       )
     ],
 
     [
       Markup.button.callback(
-        "📊 آمار",
-        "panel_stats"
+        "『𓆩 قوانین گروه 𓆪』",
+        "rules"
       )
     ],
 
     [
       Markup.button.callback(
-        "⚙️ تنظیمات",
-        "panel_settings"
+        "『𓆩 آمار گروه 𓆪』",
+        "stats"
       )
     ],
 
     [
       Markup.button.callback(
-        "❓ راهنما",
-        "panel_help"
+        "『𓆩 تنظیمات 𓆪』",
+        "settings"
+      ),
+
+      Markup.button.callback(
+        "『𓆩 راهنما 𓆪』",
+        "help"
       )
     ],
 
     [
       Markup.button.callback(
-        "✖️ بستن پنل",
-        "close_panel"
+        "『𓆩 بستن پنل ✖️ 𓆪』",
+        "close"
       )
     ]
 
@@ -238,104 +284,135 @@ function panelKeyboard() {
 }
 
 // =====================================================
-// HELP TEXT
+// SEND PANEL
 // =====================================================
 
-function helpText() {
+async function sendPanel(ctx) {
 
-  return (
-    "『𓆩 راهنمای PulseGroupManager 𓆪』\n\n" +
+  const access = await checkAdmin(ctx);
 
-    "👥 مدیریت کاربران\n" +
-    "🔒 قفل‌های گروه\n" +
-    "⚠️ سیستم اخطار\n" +
-    "👋 ورود و خروج\n" +
-    "📜 قوانین\n" +
-    "📊 آمار\n" +
-    "⚙️ تنظیمات\n\n" +
-
-    "🔐 فقط مدیران و مالک گروه اجازه استفاده از پنل را دارند."
-  );
-}
-
-// =====================================================
-// SAVE PANEL OWNER
-// =====================================================
-
-function savePanelOwner(chatId, messageId, userId) {
-
-  activePanels.set(
-    `${chatId}:${messageId}`,
-    userId
-  );
-
-  console.log(
-    `🔐 PANEL OWNER SAVED | chat=${chatId} | message=${messageId} | owner=${userId}`
-  );
-}
-
-// =====================================================
-// GET PANEL OWNER
-// =====================================================
-
-function getPanelOwner(ctx) {
-
-  const chatId =
-    ctx.callbackQuery?.message?.chat?.id;
-
-  const messageId =
-    ctx.callbackQuery?.message?.message_id;
-
-  if (!chatId || !messageId) {
-    return null;
+  if (!access.ok) {
+    return ctx.reply(
+      access.text,
+      replyOptions(ctx)
+    );
   }
 
-  return activePanels.get(
-    `${chatId}:${messageId}`
+  setPanel(
+    ctx.chat.id,
+    ctx.from.id
   );
+
+  try {
+
+    await ctx.reply(
+      panelText(),
+      {
+        ...mainPanelKeyboard()
+      }
+    );
+
+    console.log(
+      `✅ Panel opened by ${ctx.from.id}`
+    );
+
+  } catch (error) {
+
+    console.error(
+      "❌ PANEL:",
+      error.message
+    );
+
+  }
 }
 
 // =====================================================
-// CHECK PANEL OWNER
+// PANEL COMMAND
 // =====================================================
 
-async function checkPanelOwner(ctx) {
+bot.hears(
+  /^پنل$/u,
+  async (ctx) => {
+    await sendPanel(ctx);
+  }
+);
 
-  const ownerId =
-    getPanelOwner(ctx);
+// =====================================================
+// HELP COMMAND
+// =====================================================
 
-  if (!ownerId) {
+bot.hears(
+  /^راهنما$/u,
+  async (ctx) => {
+
+    const access = await checkAdmin(ctx);
+
+    if (!access.ok) {
+      return ctx.reply(
+        access.text,
+        replyOptions(ctx)
+      );
+    }
+
+    await ctx.reply(
+      "『𓆩 راهنمای ربات 𓆪』\n\n" +
+      "『𓆩 پنل مدیریت 𓆪』\n" +
+      "باز کردن پنل اصلی\n\n" +
+
+      "『𓆩 بن 𓆪』\n" +
+      "روی پیام کاربر ریپلای کن و بنویس بن\n\n" +
+
+      "『𓆩 میوت 𓆪』\n" +
+      "روی پیام کاربر ریپلای کن و بنویس میوت\n\n" +
+
+      "『𓆩 آمار گروه 𓆪』\n" +
+      "نمایش آمار گروه\n\n" +
+
+      "⚠️ کاربران عادی هیچ دسترسی مدیریتی ندارند.",
+      Markup.inlineKeyboard([
+        [
+          Markup.button.callback(
+            "『𓆩 بازگشت به پنل 𓆪』",
+            "back"
+          )
+        ],
+        [
+          Markup.button.callback(
+            "『𓆩 بستن 𓆪』",
+            "close"
+          )
+        ]
+      ])
+    );
+  }
+);
+
+// =====================================================
+// PANEL ACCESS FOR BUTTONS
+// =====================================================
+
+async function checkButtonAccess(ctx) {
+
+  const access = await checkAdmin(ctx);
+
+  if (!access.ok) {
 
     try {
-
       await ctx.answerCbQuery(
-        "❌ این پنل دیگر فعال نیست.",
-        {
-          show_alert: true
-        }
+        "❌ فقط مدیران و مالک دسترسی دارند."
       );
-
     } catch {}
 
     return false;
   }
 
-  if (ctx.from.id !== ownerId) {
+  if (!isPanelOwner(ctx)) {
 
     try {
-
       await ctx.answerCbQuery(
-        "❌ این پنل متعلق به شخص دیگری است.",
-        {
-          show_alert: true
-        }
+        "❌ این پنل توسط مدیر دیگری باز شده است."
       );
-
     } catch {}
-
-    console.log(
-      `🚫 PANEL ACCESS DENIED | user=${ctx.from.id} | owner=${ownerId}`
-    );
 
     return false;
   }
@@ -344,113 +421,37 @@ async function checkPanelOwner(ctx) {
 }
 
 // =====================================================
-// OPEN PANEL
-// =====================================================
-
-bot.hears(
-  /^پنل$/i,
-  async (ctx) => {
-
-    console.log(
-      `🟢 PANEL REQUEST | user=${ctx.from?.id} | chat=${ctx.chat?.id}`
-    );
-
-    const access =
-      await checkPanelAccess(ctx);
-
-    if (!access.ok) {
-
-      return ctx.reply(
-        access.text,
-        replyOptions(ctx)
-      );
-    }
-
-    try {
-
-      const sent =
-        await ctx.reply(
-          panelText(),
-          {
-            ...panelKeyboard(),
-            ...replyOptions(ctx)
-          }
-        );
-
-      // ثبت صاحب همین پنل
-      savePanelOwner(
-        ctx.chat.id,
-        sent.message_id,
-        ctx.from.id
-      );
-
-      console.log(
-        `✅ PANEL CREATED | message=${sent.message_id} | owner=${ctx.from.id}`
-      );
-
-    } catch (error) {
-
-      console.error(
-        "❌ PANEL ERROR:",
-        error.message
-      );
-
-    }
-  }
-);
-
-// =====================================================
-// HELP
-// =====================================================
-
-bot.hears(
-  /^راهنما$/i,
-  async (ctx) => {
-
-    console.log(
-      `🟢 HELP REQUEST | user=${ctx.from?.id} | chat=${ctx.chat?.id}`
-    );
-
-    const access =
-      await checkPanelAccess(ctx);
-
-    if (!access.ok) {
-
-      return ctx.reply(
-        access.text,
-        replyOptions(ctx)
-      );
-    }
-
-    try {
-
-      await ctx.reply(
-        helpText(),
-        replyOptions(ctx)
-      );
-
-    } catch (error) {
-
-      console.error(
-        "❌ HELP ERROR:",
-        error.message
-      );
-
-    }
-  }
-);
-
-// =====================================================
-// CLOSE PANEL
+// BACK
 // =====================================================
 
 bot.action(
-  "close_panel",
+  "back",
   async (ctx) => {
 
-    if (
-      !(await checkPanelOwner(ctx))
-    ) {
+    if (!(await checkButtonAccess(ctx))) {
+      return;
+    }
+
+    try {
+      await ctx.answerCbQuery();
+    } catch {}
+
+    await ctx.editMessageText(
+      panelText(),
+      mainPanelKeyboard()
+    );
+  }
+);
+
+// =====================================================
+// CLOSE
+// =====================================================
+
+bot.action(
+  "close",
+  async (ctx) => {
+
+    if (!(await checkButtonAccess(ctx))) {
       return;
     }
 
@@ -460,53 +461,30 @@ bot.action(
       );
     } catch {}
 
-    const chatId =
-      ctx.callbackQuery.message.chat.id;
-
-    const messageId =
-      ctx.callbackQuery.message.message_id;
-
-    activePanels.delete(
-      `${chatId}:${messageId}`
-    );
+    deletePanel(ctx.chat.id);
 
     try {
-
       await ctx.deleteMessage();
-
     } catch {
 
       try {
-
         await ctx.editMessageText(
           "『𓆩 پنل بسته شد ✖️ 𓆪』"
         );
-
       } catch {}
     }
   }
 );
 
 // =====================================================
-// PANEL SECTIONS
+// USERS
 // =====================================================
 
 bot.action(
-  [
-    "panel_users",
-    "panel_locks",
-    "panel_warns",
-    "panel_welcome",
-    "panel_rules",
-    "panel_stats",
-    "panel_settings",
-    "panel_help"
-  ],
+  "users",
   async (ctx) => {
 
-    if (
-      !(await checkPanelOwner(ctx))
-    ) {
+    if (!(await checkButtonAccess(ctx))) {
       return;
     }
 
@@ -514,56 +492,37 @@ bot.action(
       await ctx.answerCbQuery();
     } catch {}
 
-    const names = {
-
-      panel_users:
-        "👥 مدیریت کاربران",
-
-      panel_locks:
-        "🔒 قفل‌های گروه",
-
-      panel_warns:
-        "⚠️ سیستم اخطار",
-
-      panel_welcome:
-        "👋 ورود و خروج",
-
-      panel_rules:
-        "📜 قوانین",
-
-      panel_stats:
-        "📊 آمار",
-
-      panel_settings:
-        "⚙️ تنظیمات",
-
-      panel_help:
-        "❓ راهنما"
-    };
-
-    const section =
-      names[
-        ctx.callbackQuery.data
-      ];
-
     await ctx.editMessageText(
-
-      `『𓆩 ${section} 𓆪』\n\n` +
-      "این بخش در مرحله بعدی فعال می‌شود.",
-
+      "『𓆩 مدیریت کاربران 𓆪』\n\n" +
+      "روی پیام کاربر ریپلای کن و یکی از دستورات مدیریتی را بفرست.",
       Markup.inlineKeyboard([
 
         [
           Markup.button.callback(
-            "↩️ بازگشت",
-            "back_panel"
+            "『𓆩 بن 𓆪",
+            "info_ban"
+          ),
+          Markup.button.callback(
+            "『𓆩 میوت 𓆪",
+            "info_mute"
           )
         ],
 
         [
           Markup.button.callback(
-            "✖️ بستن پنل",
-            "close_panel"
+            "『𓆩 اخطار 𓆪",
+            "info_warn"
+          ),
+          Markup.button.callback(
+            "『𓆩 اطلاعات 𓆪",
+            "info_user"
+          )
+        ],
+
+        [
+          Markup.button.callback(
+            "『𓆩 بازگشت 𓆪",
+            "back"
           )
         ]
 
@@ -573,16 +532,72 @@ bot.action(
 );
 
 // =====================================================
-// BACK TO PANEL
+// OTHER PANELS
+// =====================================================
+
+const simplePanels = {
+  locks: "『𓆩 قفل‌های گروه 𓆪』",
+  messages: "『𓆩 مدیریت پیام‌ها 𓆪』",
+  warns: "『𓆩 سیستم اخطار 𓆪』",
+  welcome: "『𓆩 ورود و خروج 𓆪』",
+  rules: "『𓆩 قوانین گروه 𓆪』",
+  stats: "『𓆩 آمار گروه 𓆪』",
+  settings: "『𓆩 تنظیمات 𓆪』",
+  help: "『𓆩 راهنما 𓆪』"
+};
+
+for (const [action, title] of Object.entries(simplePanels)) {
+
+  bot.action(
+    action,
+    async (ctx) => {
+
+      if (!(await checkButtonAccess(ctx))) {
+        return;
+      }
+
+      try {
+        await ctx.answerCbQuery();
+      } catch {}
+
+      await ctx.editMessageText(
+        title +
+        "\n\n" +
+        "『𓆩 این بخش در مرحله بعد فعال می‌شود 𓆪』\n\n" +
+        "ساختار اصلی آماده است.",
+        Markup.inlineKeyboard([
+          [
+            Markup.button.callback(
+              "『𓆩 بازگشت 𓆪",
+              "back"
+            )
+          ],
+          [
+            Markup.button.callback(
+              "『𓆩 بستن پنل ✖️ 𓆪",
+              "close"
+            )
+          ]
+        ])
+      );
+    }
+  );
+}
+
+// =====================================================
+// USER INFO BUTTONS
 // =====================================================
 
 bot.action(
-  "back_panel",
+  [
+    "info_ban",
+    "info_mute",
+    "info_warn",
+    "info_user"
+  ],
   async (ctx) => {
 
-    if (
-      !(await checkPanelOwner(ctx))
-    ) {
+    if (!(await checkButtonAccess(ctx))) {
       return;
     }
 
@@ -590,46 +605,204 @@ bot.action(
       await ctx.answerCbQuery();
     } catch {}
 
+    const names = {
+      info_ban: "بن",
+      info_mute: "میوت",
+      info_warn: "اخطار",
+      info_user: "اطلاعات کاربر"
+    };
+
+    const name =
+      names[ctx.callbackQuery.data];
+
+    await ctx.editMessageText(
+      `『𓆩 ${name} 𓆪』\n\n` +
+      "روی پیام کاربر ریپلای کن و دستور مربوطه را ارسال کن.",
+      Markup.inlineKeyboard([
+        [
+          Markup.button.callback(
+            "『𓆩 بازگشت 𓆪",
+            "users"
+          )
+        ]
+      ])
+    );
+  }
+);
+
+// =====================================================
+// BAN
+// =====================================================
+
+bot.hears(
+  /^بن$/u,
+  async (ctx) => {
+
+    if (!isGroup(ctx)) return;
+
+    const access = await checkAdmin(ctx);
+
+    if (!access.ok) {
+      return ctx.reply(
+        access.text,
+        replyOptions(ctx)
+      );
+    }
+
+    const target = getReplyUser(ctx);
+
+    if (!target) {
+      return ctx.reply(
+        "❌ باید روی پیام کاربر ریپلای کنی و بنویسی:\n\nبن",
+        replyOptions(ctx)
+      );
+    }
+
+    const targetRole =
+      await getRole(
+        ctx,
+        target.id
+      );
+
+    if (targetRole === "creator") {
+      return ctx.reply(
+        "👑 مالک گروه قابل بن کردن نیست.",
+        replyOptions(ctx)
+      );
+    }
+
+    if (
+      targetRole === "administrator" &&
+      access.role !== "creator"
+    ) {
+      return ctx.reply(
+        "⚠️ مدیر عادی نمی‌تواند مدیر دیگری را مدیریت کند.",
+        replyOptions(ctx)
+      );
+    }
+
     try {
 
-      await ctx.editMessageText(
-        panelText(),
-        panelKeyboard()
+      await ctx.telegram.banChatMember(
+        ctx.chat.id,
+        target.id
+      );
+
+      await ctx.reply(
+        "『𓆩 کاربر بن شد 𓆪』\n\n" +
+        `👤 ${userName(target)}\n` +
+        `🆔 ${target.id}`,
+        replyOptions(ctx)
       );
 
     } catch (error) {
 
       console.error(
-        "❌ BACK PANEL ERROR:",
+        "❌ BAN:",
         error.message
       );
 
+      await ctx.reply(
+        "❌ بن انجام نشد.\n\n" +
+        "دسترسی Ban Users ربات را بررسی کن.",
+        replyOptions(ctx)
+      );
     }
   }
 );
 
 // =====================================================
-// DEBUG LOG
+// MUTE
 // =====================================================
 
-bot.on(
-  "message",
-  async (ctx, next) => {
+bot.hears(
+  /^میوت$/u,
+  async (ctx) => {
 
-    console.log(
-      "📩 UPDATE:",
-      ctx.updateType,
-      "| chat:",
-      ctx.chat?.id,
-      "| type:",
-      ctx.chat?.type,
-      "| user:",
-      ctx.from?.id,
-      "| text:",
-      ctx.message?.text || ""
-    );
+    if (!isGroup(ctx)) return;
 
-    return next();
+    const access = await checkAdmin(ctx);
+
+    if (!access.ok) {
+      return ctx.reply(
+        access.text,
+        replyOptions(ctx)
+      );
+    }
+
+    const target = getReplyUser(ctx);
+
+    if (!target) {
+      return ctx.reply(
+        "❌ باید روی پیام کاربر ریپلای کنی و بنویسی:\n\nمیوت",
+        replyOptions(ctx)
+      );
+    }
+
+    const targetRole =
+      await getRole(
+        ctx,
+        target.id
+      );
+
+    if (targetRole === "creator") {
+      return ctx.reply(
+        "👑 مالک گروه قابل میوت نیست.",
+        replyOptions(ctx)
+      );
+    }
+
+    if (
+      targetRole === "administrator" &&
+      access.role !== "creator"
+    ) {
+      return ctx.reply(
+        "⚠️ مدیر عادی نمی‌تواند مدیر دیگری را مدیریت کند.",
+        replyOptions(ctx)
+      );
+    }
+
+    try {
+
+      await ctx.telegram.restrictChatMember(
+        ctx.chat.id,
+        target.id,
+        {
+          permissions: {
+            can_send_messages: false,
+            can_send_audios: false,
+            can_send_documents: false,
+            can_send_photos: false,
+            can_send_videos: false,
+            can_send_video_notes: false,
+            can_send_voice_notes: false,
+            can_send_polls: false,
+            can_send_other_messages: false,
+            can_add_web_page_previews: false
+          }
+        }
+      );
+
+      await ctx.reply(
+        "『𓆩 کاربر میوت شد 𓆪』\n\n" +
+        `👤 ${userName(target)}\n` +
+        `🆔 ${target.id}`,
+        replyOptions(ctx)
+      );
+
+    } catch (error) {
+
+      console.error(
+        "❌ MUTE:",
+        error.message
+      );
+
+      await ctx.reply(
+        "❌ میوت انجام نشد.\n\n" +
+        "دسترسی Restrict Members ربات را بررسی کن.",
+        replyOptions(ctx)
+      );
+    }
   }
 );
 
@@ -637,52 +810,44 @@ bot.on(
 // ERROR HANDLER
 // =====================================================
 
-bot.catch((error) => {
+bot.catch((error, ctx) => {
 
   console.error(
     "❌ BOT ERROR:",
-    error
+    error.message
   );
 
 });
 
 // =====================================================
-// START BOT
+// START
 // =====================================================
 
-(async () => {
-
-  try {
-
-    console.log(
-      "🚀 Starting PulseGroupManager..."
-    );
-
-    await bot.launch();
+bot.launch()
+  .then(() => {
 
     console.log(
       "🤖 BOT:",
-      bot.botInfo?.username
+      process.env.BOT_USERNAME || "PulseGroupManagerBot"
     );
 
     console.log(
       "✅ PulseGroupManager started successfully"
     );
 
-  } catch (error) {
+  })
+  .catch((error) => {
 
     console.error(
-      "❌ FAILED TO START:",
-      error
+      "❌ BOT START ERROR:",
+      error.message
     );
 
     process.exit(1);
-  }
-
-})();
+  });
 
 // =====================================================
-// SHUTDOWN
+// GRACEFUL STOP
 // =====================================================
 
 process.once(
