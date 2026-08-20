@@ -191,7 +191,6 @@ function isAdmin(status) {
 
 // =====================================================
 // CHECK PANEL ACCESS
-// فقط مدیر و مالک
 // =====================================================
 
 async function checkPanelAccess(ctx) {
@@ -235,8 +234,6 @@ async function checkPanelAccess(ctx) {
 
 // =====================================================
 // CHECK USER MANAGEMENT PERMISSION
-// مدیر و مالک فقط اعضای عادی را مدیریت کنند
-// مالک دسترسی بالاتر دارد
 // =====================================================
 
 async function checkPermission(ctx, targetId) {
@@ -269,7 +266,6 @@ async function checkPermission(ctx, targetId) {
       targetId
     );
 
-  // فقط مدیر و مالک
   if (!isAdmin(executor)) {
     return {
       ok: false,
@@ -279,7 +275,6 @@ async function checkPermission(ctx, targetId) {
     };
   }
 
-  // مالک گروه قابل مدیریت نیست
   if (target === "creator") {
     return {
       ok: false,
@@ -288,7 +283,6 @@ async function checkPermission(ctx, targetId) {
     };
   }
 
-  // مدیر عادی نمی‌تواند مدیر دیگر را مدیریت کند
   if (
     target === "administrator" &&
     executor !== "creator"
@@ -396,8 +390,6 @@ function panelText() {
 
 // =====================================================
 // SEND PANEL
-// پنل فقط برای مدیر و مالک
-// و به پیام کاربر ریپلای می‌شود
 // =====================================================
 
 async function sendPanel(ctx) {
@@ -478,218 +470,7 @@ bot.on("text", async (ctx, next) => {
   );
 
   return next();
-});
-
-// =====================================================
-// START
-// =====================================================
-
-bot.start(async (ctx) => {
-
-  await ctx.reply(
-
-    "『𓆩 PulseGroupManager 𓆪』\n\n" +
-    "سلام 👋\n\n" +
-    "ربات مدیریت گروه آماده است. 🤖\n\n" +
-    "برای استفاده از پنل، ربات را داخل گروه مدیر کن.\n\n" +
-    "سپس داخل گروه بنویس:\n\n" +
-    "پنل",
-
-    Markup.inlineKeyboard([
-
-      [
-        Markup.button.callback(
-          B.panel,
-          "private_panel"
-        )
-      ],
-
-      [
-        Markup.button.callback(
-          B.help,
-          "private_help"
-        )
-      ]
-
-    ])
-  );
-});
-
-// =====================================================
-// PANEL COMMAND
-// =====================================================
-
-bot.command(
-  "panel",
-  async (ctx) => {
-    return sendPanel(ctx);
-  }
-);
-
-bot.hears(
-  /^پنل$/i,
-  async (ctx) => {
-    return sendPanel(ctx);
-  }
-);
-
-// =====================================================
-// HELP
-// =====================================================
-
-async function sendHelp(ctx) {
-
-  return ctx.reply(
-
-    "『𓆩 راهنمای PulseGroupManager 𓆪』\n\n" +
-
-    "👤 مدیریت کاربران:\n" +
-    "روی پیام کاربر ریپلای کن و بنویس:\n\n" +
-
-    "• بن\n" +
-    "• میوت\n" +
-    "• آن‌بن\n" +
-    "• آن‌میوت\n" +
-    "• اخطار\n" +
-    "• اطلاعات\n\n" +
-
-    "📌 دستورات:\n" +
-    "• پنل\n" +
-    "• /panel\n" +
-    "• راهنما\n" +
-    "• /help\n\n" +
-
-    "⚙️ پنل و دستورات مدیریتی فقط برای مدیران و مالک گروه فعال هستند.",
-
-    Markup.inlineKeyboard([
-
-      [
-        Markup.button.callback(
-          B.back,
-          "panel"
-        )
-      ],
-
-      [
-        Markup.button.callback(
-          B.closeHelp,
-          "close_help"
-        )
-      ]
-
-    ])
-  );
-}
-
-bot.command(
-  "help",
-  async (ctx) => {
-    return sendHelp(ctx);
-  }
-);
-
-bot.hears(
-  /^راهنما$/i,
-  async (ctx) => {
-    return sendHelp(ctx);
-  }
-);
-
-// =====================================================
-// SETTINGS COMMAND
-// =====================================================
-
-async function sendSettings(ctx) {
-
-  if (isGroup(ctx)) {
-
-    const access =
-      await checkPanelAccess(ctx);
-
-    if (!access.ok) {
-
-      return ctx.reply(
-        access.text,
-        replyOptions(ctx)
-      );
-    }
-  }
-
-  return ctx.reply(
-
-    "『𓆩 تنظیمات گروه 𓆪』\n\n" +
-    "بخش موردنظر را انتخاب کنید:",
-
-    Markup.inlineKeyboard([
-
-      [
-        Markup.button.callback(
-          "『𓆩 کاربران 𓆪",
-          "settings_users"
-        )
-      ],
-
-      [
-        Markup.button.callback(
-          "『𓆩 پیام‌ها 𓆪",
-          "settings_messages"
-        )
-      ],
-
-      [
-        Markup.button.callback(
-          "『𓆩 قفل‌ها 𓆪",
-          "settings_locks"
-        )
-      ],
-
-      [
-        Markup.button.callback(
-          "『𓆩 ورود و خروج 𓆪",
-          "settings_welcome"
-        )
-      ],
-
-      [
-        Markup.button.callback(
-          "『𓆩 قوانین 𓆪",
-          "settings_rules"
-        )
-      ],
-
-      [
-        Markup.button.callback(
-          B.back,
-          "panel"
-        )
-      ],
-
-      [
-        Markup.button.callback(
-          B.closePanel,
-          "close_panel"
-        )
-      ]
-
-    ])
-  );
-}
-
-bot.command(
-  "settings",
-  async (ctx) => {
-    return sendSettings(ctx);
-  }
-);
-
-bot.hears(
-  /^تنظیمات$/i,
-  async (ctx) => {
-    return sendSettings(ctx);
-  }
-);
-
-// =====================================================
+});// =====================================================
 // CLOSE PANEL
 // =====================================================
 
@@ -1049,9 +830,7 @@ bot.action(
       ])
     );
   }
-);
-
-// =====================================================
+);// =====================================================
 // BAN USER
 // =====================================================
 
@@ -1175,7 +954,7 @@ bot.hears(
             can_send_videos: false,
             can_send_video_notes: false,
             can_send_voice_notes: false,
-             can_send_polls: false,
+            can_send_polls: false,
             can_send_other_messages: false,
             can_add_web_page_previews: false
           }
@@ -1183,10 +962,13 @@ bot.hears(
       );
 
       return ctx.reply(
+
         "『𓆩 کاربر میوت شد 𓆪』\n\n" +
+
         `👤 ${userName(target)}\n` +
         `🆔 ${target.id}\n\n` +
         `👮 مدیر: ${userName(ctx.from)}`,
+
         replyOptions(ctx)
       );
 
@@ -1198,8 +980,10 @@ bot.hears(
       );
 
       return ctx.reply(
-        "❌ میوت انجام نشد.\n\n" +
-        "مطمئن شو ربات مدیر گروه است و دسترسی Restrict Users دارد.",
+
+        "❌ میوت کردن انجام نشد.\n\n" +
+        "مطمئن شو ربات مدیر گروه است و دسترسی محدود کردن کاربران را دارد.",
+
         replyOptions(ctx)
       );
     }
@@ -1222,6 +1006,7 @@ bot.hears(
       getReplyUser(ctx);
 
     if (!target) {
+
       return ctx.reply(
         "❌ روی پیام کاربر ریپلای کن و بنویس:\n\nآن‌بن",
         replyOptions(ctx)
@@ -1235,6 +1020,7 @@ bot.hears(
       );
 
     if (!permission.ok) {
+
       return ctx.reply(
         permission.text,
         replyOptions(ctx)
@@ -1247,14 +1033,18 @@ bot.hears(
         ctx.chat.id,
         target.id,
         {
-          only_if_banned: false
+          only_if_banned: true
         }
       );
 
       return ctx.reply(
-        "『𓆩 آن‌بن انجام شد 𓆪』\n\n" +
+
+        "『𓆩 کاربر آن‌بن شد 𓆪』\n\n" +
+
         `👤 ${userName(target)}\n` +
-        `🆔 ${target.id}`,
+        `🆔 ${target.id}\n\n` +
+        `👮 مدیر: ${userName(ctx.from)}`,
+
         replyOptions(ctx)
       );
 
@@ -1266,7 +1056,9 @@ bot.hears(
       );
 
       return ctx.reply(
-        "❌ آن‌بن انجام نشد.",
+
+        "❌ آن‌بن کردن انجام نشد.",
+
         replyOptions(ctx)
       );
     }
@@ -1289,6 +1081,7 @@ bot.hears(
       getReplyUser(ctx);
 
     if (!target) {
+
       return ctx.reply(
         "❌ روی پیام کاربر ریپلای کن و بنویس:\n\nآن‌میوت",
         replyOptions(ctx)
@@ -1302,6 +1095,7 @@ bot.hears(
       );
 
     if (!permission.ok) {
+
       return ctx.reply(
         permission.text,
         replyOptions(ctx)
@@ -1330,9 +1124,13 @@ bot.hears(
       );
 
       return ctx.reply(
-        "『𓆩 آن‌میوت انجام شد 𓆪』\n\n" +
+
+        "『𓆩 کاربر آن‌میوت شد 𓆪』\n\n" +
+
         `👤 ${userName(target)}\n` +
-        `🆔 ${target.id}`,
+        `🆔 ${target.id}\n\n` +
+        `👮 مدیر: ${userName(ctx.from)}`,
+
         replyOptions(ctx)
       );
 
@@ -1344,7 +1142,9 @@ bot.hears(
       );
 
       return ctx.reply(
-        "❌ آن‌میوت انجام نشد.",
+
+        "❌ آن‌میوت کردن انجام نشد.",
+
         replyOptions(ctx)
       );
     }
@@ -1367,6 +1167,7 @@ bot.hears(
       getReplyUser(ctx);
 
     if (!target) {
+
       return ctx.reply(
         "❌ روی پیام کاربر ریپلای کن و بنویس:\n\nاخطار",
         replyOptions(ctx)
@@ -1380,6 +1181,7 @@ bot.hears(
       );
 
     if (!permission.ok) {
+
       return ctx.reply(
         permission.text,
         replyOptions(ctx)
@@ -1389,23 +1191,25 @@ bot.hears(
     const group =
       getGroup(ctx.chat.id);
 
-    const current =
+    const oldWarn =
       group.warns.get(target.id) || 0;
 
-    const count =
-      current + 1;
+    const newWarn =
+      oldWarn + 1;
 
     group.warns.set(
       target.id,
-      count
+      newWarn
     );
 
     return ctx.reply(
-      "『𓆩 اخطار ثبت شد 𓆪』\n\n" +
+
+      "『𓆩 اخطار ثبت شد ⚠️ 𓆪』\n\n" +
+
       `👤 ${userName(target)}\n` +
-      `🆔 ${target.id}\n\n` +
-      `⚠️ تعداد اخطار: ${count}\n` +
+      `⚠️ تعداد اخطار: ${newWarn}\n\n` +
       `👮 مدیر: ${userName(ctx.from)}`,
+
       replyOptions(ctx)
     );
   }
@@ -1427,41 +1231,18 @@ bot.hears(
       getReplyUser(ctx);
 
     if (!target) {
+
       return ctx.reply(
         "❌ روی پیام کاربر ریپلای کن و بنویس:\n\nاطلاعات",
         replyOptions(ctx)
       );
     }
 
-    const access =
-      await checkPanelAccess(ctx);
-
-    if (!access.ok) {
-      return ctx.reply(
-        access.text,
-        replyOptions(ctx)
-      );
-    }
-
-    let role =
+    const role =
       await getRole(
         ctx,
         target.id
       );
-
-    let roleText = "👤 عضو گروه";
-
-    if (role === "creator") {
-      roleText = "👑 مالک گروه";
-    } else if (role === "administrator") {
-      roleText = "🛡 مدیر گروه";
-    } else if (role === "restricted") {
-      roleText = "🔇 محدود شده";
-    } else if (role === "left") {
-      roleText = "🚪 خارج شده";
-    } else if (role === "kicked") {
-      roleText = "🚫 بن شده";
-    }
 
     const group =
       getGroup(ctx.chat.id);
@@ -1470,11 +1251,14 @@ bot.hears(
       group.warns.get(target.id) || 0;
 
     return ctx.reply(
+
       "『𓆩 اطلاعات کاربر 𓆪』\n\n" +
+
       `👤 نام: ${userName(target)}\n` +
       `🆔 آیدی: ${target.id}\n` +
-      `🎭 وضعیت: ${roleText}\n` +
-      `⚠️ اخطار: ${warns}`,
+      `👮 وضعیت: ${role}\n` +
+      `⚠️ اخطارها: ${warns}`,
+
       replyOptions(ctx)
     );
   }
@@ -1482,97 +1266,96 @@ bot.hears(
 // LOCKS PANEL
 // =====================================================
 
-bot.action("panel_locks", async (ctx) => {
+bot.action(
+  "panel_locks",
+  async (ctx) => {
 
-  const access = await checkPanelAccess(ctx);
+    const access =
+      await checkPanelAccess(ctx);
 
-  if (!access.ok) {
+    if (!access.ok) {
+      try {
+        await ctx.answerCbQuery(
+          "❌ فقط مدیر و مالک دسترسی دارند."
+        );
+      } catch {}
+      return;
+    }
+
+    const group =
+      getGroup(ctx.chat.id);
+
     try {
-      await ctx.answerCbQuery("❌ فقط مدیر و مالک دسترسی دارند.");
+      await ctx.answerCbQuery();
     } catch {}
-    return;
+
+    await ctx.editMessageText(
+
+      "『𓆩 قفل‌های گروه 𓆪』\n\n" +
+      "وضعیت قفل‌ها را انتخاب کنید:",
+
+      Markup.inlineKeyboard([
+
+        [
+          Markup.button.callback(
+            `🔗 لینک: ${group.locks.links ? "🔒" : "🔓"}`,
+            "lock_links"
+          )
+        ],
+
+        [
+          Markup.button.callback(
+            `🖼 رسانه: ${group.locks.media ? "🔒" : "🔓"}`,
+            "lock_media"
+          )
+        ],
+
+        [
+          Markup.button.callback(
+            `📁 فایل: ${group.locks.files ? "🔒" : "🔓"}`,
+            "lock_files"
+          )
+        ],
+
+        [
+          Markup.button.callback(
+            `🎭 استیکر: ${group.locks.sticker ? "🔒" : "🔓"}`,
+            "lock_sticker"
+          )
+        ],
+
+        [
+          Markup.button.callback(
+            `🎞 گیف: ${group.locks.gif ? "🔒" : "🔓"}`,
+            "lock_gif"
+          )
+        ],
+
+        [
+          Markup.button.callback(
+            `📊 نظرسنجی: ${group.locks.poll ? "🔒" : "🔓"}`,
+            "lock_poll"
+          )
+        ],
+
+        [
+          Markup.button.callback(
+            B.back,
+            "panel"
+          )
+        ],
+
+        [
+          Markup.button.callback(
+            B.closePanel,
+            "close_panel"
+          )
+        ]
+
+      ])
+    );
   }
-
-  try {
-    await ctx.answerCbQuery();
-  } catch {}
-
-  const group = getGroup(ctx.chat.id);
-
-  const icon = (value) =>
-    value ? "🔴 روشن" : "🟢 خاموش";
-
-  return ctx.editMessageText(
-    "『𓆩 قفل‌های گروه 𓆪』\n\n" +
-    "وضعیت قفل‌ها:\n\n" +
-    `🔗 لینک: ${icon(group.locks.links)}\n` +
-    `🖼 رسانه: ${icon(group.locks.media)}\n` +
-    `📁 فایل: ${icon(group.locks.files)}\n` +
-    `🎭 استیکر: ${icon(group.locks.sticker)}\n` +
-    `🎬 گیف: ${icon(group.locks.gif)}\n` +
-    `📊 نظرسنجی: ${icon(group.locks.poll)}`,
-
-    Markup.inlineKeyboard([
-
-      [
-        Markup.button.callback(
-          "🔗 قفل لینک",
-          "lock_links"
-        )
-      ],
-
-      [
-        Markup.button.callback(
-          "🖼 قفل رسانه",
-          "lock_media"
-        )
-      ],
-
-      [
-        Markup.button.callback(
-          "📁 قفل فایل",
-          "lock_files"
-        )
-      ],
-
-      [
-        Markup.button.callback(
-          "🎭 قفل استیکر",
-          "lock_sticker"
-        )
-      ],
-
-      [
-        Markup.button.callback(
-          "🎬 قفل گیف",
-          "lock_gif"
-        )
-      ],
-
-      [
-        Markup.button.callback(
-          "📊 قفل نظرسنجی",
-          "lock_poll"
-        )
-      ],
-
-      [
-        Markup.button.callback(
-          B.back,
-          "panel"
-        )
-      ],
-
-      [
-        Markup.button.callback(
-          B.closePanel,
-          "close_panel"
-        )
-      ]
-
-    ])
-  );
-});
+);
 
 // =====================================================
 // LOCK TOGGLE
@@ -1589,7 +1372,8 @@ bot.action(
   ],
   async (ctx) => {
 
-    const access = await checkPanelAccess(ctx);
+    const access =
+      await checkPanelAccess(ctx);
 
     if (!access.ok) {
       try {
@@ -1600,9 +1384,10 @@ bot.action(
       return;
     }
 
-    const group = getGroup(ctx.chat.id);
+    const group =
+      getGroup(ctx.chat.id);
 
-    const map = {
+    const keyMap = {
       lock_links: "links",
       lock_media: "media",
       lock_files: "files",
@@ -1612,7 +1397,9 @@ bot.action(
     };
 
     const key =
-      map[ctx.callbackQuery.data];
+      keyMap[
+        ctx.callbackQuery.data
+      ];
 
     group.locks[key] =
       !group.locks[key];
@@ -1620,66 +1407,56 @@ bot.action(
     try {
       await ctx.answerCbQuery(
         group.locks[key]
-          ? "🔴 قفل فعال شد"
-          : "🟢 قفل غیرفعال شد"
+          ? "🔒 قفل فعال شد"
+          : "🔓 قفل غیرفعال شد"
       );
     } catch {}
 
-    const icon = (value) =>
-      value ? "🔴 روشن" : "🟢 خاموش";
-
-    return ctx.editMessageText(
+    await ctx.editMessageText(
 
       "『𓆩 قفل‌های گروه 𓆪』\n\n" +
-      "وضعیت قفل‌ها:\n\n" +
-
-      `🔗 لینک: ${icon(group.locks.links)}\n` +
-      `🖼 رسانه: ${icon(group.locks.media)}\n` +
-      `📁 فایل: ${icon(group.locks.files)}\n` +
-      `🎭 استیکر: ${icon(group.locks.sticker)}\n` +
-      `🎬 گیف: ${icon(group.locks.gif)}\n` +
-      `📊 نظرسنجی: ${icon(group.locks.poll)}`,
+      "وضعیت قفل‌ها را انتخاب کنید:",
 
       Markup.inlineKeyboard([
 
         [
           Markup.button.callback(
-            "🔗 قفل لینک",
+            `🔗 لینک: ${group.locks.links ? "🔒" : "🔓"}`,
             "lock_links"
           )
         ],
 
         [
           Markup.button.callback(
-            "🖼 قفل رسانه",
+            `🖼 رسانه: ${group.locks.media ? "🔒" : "🔓"}`,
             "lock_media"
           )
         ],
 
         [
           Markup.button.callback(
-            "📁 قفل فایل",
+            `📁 فایل: ${group.locks.files ? "🔒" : "🔓"}`,
             "lock_files"
           )
         ],
 
         [
           Markup.button.callback(
-            "🎭 قفل استیکر",
+            `🎭 استیکر: ${group.locks.sticker ? "🔒" : "🔓"}`,
             "lock_sticker"
           )
         ],
 
         [
           Markup.button.callback(
-            "🎬 قفل گیف",
+            `🎞 گیف: ${group.locks.gif ? "🔒" : "🔓"}`,
             "lock_gif"
           )
         ],
 
         [
           Markup.button.callback(
-            "📊 قفل نظرسنجی",
+            `📊 نظرسنجی: ${group.locks.poll ? "🔒" : "🔓"}`,
             "lock_poll"
           )
         ],
@@ -1727,45 +1504,31 @@ bot.action(
       await ctx.answerCbQuery();
     } catch {}
 
-    const group =
-      getGroup(ctx.chat.id);
-
-    return ctx.editMessageText(
+    await ctx.editMessageText(
 
       "『𓆩 مدیریت پیام‌ها 𓆪』\n\n" +
-
-      `🚫 ضداسپم: ${
-        group.antiSpam
-          ? "🔴 روشن"
-          : "🟢 خاموش"
-      }\n` +
-
-      `🔤 فیلتر کلمات: ${
-        group.wordFilter
-          ? "🔴 روشن"
-          : "🟢 خاموش"
-      }`,
+      "امکانات مدیریت پیام‌ها:",
 
       Markup.inlineKeyboard([
 
         [
           Markup.button.callback(
-            "🚫 ضداسپم",
-            "toggle_antispam"
+            "🗑 حذف پیام",
+            "delete_message_help"
+          )
+        ],
+
+        [
+          Markup.button.callback(
+            "🚫 ضد اسپم",
+            "anti_spam"
           )
         ],
 
         [
           Markup.button.callback(
             "🔤 فیلتر کلمات",
-            "toggle_wordfilter"
-          )
-        ],
-
-        [
-          Markup.button.callback(
-            "🧹 پاکسازی",
-            "clean_messages"
+            "word_filter"
           )
         ],
 
@@ -1789,14 +1552,11 @@ bot.action(
 );
 
 // =====================================================
-// MESSAGE SETTINGS
+// ANTI SPAM
 // =====================================================
 
 bot.action(
-  [
-    "toggle_antispam",
-    "toggle_wordfilter"
-  ],
+  "anti_spam",
   async (ctx) => {
 
     const access =
@@ -1814,71 +1574,35 @@ bot.action(
     const group =
       getGroup(ctx.chat.id);
 
-    if (
-      ctx.callbackQuery.data ===
-      "toggle_antispam"
-    ) {
-      group.antiSpam =
-        !group.antiSpam;
-    }
-
-    if (
-      ctx.callbackQuery.data ===
-      "toggle_wordfilter"
-    ) {
-      group.wordFilter =
-        !group.wordFilter;
-    }
+    group.antiSpam =
+      !group.antiSpam;
 
     try {
       await ctx.answerCbQuery(
-        "تغییرات ذخیره شد ✅"
+        group.antiSpam
+          ? "🛡 ضد اسپم فعال شد"
+          : "🛡 ضد اسپم غیرفعال شد"
       );
     } catch {}
 
-    return ctx.editMessageText(
+    await ctx.editMessageText(
 
       "『𓆩 مدیریت پیام‌ها 𓆪』\n\n" +
-
-      `🚫 ضداسپم: ${
-        group.antiSpam
-          ? "🔴 روشن"
-          : "🟢 خاموش"
-      }\n` +
-
-      `🔤 فیلتر کلمات: ${
-        group.wordFilter
-          ? "🔴 روشن"
-          : "🟢 خاموش"
-      }`,
+      `🛡 ضد اسپم: ${group.antiSpam ? "فعال ✅" : "غیرفعال ❌"}`,
 
       Markup.inlineKeyboard([
 
         [
           Markup.button.callback(
-            "🚫 ضداسپم",
-            "toggle_antispam"
-          )
-        ],
-
-        [
-          Markup.button.callback(
-            "🔤 فیلتر کلمات",
-            "toggle_wordfilter"
-          )
-        ],
-
-        [
-          Markup.button.callback(
-            "🧹 پاکسازی",
-            "clean_messages"
+            "🛡 تغییر وضعیت ضد اسپم",
+            "anti_spam"
           )
         ],
 
         [
           Markup.button.callback(
             B.back,
-            "panel"
+            "panel_messages"
           )
         ],
 
@@ -1895,11 +1619,79 @@ bot.action(
 );
 
 // =====================================================
-// CLEAN MESSAGES
+// WORD FILTER
 // =====================================================
 
 bot.action(
-  "clean_messages",
+  "word_filter",
+  async (ctx) => {
+
+    const access =
+      await checkPanelAccess(ctx);
+
+    if (!access.ok) {
+      try {
+        await ctx.answerCbQuery(
+          "❌ فقط مدیر و مالک دسترسی دارند."
+        );
+      } catch {}
+      return;
+    }
+
+    const group =
+      getGroup(ctx.chat.id);
+
+    group.wordFilter =
+      !group.wordFilter;
+
+    try {
+      await ctx.answerCbQuery(
+        group.wordFilter
+          ? "🔤 فیلتر کلمات فعال شد"
+          : "🔤 فیلتر کلمات غیرفعال شد"
+      );
+    } catch {}
+
+    await ctx.editMessageText(
+
+      "『𓆩 فیلتر کلمات 𓆪』\n\n" +
+      `وضعیت: ${group.wordFilter ? "فعال ✅" : "غیرفعال ❌"}\n\n` +
+      "برای افزودن کلمات فیلترشده در نسخه بعدی می‌توانیم بخش مدیریت کلمات را اضافه کنیم.",
+
+      Markup.inlineKeyboard([
+
+        [
+          Markup.button.callback(
+            "🔤 تغییر وضعیت",
+            "word_filter"
+          )
+        ],
+
+        [
+          Markup.button.callback(
+            B.back,
+            "panel_messages"
+          )
+        ],
+
+        [
+          Markup.button.callback(
+            B.closePanel,
+            "close_panel"
+          )
+        ]
+
+      ])
+    );
+  }
+);
+
+// =====================================================
+// DELETE MESSAGE HELP
+// =====================================================
+
+bot.action(
+  "delete_message_help",
   async (ctx) => {
 
     const access =
@@ -1915,14 +1707,97 @@ bot.action(
     }
 
     try {
-      await ctx.answerCbQuery(
-        "🧹 پاکسازی دستی فعلاً از طریق ریپلای انجام می‌شود."
-      );
+      await ctx.answerCbQuery();
     } catch {}
+
+    await ctx.editMessageText(
+
+      "『𓆩 حذف پیام 𓆪』\n\n" +
+      "برای حذف یک پیام، روی پیام موردنظر ریپلای کن و بنویس:\n\n" +
+      "حذف",
+
+      Markup.inlineKeyboard([
+
+        [
+          Markup.button.callback(
+            B.back,
+            "panel_messages"
+          )
+        ],
+
+        [
+          Markup.button.callback(
+            B.closePanel,
+            "close_panel"
+          )
+        ]
+
+      ])
+    );
   }
 );
 
 // =====================================================
+// DELETE REPLIED MESSAGE
+// =====================================================
+
+bot.hears(
+  /^حذف$/i,
+  async (ctx) => {
+
+    if (!isGroup(ctx)) {
+      return;
+    }
+
+    const access =
+      await checkPanelAccess(ctx);
+
+    if (!access.ok) {
+
+      return ctx.reply(
+        access.text,
+        replyOptions(ctx)
+      );
+    }
+
+    const targetMessage =
+      ctx.message?.reply_to_message;
+
+    if (!targetMessage) {
+
+      return ctx.reply(
+        "❌ روی پیام موردنظر ریپلای کن و بنویس:\n\nحذف",
+        replyOptions(ctx)
+      );
+    }
+
+    try {
+
+      await ctx.telegram.deleteMessage(
+        ctx.chat.id,
+        targetMessage.message_id
+      );
+
+      try {
+
+        await ctx.deleteMessage();
+
+      } catch {}
+
+    } catch (error) {
+
+      console.error(
+        "❌ DELETE:",
+        error.message
+      );
+
+      return ctx.reply(
+        "❌ حذف پیام انجام نشد.\n\nمطمئن شو ربات دسترسی حذف پیام‌ها را دارد.",
+        replyOptions(ctx)
+      );
+    }
+  }
+);// =====================================================
 // WARN PANEL
 // =====================================================
 
@@ -1946,24 +1821,19 @@ bot.action(
       await ctx.answerCbQuery();
     } catch {}
 
-    return ctx.editMessageText(
+    await ctx.editMessageText(
 
       "『𓆩 سیستم اخطار 𓆪』\n\n" +
-      "مدیریت سیستم اخطار:",
+      "برای دادن اخطار، روی پیام کاربر ریپلای کن و بنویس:\n\n" +
+      "اخطار\n\n" +
+      "⚠️ تعداد اخطارهای هر کاربر برای هر گروه جداگانه ثبت می‌شود.",
 
       Markup.inlineKeyboard([
 
         [
           Markup.button.callback(
-            "📋 لیست اخطارها",
-            "warn_list"
-          )
-        ],
-
-        [
-          Markup.button.callback(
-            "🗑 پاک کردن اخطارها",
-            "warn_clear"
+            "⚠️ راهنمای اخطار",
+            "warn_help"
           )
         ],
 
@@ -1987,11 +1857,11 @@ bot.action(
 );
 
 // =====================================================
-// WARN LIST
+// WARN HELP
 // =====================================================
 
 bot.action(
-  "warn_list",
+  "warn_help",
   async (ctx) => {
 
     const access =
@@ -2010,52 +1880,13 @@ bot.action(
       await ctx.answerCbQuery();
     } catch {}
 
-    const group =
-      getGroup(ctx.chat.id);
+    await ctx.editMessageText(
 
-    if (group.warns.size === 0) {
-
-      return ctx.editMessageText(
-
-        "『𓆩 لیست اخطارها 𓆪』\n\n" +
-        "✅ هیچ اخطاری ثبت نشده است.",
-
-        Markup.inlineKeyboard([
-
-          [
-            Markup.button.callback(
-              B.back,
-              "panel_warns"
-            )
-          ],
-
-          [
-            Markup.button.callback(
-              B.closePanel,
-              "close_panel"
-            )
-          ]
-
-        ])
-      );
-    }
-
-    let text =
-      "『𓆩 لیست اخطارها 𓆪』\n\n";
-
-    for (
-      const [userId, count]
-      of group.warns
-    ) {
-
-      text +=
-        `👤 ${userId}\n` +
-        `⚠️ اخطار: ${count}\n\n`;
-    }
-
-    return ctx.editMessageText(
-
-      text,
+      "『𓆩 سیستم اخطار 𓆪』\n\n" +
+      "👤 روی پیام کاربر ریپلای کن.\n\n" +
+      "سپس بنویس:\n" +
+      "اخطار\n\n" +
+      "ربات تعداد اخطارهای آن کاربر را ثبت می‌کند.",
 
       Markup.inlineKeyboard([
 
@@ -2079,62 +1910,7 @@ bot.action(
 );
 
 // =====================================================
-// CLEAR WARNS
-// =====================================================
-
-bot.action(
-  "warn_clear",
-  async (ctx) => {
-
-    const access =
-      await checkPanelAccess(ctx);
-
-    if (!access.ok) {
-      try {
-        await ctx.answerCbQuery(
-          "❌ فقط مدیر و مالک دسترسی دارند."
-        );
-      } catch {}
-      return;
-    }
-
-    const group =
-      getGroup(ctx.chat.id);
-
-    group.warns.clear();
-
-    try {
-      await ctx.answerCbQuery(
-        "اخطارها پاک شدند ✅"
-      );
-    } catch {}
-
-    return ctx.editMessageText(
-
-      "『𓆩 سیستم اخطار 𓆪』\n\n" +
-      "✅ تمام اخطارهای این گروه پاک شدند.",
-
-      Markup.inlineKeyboard([
-
-        [
-          Markup.button.callback(
-            B.back,
-            "panel"
-          )
-        ],
-
-        [
-          Markup.button.callback(
-            B.closePanel,
-            "close_panel"
-          )
-        ]
-
-      ])
-    );
-  }
-);// =====================================================
-// WELCOME / GOODBYE PANEL
+// WELCOME PANEL
 // =====================================================
 
 bot.action(
@@ -2153,41 +1929,31 @@ bot.action(
       return;
     }
 
+    const group =
+      getGroup(ctx.chat.id);
+
     try {
       await ctx.answerCbQuery();
     } catch {}
 
-    const group =
-      getGroup(ctx.chat.id);
-
-    return ctx.editMessageText(
+    await ctx.editMessageText(
 
       "『𓆩 ورود و خروج 𓆪』\n\n" +
-
-      `👋 پیام ورود: ${
-        group.welcome
-          ? "🔴 روشن"
-          : "🟢 خاموش"
-      }\n` +
-
-      `🚪 پیام خروج: ${
-        group.goodbye
-          ? "🔴 روشن"
-          : "🟢 خاموش"
-      }`,
+      `👋 خوش‌آمدگویی: ${group.welcome ? "فعال ✅" : "غیرفعال ❌"}\n` +
+      `🚪 پیام خروج: ${group.goodbye ? "فعال ✅" : "غیرفعال ❌"}`,
 
       Markup.inlineKeyboard([
 
         [
           Markup.button.callback(
-            "👋 ورود",
+            `👋 خوش‌آمدگویی ${group.welcome ? "🔒" : "🔓"}`,
             "toggle_welcome"
           )
         ],
 
         [
           Markup.button.callback(
-            "🚪 خروج",
+            `🚪 پیام خروج ${group.goodbye ? "🔒" : "🔓"}`,
             "toggle_goodbye"
           )
         ],
@@ -2212,14 +1978,11 @@ bot.action(
 );
 
 // =====================================================
-// TOGGLE WELCOME / GOODBYE
+// TOGGLE WELCOME
 // =====================================================
 
 bot.action(
-  [
-    "toggle_welcome",
-    "toggle_goodbye"
-  ],
+  "toggle_welcome",
   async (ctx) => {
 
     const access =
@@ -2237,56 +2000,35 @@ bot.action(
     const group =
       getGroup(ctx.chat.id);
 
-    if (
-      ctx.callbackQuery.data ===
-      "toggle_welcome"
-    ) {
-      group.welcome =
-        !group.welcome;
-    }
-
-    if (
-      ctx.callbackQuery.data ===
-      "toggle_goodbye"
-    ) {
-      group.goodbye =
-        !group.goodbye;
-    }
+    group.welcome =
+      !group.welcome;
 
     try {
       await ctx.answerCbQuery(
-        "تغییرات ذخیره شد ✅"
+        group.welcome
+          ? "👋 خوش‌آمدگویی فعال شد"
+          : "👋 خوش‌آمدگویی غیرفعال شد"
       );
     } catch {}
 
-    return ctx.editMessageText(
+    await ctx.editMessageText(
 
       "『𓆩 ورود و خروج 𓆪』\n\n" +
-
-      `👋 پیام ورود: ${
-        group.welcome
-          ? "🔴 روشن"
-          : "🟢 خاموش"
-      }\n` +
-
-      `🚪 پیام خروج: ${
-        group.goodbye
-          ? "🔴 روشن"
-          : "🟢 خاموش"
-      }`,
+      `👋 خوش‌آمدگویی: ${group.welcome ? "فعال ✅" : "غیرفعال ❌"}\n` +
+      `🚪 پیام خروج: ${group.goodbye ? "فعال ✅" : "غیرفعال ❌"}`,
 
       Markup.inlineKeyboard([
 
         [
           Markup.button.callback(
-            "👋 ورود",
+            `👋 خوش‌آمدگویی ${group.welcome ? "🔒" : "🔓"}`,
             "toggle_welcome"
           )
         ],
 
         [
           Markup.button.callback(
-            "🚪 خروج",
+            `🚪 پیام خروج ${group.goodbye ? "🔒" : "🔓"}`,
             "toggle_goodbye"
           )
         ],
@@ -2296,12 +2038,73 @@ bot.action(
             B.back,
             "panel"
           )
+        ]
+
+      ])
+    );
+  }
+);
+
+// =====================================================
+// TOGGLE GOODBYE
+// =====================================================
+
+bot.action(
+  "toggle_goodbye",
+  async (ctx) => {
+
+    const access =
+      await checkPanelAccess(ctx);
+
+    if (!access.ok) {
+      try {
+        await ctx.answerCbQuery(
+          "❌ فقط مدیر و مالک دسترسی دارند."
+        );
+      } catch {}
+      return;
+    }
+
+    const group =
+      getGroup(ctx.chat.id);
+
+    group.goodbye =
+      !group.goodbye;
+
+    try {
+      await ctx.answerCbQuery(
+        group.goodbye
+          ? "🚪 پیام خروج فعال شد"
+          : "🚪 پیام خروج غیرفعال شد"
+      );
+    } catch {}
+
+    await ctx.editMessageText(
+
+      "『𓆩 ورود و خروج 𓆪』\n\n" +
+      `👋 خوش‌آمدگویی: ${group.welcome ? "فعال ✅" : "غیرفعال ❌"}\n` +
+      `🚪 پیام خروج: ${group.goodbye ? "فعال ✅" : "غیرفعال ❌"}`,
+
+      Markup.inlineKeyboard([
+
+        [
+          Markup.button.callback(
+            `👋 خوش‌آمدگویی ${group.welcome ? "🔒" : "🔓"}`,
+            "toggle_welcome"
+          )
         ],
 
         [
           Markup.button.callback(
-            B.closePanel,
-            "close_panel"
+            `🚪 پیام خروج ${group.goodbye ? "🔒" : "🔓"}`,
+            "toggle_goodbye"
+          )
+        ],
+
+        [
+          Markup.button.callback(
+            B.back,
+            "panel"
           )
         ]
 
@@ -2311,6 +2114,96 @@ bot.action(
 );
 
 // =====================================================
+// NEW MEMBER WELCOME
+// =====================================================
+
+bot.on(
+  "new_chat_members",
+  async (ctx) => {
+
+    if (!isGroup(ctx)) {
+      return;
+    }
+
+    const group =
+      getGroup(ctx.chat.id);
+
+    if (!group.welcome) {
+      return;
+    }
+
+    for (
+      const member of ctx.message.new_chat_members
+    ) {
+
+      try {
+
+        await ctx.reply(
+
+          "『𓆩 خوش آمدید 🌹 𓆪』\n\n" +
+          `👤 ${userName(member)}\n\n` +
+          "به گروه خوش اومدی ❤️",
+
+          replyOptions(ctx)
+        );
+
+      } catch (error) {
+
+        console.error(
+          "❌ WELCOME:",
+          error.message
+        );
+      }
+    }
+  }
+);
+
+// =====================================================
+// MEMBER LEFT
+// =====================================================
+
+bot.on(
+  "left_chat_member",
+  async (ctx) => {
+
+    if (!isGroup(ctx)) {
+      return;
+    }
+
+    const group =
+      getGroup(ctx.chat.id);
+
+    if (!group.goodbye) {
+      return;
+    }
+
+    const member =
+      ctx.message.left_chat_member;
+
+    if (!member) {
+      return;
+    }
+
+    try {
+
+      await ctx.reply(
+
+        "『𓆩 خروج کاربر 🚪 𓆪』\n\n" +
+        `👤 ${userName(member)}\n\n` +
+        "از گروه خارج شد.",
+
+        replyOptions(ctx)
+      );
+
+    } catch (error) {
+
+      console.error(
+        "❌ GOODBYE:",
+        error.message
+      );
+    }
+  }
+);// =====================================================
 // RULES PANEL
 // =====================================================
 
@@ -2330,23 +2223,25 @@ bot.action(
       return;
     }
 
+    const group =
+      getGroup(ctx.chat.id);
+
     try {
       await ctx.answerCbQuery();
     } catch {}
 
-    const group =
-      getGroup(ctx.chat.id);
-
-    return ctx.editMessageText(
+    await ctx.editMessageText(
 
       "『𓆩 قوانین گروه 𓆪』\n\n" +
-      group.rules,
+      `${group.rules}\n\n` +
+      "برای تغییر قوانین، از دستور زیر استفاده کن:\n\n" +
+      "قوانین جدید متن قوانین",
 
       Markup.inlineKeyboard([
 
         [
           Markup.button.callback(
-            "📋 نمایش قوانین",
+            "📜 نمایش قوانین",
             "show_rules"
           )
         ],
@@ -2378,6 +2273,10 @@ bot.action(
   "show_rules",
   async (ctx) => {
 
+    if (!isGroup(ctx)) {
+      return;
+    }
+
     const access =
       await checkPanelAccess(ctx);
 
@@ -2390,14 +2289,14 @@ bot.action(
       return;
     }
 
+    const group =
+      getGroup(ctx.chat.id);
+
     try {
       await ctx.answerCbQuery();
     } catch {}
 
-    const group =
-      getGroup(ctx.chat.id);
-
-    return ctx.editMessageText(
+    await ctx.editMessageText(
 
       "『𓆩 قوانین گروه 𓆪』\n\n" +
       group.rules,
@@ -2424,6 +2323,105 @@ bot.action(
 );
 
 // =====================================================
+// SET RULES
+// =====================================================
+
+bot.hears(
+  /^قوانین جدید (.+)$/i,
+  async (ctx) => {
+
+    if (!isGroup(ctx)) {
+      return;
+    }
+
+    const access =
+      await checkPanelAccess(ctx);
+
+    if (!access.ok) {
+
+      return ctx.reply(
+        access.text,
+        replyOptions(ctx)
+      );
+    }
+
+    const rules =
+      ctx.match[1].trim();
+
+    if (!rules) {
+
+      return ctx.reply(
+        "❌ متن قوانین خالی است.",
+        replyOptions(ctx)
+      );
+    }
+
+    const group =
+      getGroup(ctx.chat.id);
+
+    group.rules =
+      rules;
+
+    return ctx.reply(
+
+      "『𓆩 قوانین ذخیره شد 📜 𓆪』\n\n" +
+      group.rules,
+
+      replyOptions(ctx)
+    );
+  }
+);
+
+// =====================================================
+// RULES COMMAND
+// =====================================================
+
+bot.command(
+  "rules",
+  async (ctx) => {
+
+    if (!isGroup(ctx)) {
+
+      return ctx.reply(
+        "❌ قوانین فقط داخل گروه قابل نمایش است."
+      );
+    }
+
+    const group =
+      getGroup(ctx.chat.id);
+
+    return ctx.reply(
+
+      "『𓆩 قوانین گروه 𓆪』\n\n" +
+      group.rules,
+
+      replyOptions(ctx)
+    );
+  }
+);
+
+bot.hears(
+  /^قوانین$/i,
+  async (ctx) => {
+
+    if (!isGroup(ctx)) {
+      return;
+    }
+
+    const group =
+      getGroup(ctx.chat.id);
+
+    return ctx.reply(
+
+      "『𓆩 قوانین گروه 𓆪』\n\n" +
+      group.rules,
+
+      replyOptions(ctx)
+    );
+  }
+);
+
+// =====================================================
 // STATS PANEL
 // =====================================================
 
@@ -2443,139 +2441,47 @@ bot.action(
       return;
     }
 
-    try {
-      await ctx.answerCbQuery();
-    } catch {}
-
     const group =
       getGroup(ctx.chat.id);
 
-    let memberCount =
-      "نامشخص";
+    let totalWarns = 0;
 
-    try {
-
-      memberCount =
-        await ctx.telegram.getChatMemberCount(
-          ctx.chat.id
-        );
-
-    } catch (error) {
-
-      console.error(
-        "❌ MEMBER COUNT:",
-        error.message
-      );
-    }
-
-    return ctx.editMessageText(
-
-      "『𓆩 آمار گروه 𓆪』\n\n" +
-
-      `👥 اعضای گروه: ${memberCount}\n` +
-
-      `⚠️ کاربران دارای اخطار: ${
-        group.warns.size
-      }\n` +
-
-      `🔗 قفل لینک: ${
-        group.locks.links
-          ? "روشن"
-          : "خاموش"
-      }\n` +
-
-      `🚫 ضداسپم: ${
-        group.antiSpam
-          ? "روشن"
-          : "خاموش"
-      }\n\n` +
-
-      "🤖 PulseGroupManager",
-
-      Markup.inlineKeyboard([
-
-        [
-          Markup.button.callback(
-            B.back,
-            "panel"
-          )
-        ],
-
-        [
-          Markup.button.callback(
-            B.closePanel,
-            "close_panel"
-          )
-        ]
-
-      ])
-    );
-  }
-);
-
-// =====================================================
-// SETTINGS PANEL
-// =====================================================
-
-bot.action(
-  "settings",
-  async (ctx) => {
-
-    const access =
-      await checkPanelAccess(ctx);
-
-    if (!access.ok) {
-      try {
-        await ctx.answerCbQuery(
-          "❌ فقط مدیر و مالک دسترسی دارند."
-        );
-      } catch {}
-      return;
+    for (
+      const count of group.warns.values()
+    ) {
+      totalWarns += count;
     }
 
     try {
       await ctx.answerCbQuery();
     } catch {}
 
-    return ctx.editMessageText(
+    await ctx.editMessageText(
 
-      "『𓆩 تنظیمات گروه 𓆪』\n\n" +
-      "بخش موردنظر را انتخاب کنید:",
+      "『𓆩 آمار گروه 𓆪』\n\n" +
+
+      `⚠️ مجموع اخطارها: ${totalWarns}\n` +
+      `👤 کاربران دارای اخطار: ${group.warns.size}\n\n` +
+
+      `🔗 قفل لینک: ${group.locks.links ? "فعال 🔒" : "خاموش 🔓"}\n` +
+      `🖼 قفل رسانه: ${group.locks.media ? "فعال 🔒" : "خاموش 🔓"}\n` +
+      `📁 قفل فایل: ${group.locks.files ? "فعال 🔒" : "خاموش 🔓"}\n` +
+      `🎭 قفل استیکر: ${group.locks.sticker ? "فعال 🔒" : "خاموش 🔓"}\n` +
+      `🎞 قفل گیف: ${group.locks.gif ? "فعال 🔒" : "خاموش 🔓"}\n` +
+      `📊 قفل نظرسنجی: ${group.locks.poll ? "فعال 🔒" : "خاموش 🔓"}\n\n` +
+
+      `🛡 ضد اسپم: ${group.antiSpam ? "فعال ✅" : "خاموش ❌"}\n` +
+      `🔤 فیلتر کلمات: ${group.wordFilter ? "فعال ✅" : "خاموش ❌"}\n\n` +
+
+      `👋 خوش‌آمدگویی: ${group.welcome ? "فعال ✅" : "خاموش ❌"}\n` +
+      `🚪 پیام خروج: ${group.goodbye ? "فعال ✅" : "خاموش ❌"}`,
 
       Markup.inlineKeyboard([
 
         [
           Markup.button.callback(
-            "『𓆩 کاربران 𓆪",
-            "settings_users"
-          )
-        ],
-
-        [
-          Markup.button.callback(
-            "『𓆩 پیام‌ها 𓆪",
-            "settings_messages"
-          )
-        ],
-
-        [
-          Markup.button.callback(
-            "『𓆩 قفل‌ها 𓆪",
-            "settings_locks"
-          )
-        ],
-
-        [
-          Markup.button.callback(
-            "『𓆩 ورود و خروج 𓆪",
-            "settings_welcome"
-          )
-        ],
-
-        [
-          Markup.button.callback(
-            "『𓆩 قوانین 𓆪",
-            "settings_rules"
+            "🔄 بروزرسانی آمار",
+            "panel_stats"
           )
         ],
 
@@ -2599,7 +2505,7 @@ bot.action(
 );
 
 // =====================================================
-// SETTINGS - USERS
+// SETTINGS USERS
 // =====================================================
 
 bot.action(
@@ -2622,10 +2528,10 @@ bot.action(
       await ctx.answerCbQuery();
     } catch {}
 
-    return ctx.editMessageText(
+    await ctx.editMessageText(
 
       "『𓆩 تنظیمات کاربران 𓆪』\n\n" +
-      "مدیریت کاربران گروه:",
+      "مدیریت کاربران از بخش «مدیریت کاربران» پنل انجام می‌شود.",
 
       Markup.inlineKeyboard([
 
@@ -2656,7 +2562,7 @@ bot.action(
 );
 
 // =====================================================
-// SETTINGS - MESSAGES
+// SETTINGS MESSAGES
 // =====================================================
 
 bot.action(
@@ -2679,10 +2585,10 @@ bot.action(
       await ctx.answerCbQuery();
     } catch {}
 
-    return ctx.editMessageText(
+    await ctx.editMessageText(
 
       "『𓆩 تنظیمات پیام‌ها 𓆪』\n\n" +
-      "مدیریت ضداسپم و فیلتر پیام‌ها:",
+      "از این بخش می‌توانی مدیریت پیام‌ها و ضداسپم را کنترل کنی.",
 
       Markup.inlineKeyboard([
 
@@ -2710,179 +2616,8 @@ bot.action(
       ])
     );
   }
-);
-
-// =====================================================
-// SETTINGS - LOCKS
-// =====================================================
-
-bot.action(
-  "settings_locks",
-  async (ctx) => {
-
-    const access =
-      await checkPanelAccess(ctx);
-
-    if (!access.ok) {
-      try {
-        await ctx.answerCbQuery(
-          "❌ فقط مدیر و مالک دسترسی دارند."
-        );
-      } catch {}
-      return;
-    }
-
-    try {
-      await ctx.answerCbQuery();
-    } catch {}
-
-    return ctx.editMessageText(
-
-      "『𓆩 تنظیمات قفل‌ها 𓆪』\n\n" +
-      "مدیریت قفل‌های گروه:",
-
-      Markup.inlineKeyboard([
-
-        [
-          Markup.button.callback(
-            B.locks,
-            "panel_locks"
-          )
-        ],
-
-        [
-          Markup.button.callback(
-            B.back,
-            "settings"
-          )
-        ],
-
-        [
-          Markup.button.callback(
-            B.closePanel,
-            "close_panel"
-          )
-        ]
-
-      ])
-    );
-  }
-);
-
-// =====================================================
-// SETTINGS - WELCOME
-// =====================================================
-
-bot.action(
-  "settings_welcome",
-  async (ctx) => {
-
-    const access =
-      await checkPanelAccess(ctx);
-
-    if (!access.ok) {
-      try {
-        await ctx.answerCbQuery(
-          "❌ فقط مدیر و مالک دسترسی دارند."
-        );
-      } catch {}
-      return;
-    }
-
-    try {
-      await ctx.answerCbQuery();
-    } catch {}
-
-    return ctx.editMessageText(
-
-      "『𓆩 تنظیمات ورود و خروج 𓆪』\n\n" +
-      "مدیریت پیام‌های ورود و خروج:",
-
-      Markup.inlineKeyboard([
-
-        [
-          Markup.button.callback(
-            B.welcome,
-            "panel_welcome"
-          )
-        ],
-
-        [
-          Markup.button.callback(
-            B.back,
-            "settings"
-          )
-        ],
-
-        [
-          Markup.button.callback(
-            B.closePanel,
-            "close_panel"
-          )
-        ]
-
-      ])
-    );
-  }
-);
-
-// =====================================================
-// SETTINGS - RULES
-// =====================================================
-
-bot.action(
-  "settings_rules",
-  async (ctx) => {
-
-    const access =
-      await checkPanelAccess(ctx);
-
-    if (!access.ok) {
-      try {
-        await ctx.answerCbQuery(
-          "❌ فقط مدیر و مالک دسترسی دارند."
-        );
-      } catch {}
-      return;
-    }
-
-    try {
-      await ctx.answerCbQuery();
-    } catch {}
-
-    return ctx.editMessageText(
-
-      "『𓆩 تنظیمات قوانین 𓆪』\n\n" +
-      "نمایش قوانین فعلی گروه:",
-
-      Markup.inlineKeyboard([
-
-        [
-          Markup.button.callback(
-            B.rules,
-            "panel_rules"
-          )
-        ],
-
-        [
-          Markup.button.callback(
-            B.back,
-            "settings"
-          )
-        ],
-
-        [
-          Markup.button.callback(
-            B.closePanel,
-            "close_panel"
-          )
-        ]
-
-      ])
-    );
-  }
 );// =====================================================
-// WELCOME NEW MEMBERS
+// WELCOME / GOODBYE
 // =====================================================
 
 bot.on("new_chat_members", async (ctx) => {
@@ -2891,22 +2626,22 @@ bot.on("new_chat_members", async (ctx) => {
     return;
   }
 
-  const group =
-    getGroup(ctx.chat.id);
+  const group = getGroup(ctx.chat.id);
 
   if (!group.welcome) {
     return;
   }
 
-  for (const member of ctx.message.new_chat_members) {
+  for (const user of ctx.message.new_chat_members) {
 
     try {
 
       await ctx.reply(
         "『𓆩 خوش آمدید 𓆪』\n\n" +
-        `👤 ${userName(member)}\n\n` +
+        `👤 ${userName(user)}\n\n` +
         "به گروه خوش اومدی 🌹\n" +
-        "امیدواریم کنارمون لحظات خوبی داشته باشی ❤️"
+        "امیدواریم کنارمون خوش بگذره ❤️",
+        replyOptions(ctx)
       );
 
     } catch (error) {
@@ -2915,12 +2650,13 @@ bot.on("new_chat_members", async (ctx) => {
         "❌ WELCOME:",
         error.message
       );
+
     }
   }
 });
 
 // =====================================================
-// GOODBYE MEMBERS
+// GOODBYE
 // =====================================================
 
 bot.on("left_chat_member", async (ctx) => {
@@ -2929,22 +2665,25 @@ bot.on("left_chat_member", async (ctx) => {
     return;
   }
 
-  const group =
-    getGroup(ctx.chat.id);
+  const group = getGroup(ctx.chat.id);
 
   if (!group.goodbye) {
     return;
   }
 
-  const member =
-    ctx.message.left_chat_member;
+  const user = ctx.message.left_chat_member;
+
+  if (!user) {
+    return;
+  }
 
   try {
 
     await ctx.reply(
       "『𓆩 خروج از گروه 𓆪』\n\n" +
-      `👤 ${userName(member)}\n\n` +
-      "از گروه خارج شد. 👋"
+      `👤 ${userName(user)}\n\n` +
+      "از گروه خارج شد. 👋",
+      replyOptions(ctx)
     );
 
   } catch (error) {
@@ -2953,108 +2692,73 @@ bot.on("left_chat_member", async (ctx) => {
       "❌ GOODBYE:",
       error.message
     );
+
   }
 });
 
 // =====================================================
-// UNKNOWN TEXT COMMANDS
+// RULES
 // =====================================================
 
 bot.hears(
-  /^پنل\s+/i,
+  /^قوانین$/i,
   async (ctx) => {
 
     if (!isGroup(ctx)) {
       return;
     }
 
-    const access =
-      await checkPanelAccess(ctx);
-
-    if (!access.ok) {
-      return;
-    }
+    const group = getGroup(ctx.chat.id);
 
     return ctx.reply(
-      "❌ دستور پنل صحیح نیست.\n\n" +
-      "برای باز کردن پنل فقط بنویس:\n\n" +
-      "پنل",
+      "『𓆩 قوانین گروه 𓆪』\n\n" +
+      group.rules,
       replyOptions(ctx)
     );
   }
 );
 
 // =====================================================
-// GLOBAL ERROR HANDLER
+// STATS
+// =====================================================
+
+bot.hears(
+  /^آمار$/i,
+  async (ctx) => {
+
+    if (!isGroup(ctx)) {
+      return;
+    }
+
+    const group = getGroup(ctx.chat.id);
+
+    let warnCount = 0;
+
+    for (const count of group.warns.values()) {
+      warnCount += count;
+    }
+
+    return ctx.reply(
+      "『𓆩 آمار گروه 𓆪』\n\n" +
+      `⚠️ مجموع اخطارها: ${warnCount}\n` +
+      `👋 ورود خوش‌آمدگویی: ${group.welcome ? "فعال ✅" : "خاموش ❌"}\n` +
+      `🚪 پیام خروج: ${group.goodbye ? "فعال ✅" : "خاموش ❌"}\n` +
+      `🚫 ضداسپم: ${group.antiSpam ? "فعال ✅" : "خاموش ❌"}\n` +
+      `🔎 فیلتر کلمات: ${group.wordFilter ? "فعال ✅" : "خاموش ❌"}`,
+      replyOptions(ctx)
+    );
+  }
+);
+
+// =====================================================
+// ERROR HANDLER
 // =====================================================
 
 bot.catch((error, ctx) => {
 
   console.error(
     "❌ BOT ERROR:",
-    error
-  );
-
-  try {
-
-    if (ctx && ctx.chat) {
-
-      ctx.reply(
-        "❌ یک خطای موقت در ربات رخ داد."
-      ).catch(() => {});
-
-    }
-
-  } catch {}
-});
-
-// =====================================================
-// LAUNCH BOT
-// =====================================================
-
-bot.launch({
-
-  dropPendingUpdates: true
-
-})
-.then(() => {
-
-  console.log(
-    "🤖 PulseGroupManager is running!"
-  );
-
-  console.log(
-    "🔐 Panel access: ADMIN + OWNER ONLY"
-  );
-
-})
-.catch((error) => {
-
-  console.error(
-    "❌ BOT LAUNCH ERROR:",
-    error
+    error.message
   );
 
 });
-
-// =====================================================
-// SAFE SHUTDOWN
-// =====================================================
-
-process.once(
-  "SIGINT",
-  () => {
-    bot.stop("SIGINT");
-  }
-);
-
-process.once(
-  "SIGTERM",
-  () => {
-    bot.stop("SIGTERM");
-  }
-);
-
-// =====================================================
-// END OF FILE
-// =====================================================
