@@ -3,17 +3,15 @@ const http = require("http");
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
-// یک پورت ساده برای Render
 const PORT = process.env.PORT || 3000;
 
 http.createServer((req, res) => {
-  res.writeHead(200);
+  res.writeHead(200, { "Content-Type": "text/plain" });
   res.end("PulseGroupManager is running!");
-}).listen(PORT, () => {
+}).listen(PORT, "0.0.0.0", () => {
   console.log(`Web server running on port ${PORT}`);
 });
 
-// دستور شروع
 bot.start((ctx) => {
   ctx.reply(
     "سلام 👋\n" +
@@ -22,7 +20,6 @@ bot.start((ctx) => {
   );
 });
 
-// راهنما
 bot.help((ctx) => {
   ctx.reply(
     "📚 راهنمای ربات\n\n" +
@@ -32,16 +29,17 @@ bot.help((ctx) => {
   );
 });
 
-// مدیریت خطا
 bot.catch((err) => {
   console.error("Bot error:", err);
 });
 
-// اجرای ربات
 bot.launch()
-  .then(() => console.log("PulseGroupManager started successfully"))
-  .catch((err) => console.error("Failed to start bot:", err));
+  .then(() => {
+    console.log("PulseGroupManager started successfully");
+  })
+  .catch((err) => {
+    console.error("Failed to start bot:", err);
+  });
 
-// توقف صحیح ربات
 process.once("SIGINT", () => bot.stop("SIGINT"));
 process.once("SIGTERM", () => bot.stop("SIGTERM"));
