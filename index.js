@@ -2761,4 +2761,29 @@ bot.catch((error, ctx) => {
     error.message
   );
 
+});// =====================================================
+// START BOT
+// =====================================================
+
+bot.launch()
+  .then(() => {
+    console.log("🤖 PulseGroupManager started successfully!");
+  })
+  .catch((error) => {
+    console.error(
+      "❌ BOT LAUNCH ERROR:",
+      error.message
+    );
+  });
+
+// =====================================================
+// GRACEFUL STOP
+// =====================================================
+
+process.once("SIGINT", () => {
+  bot.stop("SIGINT");
+});
+
+process.once("SIGTERM", () => {
+  bot.stop("SIGTERM");
 });
