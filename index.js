@@ -1929,4 +1929,631 @@ function getPermissions(
   }
 
   return group.userPermissions[id];
-          }
+          }// =====================================================
+// PERMISSIONS PANEL
+// =====================================================
+
+function permissionsPanel(
+  ownerId,
+  chatId,
+  targetId
+) {
+  const permissions =
+    getPermissions(
+      chatId,
+      targetId
+    );
+
+  const rows = [];
+
+  for (
+    let i = 0;
+    i < permissionNames.length;
+    i += 2
+  ) {
+    const a =
+      permissionNames[i];
+
+    const b =
+      permissionNames[i + 1];
+
+    const row = [
+      Markup.button.callback(
+        `${a[1]} ${star(permissions[a[0]])}`,
+        `perm:${ownerId}:${targetId}:${a[0]}`
+      )
+    ];
+
+    if (b) {
+      row.push(
+        Markup.button.callback(
+          `${b[1]} ${star(permissions[b[0]])}`,
+          `perm:${ownerId}:${targetId}:${b[0]}`
+        )
+      );
+    }
+
+    rows.push(row);
+  }
+
+  rows.push([
+    Markup.button.callback(
+      "بازگشت",
+      `back:${ownerId}`
+    ),
+
+    Markup.button.callback(
+      "بستن",
+      `close:${ownerId}`
+    )
+  ]);
+
+  return Markup.inlineKeyboard(rows);
+}
+
+// =====================================================
+// OPEN USER PERMISSIONS
+// =====================================================
+
+bot.action(
+  /^permissions:(\d+)$/,
+  async ctx => {
+
+    if (!(await protectPanel(ctx))) {
+      return;
+    }
+
+    try {
+      await ctx.answerCbQuery();
+    } catch {}
+
+    const messageId =
+      ctx.callbackQuery.message.message_id;
+
+    const panel =
+      getPanel(
+        ctx.chat.id,
+        messageId
+      );
+
+    if (
+      !panel ||
+      !panel.targetId
+    ) {
+      return ctx.answerCbQuery(
+        "ابتدا پنل را با ریپلای روی کاربر باز کنید.",
+        {
+          show_alert: true
+        }
+      );
+    }
+
+    const targetId =
+      panel.targetId;
+
+    await ctx.editMessageText(
+      "دسترسی‌های کاربر\n\n" +
+      "★ = دسترسی دارد\n" +
+      "☆ = دسترسی ندارد\n\n" +
+      "آیدی کاربر: " +
+      targetId,
+
+      permissionsPanel(
+        ctx.from.id,
+        ctx.chat.id,
+        targetId
+      )
+    );
+  }
+);
+
+// =====================================================
+// TOGGLE USER PERMISSION
+// =====================================================
+
+bot.action(
+  /^perm:(\d+):(\d+):([a-z]+)$/,
+  async ctx => {
+
+    if (!(await protectPanel(ctx))) {
+      return;
+    }
+
+    const ownerId =
+      Number(ctx.match[1]);
+
+    const targetId =
+      Number(ctx.match[2]);
+
+    const key =
+      ctx.match[3];
+
+    const permissions =
+      getPermissions(
+        ctx.chat.id,
+        targetId
+      );
+
+    if (
+      typeof permissions[key] ===
+      "undefined"
+    ) {
+      return ctx.answerCbQuery(
+        "این دسترسی وجود ندارد.",
+        {
+          show_alert: true
+        }
+      );
+    }
+
+    permissions[key] =
+      !permissions[key];
+
+    saveDB();
+
+    try {
+      await ctx.answerCbQuery();
+    } catch {}
+
+    await ctx.editMessageText(
+      "دسترسی‌های کاربر\n\n" +
+      "★ = دسترسی دارد\n" +
+      "☆ = دسترسی ندارد\n\n" +
+      "آیدی کاربر: " +
+      targetId,
+
+      permissionsPanel(
+        ownerId,
+        ctx.chat.id,
+        targetId
+      )
+    );
+  }
+);
+
+// =====================================================
+// BAN HELP
+// =====================================================
+
+bot.action(
+  /^banHelp:(\d+)$/,
+  async ctx => {
+
+    if (!(await protectPanel(ctx))) {
+      return;
+    }
+
+    try {
+      await ctx.answerCbQuery();
+    } catch {}
+
+    await ctx.editMessageText(
+      "بن کاربر\n\n" +
+      "روی پیام کاربر ریپلای کنید و بنویسید:\n\n" +
+      "بن",
+
+      Markup.inlineKeyboard([
+        [
+          panelButton(
+            "مدیریت کاربران",
+            "users",
+            ctx.from.id
+          )
+        ],
+        [
+          panelButton(
+            "بازگشت",
+            "back",
+            ctx.from.id
+          ),
+          panelButton(
+            "بستن",
+            "close",
+            ctx.from.id
+          )
+        ]
+      ])
+    );
+  }
+);
+
+// =====================================================
+// BAN COMMAND
+// =====================================================
+
+bot.hears(
+  /^بن$/u,
+  async ctx => {
+
+    if (!isGroup(ctx)) {
+      return;
+    }
+
+    const target =
+      getReplyUser(ctx);
+
+    if (!target) {
+      return ctx.reply(
+        "روی پیام کاربر ریپلای کنید و بن بنویسید."
+      );
+    }
+
+    const permission =
+      await checkTarget(
+        ctx,
+        target
+      );
+
+    if (!permission.ok) {
+      return ctx.reply(
+        permission.text
+      );
+    }
+
+    try {
+
+      await ctx.telegram.banChatMember(
+        ctx.chat.id,
+        target.id
+      );
+
+      await ctx.reply(
+        "کاربر بن شد.\n\n" +
+        "نام: " +
+        nameOf(target) +
+        "\n" +
+        "آیدی: " +
+        target.id
+      );
+
+    } catch (error) {
+
+      console.error(
+        "BAN ERROR:",
+        error.message
+      );
+
+      await ctx.reply(
+        "بن انجام نشد. دسترسی Ban Users ربات را بررسی کنید."
+      );
+    }
+  }
+);
+
+// =====================================================
+// UNBAN HELP
+// =====================================================
+
+bot.action(
+  /^unbanHelp:(\d+)$/,
+  async ctx => {
+
+    if (!(await protectPanel(ctx))) {
+      return;
+    }
+
+    try {
+      await ctx.answerCbQuery();
+    } catch {}
+
+    await ctx.editMessageText(
+      "آن‌بن کاربر\n\n" +
+      "روی پیام کاربر ریپلای کنید و بنویسید:\n\n" +
+      "آن‌بن",
+
+      Markup.inlineKeyboard([
+        [
+          panelButton(
+            "مدیریت کاربران",
+            "users",
+            ctx.from.id
+          )
+        ],
+        [
+          panelButton(
+            "بازگشت",
+            "back",
+            ctx.from.id
+          ),
+          panelButton(
+            "بستن",
+            "close",
+            ctx.from.id
+          )
+        ]
+      ])
+    );
+  }
+);
+
+// =====================================================
+// UNBAN COMMAND
+// =====================================================
+
+bot.hears(
+  /^آن‌بن$/u,
+  async ctx => {
+
+    if (!isGroup(ctx)) {
+      return;
+    }
+
+    const target =
+      getReplyUser(ctx);
+
+    if (!target) {
+      return ctx.reply(
+        "روی پیام کاربر ریپلای کنید و آن‌بن بنویسید."
+      );
+    }
+
+    const permission =
+      await checkTarget(
+        ctx,
+        target
+      );
+
+    if (!permission.ok) {
+      return ctx.reply(
+        permission.text
+      );
+    }
+
+    try {
+
+      await ctx.telegram.unbanChatMember(
+        ctx.chat.id,
+        target.id,
+        {
+          only_if_banned: true
+        }
+      );
+
+      await ctx.reply(
+        "کاربر آن‌بن شد.\n\n" +
+        "نام: " +
+        nameOf(target) +
+        "\n" +
+        "آیدی: " +
+        target.id
+      );
+
+    } catch (error) {
+
+      console.error(
+        "UNBAN ERROR:",
+        error.message
+      );
+
+      await ctx.reply(
+        "آن‌بن انجام نشد."
+      );
+    }
+  }
+);
+
+// =====================================================
+// DELETE MESSAGE HELP
+// =====================================================
+
+bot.action(
+  /^deleteHelp:(\d+)$/,
+  async ctx => {
+
+    if (!(await protectPanel(ctx))) {
+      return;
+    }
+
+    try {
+      await ctx.answerCbQuery();
+    } catch {}
+
+    await ctx.editMessageText(
+      "حذف پیام\n\n" +
+      "روی پیام موردنظر ریپلای کنید و بنویسید:\n\n" +
+      "حذف",
+
+      Markup.inlineKeyboard([
+        [
+          panelButton(
+            "مدیریت کاربران",
+            "users",
+            ctx.from.id
+          )
+        ],
+        [
+          panelButton(
+            "بازگشت",
+            "back",
+            ctx.from.id
+          ),
+          panelButton(
+            "بستن",
+            "close",
+            ctx.from.id
+          )
+        ]
+      ])
+    );
+  }
+);
+
+// =====================================================
+// DELETE MESSAGE COMMAND
+// =====================================================
+
+bot.hears(
+  /^حذف$/u,
+  async ctx => {
+
+    if (!isGroup(ctx)) {
+      return;
+    }
+
+    const access =
+      await checkAdmin(ctx);
+
+    if (!access.ok) {
+      return ctx.reply(
+        access.text
+      );
+    }
+
+    const reply =
+      ctx.message &&
+      ctx.message.reply_to_message;
+
+    if (!reply) {
+      return ctx.reply(
+        "روی پیام موردنظر ریپلای کنید و حذف بنویسید."
+      );
+    }
+
+    try {
+
+      await ctx.telegram.deleteMessage(
+        ctx.chat.id,
+        reply.message_id
+      );
+
+      await ctx.deleteMessage();
+
+    } catch (error) {
+
+      console.error(
+        "DELETE ERROR:",
+        error.message
+      );
+
+      await ctx.reply(
+        "حذف پیام انجام نشد."
+      );
+    }
+  }
+);
+
+// =====================================================
+// HELP PANEL
+// =====================================================
+
+bot.action(
+  /^help:(\d+)$/,
+  async ctx => {
+
+    if (!(await protectPanel(ctx))) {
+      return;
+    }
+
+    try {
+      await ctx.answerCbQuery();
+    } catch {}
+
+    await ctx.editMessageText(
+      "راهنمای PulseGroupManager\n\n" +
+      "پنل فقط برای مدیر صاحب آن باز است.\n\n" +
+      "مدیریت کاربر:\n" +
+      "پیام کاربر را ریپلای کنید و عملیات موردنظر را انجام دهید.\n\n" +
+      "دسترسی‌ها:\n" +
+      "★ یعنی دسترسی فعال است.\n" +
+      "☆ یعنی دسترسی غیرفعال است.\n\n" +
+      "پنل کاربر:\n" +
+      "روی پیام کاربر ریپلای کنید و «پنل» بزنید.",
+
+      Markup.inlineKeyboard([
+        [
+          panelButton(
+            "بازگشت",
+            "back",
+            ctx.from.id
+          ),
+          panelButton(
+            "بستن",
+            "close",
+            ctx.from.id
+          )
+        ]
+      ])
+    );
+  }
+);
+
+// =====================================================
+// SETTINGS PANEL
+// =====================================================
+
+function settingsPanel(ownerId) {
+  return Markup.inlineKeyboard([
+
+    [
+      panelButton(
+        "تنظیمات گروه",
+        "groupSettings",
+        ownerId
+      )
+    ],
+
+    [
+      panelButton(
+        "خوشامد",
+        "welcomeSettings",
+        ownerId
+      ),
+
+      panelButton(
+        "قوانین",
+        "rules",
+        ownerId
+      )
+    ],
+
+    [
+      panelButton(
+        "ورود و خروج",
+        "welcome",
+        ownerId
+      )
+    ],
+
+    [
+      panelButton(
+        "بازگشت",
+        "back",
+        ownerId
+      ),
+
+      panelButton(
+        "بستن",
+        "close",
+        ownerId
+      )
+    ]
+
+  ]);
+}
+
+// =====================================================
+// SETTINGS
+// =====================================================
+
+bot.action(
+  /^settings:(\d+)$/,
+  async ctx => {
+
+    if (!(await protectPanel(ctx))) {
+      return;
+    }
+
+    try {
+      await ctx.answerCbQuery();
+    } catch {}
+
+    await ctx.editMessageText(
+      "تنظیمات\n\n" +
+      "تنظیمات اصلی ربات و گروه را از این بخش مدیریت کنید.",
+
+      settingsPanel(
+        ctx.from.id
+      )
+    );
+  }
+);
