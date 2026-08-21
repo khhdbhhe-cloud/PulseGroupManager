@@ -644,4 +644,636 @@ bot.on(
     // دستورات مدیریتی را برای آمار هم حساب می‌کنیم.
     updateUserStats(ctx);
   }
+);// =====================================================
+// CLOSE PANEL
+// =====================================================
+
+bot.action(
+  /^close:(\d+)$/,
+  async ctx => {
+    if (!(await protectPanel(ctx))) return;
+
+    try {
+      await ctx.answerCbQuery();
+    } catch {}
+
+    const messageId =
+      ctx.callbackQuery.message.message_id;
+
+    deletePanel(
+      ctx.chat.id,
+      messageId
+    );
+
+    try {
+      await ctx.deleteMessage();
+    } catch (error) {
+      console.error(
+        "CLOSE PANEL ERROR:",
+        error.message
+      );
+
+      try {
+        await ctx.editMessageText(
+          "پنل بسته شد."
+        );
+      } catch {}
+    }
+  }
+);
+
+// =====================================================
+// BACK TO MAIN PANEL
+// =====================================================
+
+bot.action(
+  /^back:(\d+)$/,
+  async ctx => {
+    if (!(await protectPanel(ctx))) return;
+
+    try {
+      await ctx.answerCbQuery();
+    } catch {}
+
+    const panel =
+      getPanel(
+        ctx.chat.id,
+        ctx.callbackQuery.message.message_id
+      );
+
+    if (!panel) return;
+
+    let target = null;
+
+    if (panel.targetId) {
+      try {
+        const member =
+          await ctx.telegram.getChatMember(
+            ctx.chat.id,
+            panel.targetId
+          );
+
+        target = member.user;
+      } catch {}
+    }
+
+    try {
+      await ctx.editMessageText(
+        panelText(target),
+        mainPanel(ctx.from.id)
+      );
+    } catch (error) {
+      console.error(
+        "BACK PANEL ERROR:",
+        error.message
+      );
+    }
+  }
+);
+
+// =====================================================
+// USERS PANEL
+// =====================================================
+
+function usersPanel(ownerId) {
+  return Markup.inlineKeyboard([
+
+    [
+      panelButton(
+        "بن",
+        "banHelp",
+        ownerId
+      ),
+
+      panelButton(
+        "آن‌بن",
+        "unbanHelp",
+        ownerId
+      )
+    ],
+
+    [
+      panelButton(
+        "میوت",
+        "muteHelp",
+        ownerId
+      ),
+
+      panelButton(
+        "آن‌میوت",
+        "unmuteHelp",
+        ownerId
+      )
+    ],
+
+    [
+      panelButton(
+        "اخطار",
+        "warnHelp",
+        ownerId
+      ),
+
+      panelButton(
+        "اطلاعات",
+        "infoHelp",
+        ownerId
+      )
+    ],
+
+    [
+      panelButton(
+        "آمار کاربر",
+        "userStatsHelp",
+        ownerId
+      )
+    ],
+
+    [
+      panelButton(
+        "بازگشت",
+        "back",
+        ownerId
+      ),
+
+      panelButton(
+        "بستن",
+        "close",
+        ownerId
+      )
+    ]
+
+  ]);
+}
+
+// =====================================================
+// USERS BUTTON
+// =====================================================
+
+bot.action(
+  /^users:(\d+)$/,
+  async ctx => {
+    if (!(await protectPanel(ctx))) return;
+
+    try {
+      await ctx.answerCbQuery();
+    } catch {}
+
+    await ctx.editMessageText(
+      "مدیریت کاربران\n\n" +
+      "برای انجام عملیات روی کاربر، " +
+      "پیام همان کاربر را ریپلای کنید.",
+      usersPanel(ctx.from.id)
+    );
+  }
+);
+
+// =====================================================
+// TARGET PERMISSION
+// =====================================================
+
+async function checkTarget(
+  ctx,
+  target
+) {
+  if (!target) {
+    return {
+      ok: false,
+      text: "کاربر موردنظر پیدا نشد."
+    };
+  }
+
+  const executorRole =
+    await getRole(
+      ctx,
+      ctx.from.id
+    );
+
+  const targetRole =
+    await getRole(
+      ctx,
+      target.id
+    );
+
+  if (!isAdminRole(executorRole)) {
+    return {
+      ok: false,
+      text:
+        "فقط مدیران می‌توانند این کار را انجام دهند."
+    };
+  }
+
+  if (targetRole === "creator") {
+    return {
+      ok: false,
+      text:
+        "مالک گروه قابل مدیریت نیست."
+    };
+  }
+
+  if (
+    targetRole === "administrator" &&
+    executorRole !== "creator"
+  ) {
+    return {
+      ok: false,
+      text:
+        "مدیر عادی نمی‌تواند مدیر دیگری را مدیریت کند."
+    };
+  }
+
+  return {
+    ok: true,
+    executorRole,
+    targetRole
+  };
+}
+
+// =====================================================
+// BAN
+// =====================================================
+
+bot.action(
+  /^banHelp:(\d+)$/,
+  async ctx => {
+    if (!(await protectPanel(ctx))) return;
+
+    try {
+      await ctx.answerCbQuery();
+    } catch {}
+
+    await ctx.editMessageText(
+      "بن کاربر\n\n" +
+      "برای انجام بن، روی پیام کاربر ریپلای کنید و بنویسید:\n\n" +
+      "بن",
+      Markup.inlineKeyboard([
+        [
+          panelButton(
+            "مدیریت کاربران",
+            "users",
+            ctx.from.id
+          )
+        ],
+        [
+          panelButton(
+            "بازگشت",
+            "back",
+            ctx.from.id
+          ),
+
+          panelButton(
+            "بستن",
+            "close",
+            ctx.from.id
+          )
+        ]
+      ])
+    );
+  }
+);
+
+bot.hears(
+  /^بن$/u,
+  async ctx => {
+    if (!isGroup(ctx)) return;
+
+    const target =
+      getReplyUser(ctx);
+
+    if (!target) {
+      return ctx.reply(
+        "روی پیام کاربر ریپلای کنید و بن بنویسید."
+      );
+    }
+
+    const permission =
+      await checkTarget(
+        ctx,
+        target
+      );
+
+    if (!permission.ok) {
+      return ctx.reply(
+        permission.text
+      );
+    }
+
+    try {
+      await ctx.telegram.banChatMember(
+        ctx.chat.id,
+        target.id
+      );
+
+      await ctx.reply(
+        "کاربر بن شد.\n\n" +
+        "نام: " +
+        nameOf(target) +
+        "\n" +
+        "آیدی: " +
+        target.id
+      );
+    } catch (error) {
+      console.error(
+        "BAN ERROR:",
+        error.message
+      );
+
+      await ctx.reply(
+        "بن انجام نشد. دسترسی Ban Users ربات را بررسی کنید."
+      );
+    }
+  }
+);
+
+// =====================================================
+// UNBAN
+// =====================================================
+
+bot.action(
+  /^unbanHelp:(\d+)$/,
+  async ctx => {
+    if (!(await protectPanel(ctx))) return;
+
+    try {
+      await ctx.answerCbQuery();
+    } catch {}
+
+    await ctx.editMessageText(
+      "آن‌بن کاربر\n\n" +
+      "روی پیام کاربر ریپلای کنید و بنویسید:\n\n" +
+      "آن‌بن",
+      Markup.inlineKeyboard([
+        [
+          panelButton(
+            "مدیریت کاربران",
+            "users",
+            ctx.from.id
+          )
+        ],
+        [
+          panelButton(
+            "بازگشت",
+            "back",
+            ctx.from.id
+          ),
+
+          panelButton(
+            "بستن",
+            "close",
+            ctx.from.id
+          )
+        ]
+      ])
+    );
+  }
+);
+
+bot.hears(
+  /^آن‌بن$/u,
+  async ctx => {
+    if (!isGroup(ctx)) return;
+
+    const target =
+      getReplyUser(ctx);
+
+    if (!target) {
+      return ctx.reply(
+        "روی پیام کاربر ریپلای کنید و آن‌بن بنویسید."
+      );
+    }
+
+    const permission =
+      await checkTarget(
+        ctx,
+        target
+      );
+
+    if (!permission.ok) {
+      return ctx.reply(
+        permission.text
+      );
+    }
+
+    try {
+      await ctx.telegram.unbanChatMember(
+        ctx.chat.id,
+        target.id,
+        {
+          only_if_banned: true
+        }
+      );
+
+      await ctx.reply(
+        "کاربر آن‌بن شد.\n\n" +
+        "نام: " +
+        nameOf(target) +
+        "\n" +
+        "آیدی: " +
+        target.id
+      );
+    } catch (error) {
+      console.error(
+        "UNBAN ERROR:",
+        error.message
+      );
+
+      await ctx.reply(
+        "آن‌بن انجام نشد."
+      );
+    }
+  }
+);
+
+// =====================================================
+// MUTE HELP
+// =====================================================
+
+function mutePanel(ownerId) {
+  return Markup.inlineKeyboard([
+
+    [
+      panelButton(
+        "۱ ساعت",
+        "mutetime1",
+        ownerId
+      ),
+
+      panelButton(
+        "۲ ساعت",
+        "mutetime2",
+        ownerId
+      )
+    ],
+
+    [
+      panelButton(
+        "۳ ساعت",
+        "mutetime3",
+        ownerId
+      ),
+
+      panelButton(
+        "۴ ساعت",
+        "mutetime4",
+        ownerId
+      )
+    ],
+
+    [
+      panelButton(
+        "۶ ساعت",
+        "mutetime6",
+        ownerId
+      ),
+
+      panelButton(
+        "۱۲ ساعت",
+        "mutetime12",
+        ownerId
+      )
+    ],
+
+    [
+      panelButton(
+        "۲۴ ساعت",
+        "mutetime24",
+        ownerId
+      )
+    ],
+
+    [
+      panelButton(
+        "بازگشت",
+        "users",
+        ownerId
+      ),
+
+      panelButton(
+        "بستن",
+        "close",
+        ownerId
+      )
+    ]
+
+  ]);
+}
+
+// =====================================================
+// MUTE BUTTON
+// =====================================================
+
+bot.action(
+  /^muteHelp:(\d+)$/,
+  async ctx => {
+    if (!(await protectPanel(ctx))) return;
+
+    try {
+      await ctx.answerCbQuery();
+    } catch {}
+
+    await ctx.editMessageText(
+      "میوت کاربر\n\n" +
+      "مدت میوت را انتخاب کنید.\n\n" +
+      "سپس روی پیام کاربر ریپلای کنید و بنویسید:\n" +
+      "میوت",
+      mutePanel(ctx.from.id)
+    );
+  }
+);
+
+// =====================================================
+// MUTE FUNCTION
+// =====================================================
+
+async function muteTarget(
+  ctx,
+  hours
+) {
+  if (!isGroup(ctx)) return;
+
+  const target =
+    getReplyUser(ctx);
+
+  if (!target) {
+    return ctx.reply(
+      "روی پیام کاربر ریپلای کنید."
+    );
+  }
+
+  const permission =
+    await checkTarget(
+      ctx,
+      target
+    );
+
+  if (!permission.ok) {
+    return ctx.reply(
+      permission.text
+    );
+  }
+
+  try {
+    const until =
+      Math.floor(
+        Date.now() / 1000
+      ) +
+      hours * 60 * 60;
+
+    await ctx.telegram.restrictChatMember(
+      ctx.chat.id,
+      target.id,
+      {
+        until_date: until,
+
+        permissions: {
+          can_send_messages: false,
+          can_send_audios: false,
+          can_send_documents: false,
+          can_send_photos: false,
+          can_send_videos: false,
+          can_send_video_notes: false,
+          can_send_voice_notes: false,
+          can_send_polls: false,
+          can_send_other_messages: false,
+          can_add_web_page_previews: false
+        }
+      }
+    );
+
+    await ctx.reply(
+      "کاربر میوت شد.\n\n" +
+      "نام: " +
+      nameOf(target) +
+      "\n" +
+      "آیدی: " +
+      target.id +
+      "\n" +
+      "مدت: " +
+      hours +
+      " ساعت"
+    );
+
+  } catch (error) {
+    console.error(
+      "MUTE ERROR:",
+      error.message
+    );
+
+    await ctx.reply(
+      "میوت انجام نشد. دسترسی Restrict Members ربات را بررسی کنید."
+    );
+  }
+}
+
+// =====================================================
+// MUTE COMMAND
+// =====================================================
+
+bot.hears(
+  /^میوت$/u,
+  async ctx => {
+    await muteTarget(
+      ctx,
+      1
+    );
+  }
 );
