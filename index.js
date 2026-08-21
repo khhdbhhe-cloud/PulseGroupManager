@@ -1276,4 +1276,657 @@ bot.hears(
       1
     );
   }
+);// =====================================================
+// MUTE TIME ACTIONS
+// =====================================================
+
+for (const hours of [
+  1,
+  2,
+  3,
+  4,
+  6,
+  12,
+  24
+]) {
+  bot.action(
+    new RegExp(
+      `^mutetime${hours}:(\\d+)$`
+    ),
+    async ctx => {
+
+      if (!(await protectPanel(ctx))) {
+        return;
+      }
+
+      try {
+        await ctx.answerCbQuery();
+      } catch {}
+
+      const messageId =
+        ctx.callbackQuery.message.message_id;
+
+      const panel =
+        getPanel(
+          ctx.chat.id,
+          messageId
+        );
+
+      if (
+        !panel ||
+        !panel.targetId
+      ) {
+        return ctx.answerCbQuery(
+          "ابتدا پنل را با ریپلای روی کاربر باز کنید.",
+          {
+            show_alert: true
+          }
+        );
+      }
+
+      const targetId =
+        panel.targetId;
+
+      const permission =
+        await checkTarget(
+          ctx,
+          {
+            id: targetId
+          }
+        );
+
+      if (!permission.ok) {
+        return ctx.answerCbQuery(
+          permission.text,
+          {
+            show_alert: true
+          }
+        );
+      }
+
+      try {
+
+        const until =
+          Math.floor(
+            Date.now() / 1000
+          ) +
+          hours * 60 * 60;
+
+        await ctx.telegram.restrictChatMember(
+          ctx.chat.id,
+          targetId,
+          {
+            until_date: until,
+
+            permissions: {
+              can_send_messages: false,
+              can_send_audios: false,
+              can_send_documents: false,
+              can_send_photos: false,
+              can_send_videos: false,
+              can_send_video_notes: false,
+              can_send_voice_notes: false,
+              can_send_polls: false,
+              can_send_other_messages: false,
+              can_add_web_page_previews: false
+            }
+          }
+        );
+
+        await ctx.answerCbQuery(
+          "میوت انجام شد."
+        );
+
+        await ctx.editMessageText(
+          "میوت انجام شد.\n\n" +
+          "آیدی کاربر: " +
+          targetId +
+          "\n" +
+          "مدت: " +
+          hours +
+          " ساعت",
+          Markup.inlineKeyboard([
+            [
+              panelButton(
+                "مدیریت کاربران",
+                "users",
+                ctx.from.id
+              )
+            ],
+            [
+              panelButton(
+                "بازگشت",
+                "back",
+                ctx.from.id
+              ),
+
+              panelButton(
+                "بستن",
+                "close",
+                ctx.from.id
+              )
+            ]
+          ])
+        );
+
+      } catch (error) {
+
+        console.error(
+          "MUTE TIME ERROR:",
+          error.message
+        );
+
+        await ctx.answerCbQuery(
+          "میوت انجام نشد.",
+          {
+            show_alert: true
+          }
+        );
+      }
+    }
+  );
+}
+
+// =====================================================
+// UNMUTE
+// =====================================================
+
+bot.action(
+  /^unmuteHelp:(\d+)$/,
+  async ctx => {
+
+    if (!(await protectPanel(ctx))) {
+      return;
+    }
+
+    try {
+      await ctx.answerCbQuery();
+    } catch {}
+
+    await ctx.editMessageText(
+      "آن‌میوت کاربر\n\n" +
+      "برای خارج کردن کاربر از میوت، " +
+      "روی پیام او ریپلای کنید و بنویسید:\n\n" +
+      "آن‌میوت",
+
+      Markup.inlineKeyboard([
+        [
+          panelButton(
+            "مدیریت کاربران",
+            "users",
+            ctx.from.id
+          )
+        ],
+        [
+          panelButton(
+            "بازگشت",
+            "back",
+            ctx.from.id
+          ),
+
+          panelButton(
+            "بستن",
+            "close",
+            ctx.from.id
+          )
+        ]
+      ])
+    );
+  }
 );
+
+// =====================================================
+// UNMUTE COMMAND
+// =====================================================
+
+bot.hears(
+  /^آن‌میوت$/u,
+  async ctx => {
+
+    if (!isGroup(ctx)) return;
+
+    const target =
+      getReplyUser(ctx);
+
+    if (!target) {
+      return ctx.reply(
+        "روی پیام کاربر ریپلای کنید و آن‌میوت بنویسید."
+      );
+    }
+
+    const permission =
+      await checkTarget(
+        ctx,
+        target
+      );
+
+    if (!permission.ok) {
+      return ctx.reply(
+        permission.text
+      );
+    }
+
+    try {
+
+      await ctx.telegram.restrictChatMember(
+        ctx.chat.id,
+        target.id,
+        {
+          permissions: {
+            can_send_messages: true,
+            can_send_audios: true,
+            can_send_documents: true,
+            can_send_photos: true,
+            can_send_videos: true,
+            can_send_video_notes: true,
+            can_send_voice_notes: true,
+            can_send_polls: true,
+            can_send_other_messages: true,
+            can_add_web_page_previews: true
+          }
+        }
+      );
+
+      await ctx.reply(
+        "کاربر آن‌میوت شد.\n\n" +
+        "نام: " +
+        nameOf(target) +
+        "\n" +
+        "آیدی: " +
+        target.id
+      );
+
+    } catch (error) {
+
+      console.error(
+        "UNMUTE ERROR:",
+        error.message
+      );
+
+      await ctx.reply(
+        "آن‌میوت انجام نشد."
+      );
+    }
+  }
+);
+
+// =====================================================
+// WARN HELP
+// =====================================================
+
+bot.action(
+  /^warnHelp:(\d+)$/,
+  async ctx => {
+
+    if (!(await protectPanel(ctx))) {
+      return;
+    }
+
+    try {
+      await ctx.answerCbQuery();
+    } catch {}
+
+    await ctx.editMessageText(
+      "اخطار کاربر\n\n" +
+      "روی پیام کاربر ریپلای کنید و بنویسید:\n\n" +
+      "اخطار",
+
+      Markup.inlineKeyboard([
+        [
+          panelButton(
+            "مدیریت کاربران",
+            "users",
+            ctx.from.id
+          )
+        ],
+        [
+          panelButton(
+            "بازگشت",
+            "back",
+            ctx.from.id
+          ),
+
+          panelButton(
+            "بستن",
+            "close",
+            ctx.from.id
+          )
+        ]
+      ])
+    );
+  }
+);
+
+// =====================================================
+// WARN COMMAND
+// =====================================================
+
+bot.hears(
+  /^اخطار$/u,
+  async ctx => {
+
+    if (!isGroup(ctx)) return;
+
+    const target =
+      getReplyUser(ctx);
+
+    if (!target) {
+      return ctx.reply(
+        "روی پیام کاربر ریپلای کنید و اخطار بنویسید."
+      );
+    }
+
+    const permission =
+      await checkTarget(
+        ctx,
+        target
+      );
+
+    if (!permission.ok) {
+      return ctx.reply(
+        permission.text
+      );
+    }
+
+    const group =
+      getGroup(ctx.chat.id);
+
+    const id =
+      String(target.id);
+
+    if (
+      typeof group.warns[id] !==
+      "number"
+    ) {
+      group.warns[id] = 0;
+    }
+
+    group.warns[id]++;
+
+    saveDB();
+
+    await ctx.reply(
+      "اخطار ثبت شد.\n\n" +
+      "نام: " +
+      nameOf(target) +
+      "\n" +
+      "آیدی: " +
+      target.id +
+      "\n" +
+      "تعداد اخطار: " +
+      group.warns[id]
+    );
+  }
+);
+
+// =====================================================
+// USER INFO HELP
+// =====================================================
+
+bot.action(
+  /^infoHelp:(\d+)$/,
+  async ctx => {
+
+    if (!(await protectPanel(ctx))) {
+      return;
+    }
+
+    try {
+      await ctx.answerCbQuery();
+    } catch {}
+
+    await ctx.editMessageText(
+      "اطلاعات کاربر\n\n" +
+      "برای نمایش اطلاعات، " +
+      "روی پیام کاربر ریپلای کنید و بنویسید:\n\n" +
+      "اطلاعات",
+
+      Markup.inlineKeyboard([
+        [
+          panelButton(
+            "مدیریت کاربران",
+            "users",
+            ctx.from.id
+          )
+        ],
+        [
+          panelButton(
+            "بازگشت",
+            "back",
+            ctx.from.id
+          ),
+
+          panelButton(
+            "بستن",
+            "close",
+            ctx.from.id
+          )
+        ]
+      ])
+    );
+  }
+);
+
+// =====================================================
+// USER INFO COMMAND
+// =====================================================
+
+bot.hears(
+  /^اطلاعات$/u,
+  async ctx => {
+
+    if (!isGroup(ctx)) return;
+
+    const target =
+      getReplyUser(ctx);
+
+    if (!target) {
+      return ctx.reply(
+        "روی پیام کاربر ریپلای کنید و اطلاعات بنویسید."
+      );
+    }
+
+    const role =
+      await getRole(
+        ctx,
+        target.id
+      );
+
+    let roleText =
+      "کاربر";
+
+    if (role === "creator") {
+      roleText =
+        "مالک گروه";
+    } else if (
+      role === "administrator"
+    ) {
+      roleText =
+        "مدیر گروه";
+    }
+
+    const group =
+      getGroup(ctx.chat.id);
+
+    const id =
+      String(target.id);
+
+    const warns =
+      group.warns[id] || 0;
+
+    const stats =
+      getUserStats(
+        ctx.chat.id,
+        target.id
+      );
+
+    await ctx.reply(
+      "اطلاعات کاربر\n\n" +
+      "نام: " +
+      nameOf(target) +
+      "\n" +
+      "آیدی: " +
+      target.id +
+      "\n" +
+      "وضعیت: " +
+      roleText +
+      "\n" +
+      "اخطارها: " +
+      warns +
+      "\n" +
+      "پیام‌های امروز: " +
+      stats.todayMessages +
+      "\n" +
+      "کل پیام‌ها: " +
+      stats.totalMessages
+    );
+  }
+);
+
+// =====================================================
+// USER STATS HELP
+// =====================================================
+
+bot.action(
+  /^userStatsHelp:(\d+)$/,
+  async ctx => {
+
+    if (!(await protectPanel(ctx))) {
+      return;
+    }
+
+    try {
+      await ctx.answerCbQuery();
+    } catch {}
+
+    await ctx.editMessageText(
+      "آمار کاربر\n\n" +
+      "روی پیام کاربر ریپلای کنید و بنویسید:\n\n" +
+      "آمار",
+
+      Markup.inlineKeyboard([
+        [
+          panelButton(
+            "مدیریت کاربران",
+            "users",
+            ctx.from.id
+          )
+        ],
+        [
+          panelButton(
+            "بازگشت",
+            "back",
+            ctx.from.id
+          ),
+
+          panelButton(
+            "بستن",
+            "close",
+            ctx.from.id
+          )
+        ]
+      ])
+    );
+  }
+);
+
+// =====================================================
+// USER STATS COMMAND
+// =====================================================
+
+bot.hears(
+  /^آمار$/u,
+  async ctx => {
+
+    if (!isGroup(ctx)) return;
+
+    const target =
+      getReplyUser(ctx);
+
+    if (!target) {
+      return ctx.reply(
+        "روی پیام کاربر ریپلای کنید و آمار بنویسید."
+      );
+    }
+
+    const stats =
+      getUserStats(
+        ctx.chat.id,
+        target.id
+      );
+
+    const group =
+      getGroup(ctx.chat.id);
+
+    const warns =
+      group.warns[String(target.id)] || 0;
+
+    await ctx.reply(
+      "آمار کاربر\n\n" +
+      "نام: " +
+      nameOf(target) +
+      "\n" +
+      "آیدی: " +
+      target.id +
+      "\n" +
+      "پیام‌های امروز: " +
+      stats.todayMessages +
+      "\n" +
+      "کل پیام‌ها: " +
+      stats.totalMessages +
+      "\n" +
+      "اخطارها: " +
+      warns
+    );
+  }
+);
+
+// =====================================================
+// PERMISSION NAMES
+// =====================================================
+
+const permissionNames = [
+  ["ban", "بن"],
+  ["mute", "میوت"],
+  ["delete", "حذف پیام"],
+  ["kick", "حذف کاربر"],
+  ["warn", "اخطار"],
+  ["pin", "پین"],
+  ["links", "مدیریت لینک"],
+  ["locks", "قفل‌ها"],
+  ["welcome", "خوشامد"],
+  ["settings", "تنظیمات"],
+  ["stats", "آمار"]
+];
+
+// =====================================================
+// GET USER PERMISSIONS
+// =====================================================
+
+function getPermissions(
+  chatId,
+  userId
+) {
+  const group =
+    getGroup(chatId);
+
+  const id =
+    String(userId);
+
+  if (!group.userPermissions[id]) {
+
+    group.userPermissions[id] = {};
+
+    for (
+      const [key]
+      of permissionNames
+    ) {
+      group.userPermissions[id][key] =
+        false;
+    }
+
+    saveDB();
+  }
+
+  return group.userPermissions[id];
+          }
