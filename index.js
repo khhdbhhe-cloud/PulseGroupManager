@@ -3,6 +3,7 @@ const http = require("http");
 
 const { registerCommands } = require("./commands");
 const { registerPanelActions } = require("./panel-actions");
+const { registerHelp } = require("./help");
 
 
 // ===============================
@@ -27,7 +28,6 @@ if (!BOT_TOKEN) {
 const bot = new Telegraf(BOT_TOKEN);
 
 
-
 // ===============================
 // RENDER SERVER
 // ===============================
@@ -42,7 +42,6 @@ http.createServer(
         "text/plain; charset=utf-8"
       }
     );
-
 
     res.end(
       "PulseGroupManager ONLINE"
@@ -63,7 +62,6 @@ http.createServer(
 );
 
 
-
 // ===============================
 // REGISTER SYSTEMS
 // ===============================
@@ -72,6 +70,7 @@ registerCommands(bot);
 
 registerPanelActions(bot);
 
+registerHelp(bot);
 
 
 // ===============================
@@ -87,12 +86,14 @@ bot.start(
 ربات مدیریت گروه فعال شد ✅
 
 برای دیدن پنل:
-پنل`
+پنل
+
+برای راهنما:
+راهنما`
     );
 
   }
 );
-
 
 
 // ===============================
@@ -109,7 +110,6 @@ bot.catch(
 
   }
 );
-
 
 
 // ===============================
@@ -138,7 +138,6 @@ bot.launch()
 );
 
 
-
 // ===============================
 // STOP HANDLER
 // ===============================
@@ -147,7 +146,6 @@ process.once(
   "SIGINT",
   () => bot.stop("SIGINT")
 );
-
 
 process.once(
   "SIGTERM",
