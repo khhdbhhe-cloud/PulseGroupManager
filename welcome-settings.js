@@ -1,24 +1,87 @@
 // =====================================
 // PulseGroupManager
-// Welcome Settings
+// Welcome System
 // =====================================
 
-const { getRole } = require("./security");
-
-const {
-  getWelcomeSettings,
-  setWelcomeMedia,
-  clearWelcomeMedia,
-  enableWelcome,
-  disableWelcome
-} = require("./welcome");
+const welcomeSettings = new Map();
 
 
 // =====================================
-// مدیرانی که مقام خوشامد دارند
+// تنظیمات پیش‌فرض
 // =====================================
 
-const welcomeManagers = new Map();
+function getDefaultSettings() {
+
+  return {
+    enabled: true,
+    type: "text",
+    fileId: null
+  };
+
+}
+
+
+// =====================================
+// دریافت تنظیمات گروه
+// =====================================
+
+function getWelcomeSettings(chatId) {
+
+  if (!welcomeSettings.has(chatId)) {
+
+    welcomeSettings.set(
+      chatId,
+      getDefaultSettings()
+    );
+
+  }
+
+  return welcomeSettings.get(chatId);
+
+}
+
+
+// =====================================
+// متن پیش‌فرض خوشامدگویی
+// =====================================
+
+function getWelcomeText(user) {
+
+  const firstName =
+    user.first_name || "دوست عزیز";
+
+  const userId =
+    user.id;
+
+  const mention =
+    `<a href="tg://user?id=${userId}">${escapeHtml(firstName)}</a>`;
+
+  return `『𓆩 ★ خوش اومدی ★ 𓆪』
+
+سلام ${mention} عزیز 🌹
+
+به جمع ما خوش اومدی ❤️
+
+امیدواریم کنارمون لحظات خوبی داشته باشی ✨
+
+『𓆩 از حضورت خوشحالیم 𓆪』`;
+
+}
+
+
+// =====================================
+// جلوگیری از خراب شدن HTML
+// =====================================
+
+function escapeHtml(text) {
+
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+}
 
 
 // =====================================
@@ -39,645 +102,29 @@ function isGroup(ctx) {
 
 
 // =====================================
-// گرفتن نقش کاربر
+// تنظیم رسانه خوشامد
+// این تابع توسط welcome-settings.js استفاده می‌شود
 // =====================================
 
-async function getUserRole(ctx, userId) {
-
-  try {
-
-    return await getRole(
-      ctx,
-      userId
-    );
-
-  }
-
-  catch (error) {
-
-    console.log(
-      "WELCOME ROLE ERROR:",
-      error.message
-    );
-
-    return null;
-
-  }
-
-}
-
-
-// =====================================
-// بررسی مالک
-// =====================================
-
-async function isOwner(ctx) {
-
-  const role =
-    await getUserRole(
-      ctx,
-      ctx.from.id
-    );
-
-  return role === "creator";
-
-}
-
-
-// =====================================
-// کلید مقام
-// =====================================
-
-function managerKey(
+function setWelcomeMedia(
   chatId,
-  userId
+  type,
+  fileId
 ) {
 
-  return `${chatId}:${userId}`;
+  const settings =
+    getWelcomeSettings(chatId);
 
-}
+  settings.type =
+    type;
 
+  settings.fileId =
+    fileId;
 
-// =====================================
-// دادن مقام خوشامد
-// =====================================
+  settings.enabled =
+    true;
 
-function addWelcomeManager(
-  chatId,
-  userId
-) {
-
-  welcomeManagers.set(
-    managerKey(
-      chatId,
-      userId
-    ),
-    true
-  );
-
-}
-
-
-// =====================================
-// حذف مقام خوشامد
-// =====================================
-
-function removeWelcomeManager(
-  chatId,
-  userId
-) {
-
-  welcomeManagers.delete(
-    managerKey(
-      chatId,
-      userId
-    )
-  );
-
-}
-
-
-// =====================================
-// بررسی داشتن مقام خوشامد
-// =====================================
-
-function hasWelcomeManager(
-  chatId,
-  userId
-) {
-
-  return welcomeManagers.has(
-    managerKey(
-      chatId,
-      userId
-    )
-  );
-
-}
-
-
-// =====================================
-// بررسی دسترسی تنظیم خوشامد
-// =====================================
-
-async function canManageWelcome(ctx) {
-
-  if (!isGroup(ctx)) {
-
-    return {
-      ok: false,
-      text: "این دستور فقط داخل گروه کار می‌کند."
-    };
-
-  }
-
-
-  const role =
-    await getUserRole(
-      ctx,
-      ctx.from.id
-    );
-
-
-  // مالک همیشه دسترسی دارد
-
-  if (role === "creator") {
-
-    return {
-      ok: true,
-      role: "creator"
-    };
-
-  }
-
-
-  // مدیر دارای مقام خوشامد
-
-  if (
-    hasWelcomeManager(
-      ctx.chat.id,
-      ctx.from.id
-    )
-  ) {
-
-    return {
-      ok: true,
-      role: "welcome_manager"
-    };
-
-  }
-
-
-  return {
-    ok: false,
-    text:
-      "فقط مالک گروه یا مدیری که مقام خوشامد دارد می‌تواند این دستور را اجرا کند."
-  };
-
-}
-
-
-// =====================================
-// ریپلای به دستور
-// =====================================
-
-function replyToCommand(
-  ctx,
-  text
-) {
-
-  return ctx.reply(
-    text,
-    {
-      reply_parameters: {
-        message_id:
-          ctx.message.message_id
-      }
-    }
-  );
-
-}
-
-
-// =====================================
-// تنظیم GIF
-// =====================================
-
-function registerGif(bot) {
-
-  bot.hears(
-    /^تنظیم\s+گیف$/u,
-    async ctx => {
-
-      try {
-
-        const access =
-          await canManageWelcome(ctx);
-
-        if (!access.ok) {
-
-          return replyToCommand(
-            ctx,
-            `『𓆩 ★ دسترسی ★ 𓆪』
-
-${access.text}`
-          );
-
-        }
-
-
-        const reply =
-          ctx.message.reply_to_message;
-
-
-        if (
-          !reply ||
-          !reply.animation
-        ) {
-
-          return replyToCommand(
-            ctx,
-`『𓆩 ★ تنظیم گیف ★ 𓆪』
-
-روی یک GIF ریپلای کنید و بنویسید:
-
-تنظیم گیف`
-          );
-
-        }
-
-
-        setWelcomeMedia(
-          ctx.chat.id,
-          "animation",
-          reply.animation.file_id
-        );
-
-
-        return replyToCommand(
-          ctx,
-`『𓆩 ★ خوشامدگویی ★ 𓆪』
-
-گیف خوشامدگویی با موفقیت تنظیم شد. 🎬
-
-از این به بعد اعضای جدید با همین GIF خوشامدگویی می‌شوند.`
-        );
-
-      }
-
-      catch (error) {
-
-        console.log(
-          "WELCOME SETTINGS GIF ERROR:",
-          error.message
-        );
-
-      }
-
-    }
-  );
-
-}
-
-
-// =====================================
-// تنظیم ویدیو
-// =====================================
-
-function registerVideo(bot) {
-
-  bot.hears(
-    /^تنظیم\s+ویدیو$/u,
-    async ctx => {
-
-      try {
-
-        const access =
-          await canManageWelcome(ctx);
-
-        if (!access.ok) {
-
-          return replyToCommand(
-            ctx,
-            `『𓆩 ★ دسترسی ★ 𓆪』
-
-${access.text}`
-          );
-
-        }
-
-
-        const reply =
-          ctx.message.reply_to_message;
-
-
-        if (
-          !reply ||
-          !reply.video
-        ) {
-
-          return replyToCommand(
-            ctx,
-`『𓆩 ★ تنظیم ویدیو ★ 𓆪』
-
-روی یک ویدیو ریپلای کنید و بنویسید:
-
-تنظیم ویدیو`
-          );
-
-        }
-
-
-        setWelcomeMedia(
-          ctx.chat.id,
-          "video",
-          reply.video.file_id
-        );
-
-
-        return replyToCommand(
-          ctx,
-`『𓆩 ★ خوشامدگویی ★ 𓆪』
-
-ویدیوی خوشامدگویی با موفقیت تنظیم شد. 🎥
-
-از این به بعد اعضای جدید با همین ویدیو خوشامدگویی می‌شوند.`
-        );
-
-      }
-
-      catch (error) {
-
-        console.log(
-          "WELCOME SETTINGS VIDEO ERROR:",
-          error.message
-        );
-
-      }
-
-    }
-  );
-
-}
-
-
-// =====================================
-// تنظیم استیکر
-// =====================================
-
-function registerSticker(bot) {
-
-  bot.hears(
-    /^تنظیم\s+استیکر$/u,
-    async ctx => {
-
-      try {
-
-        const access =
-          await canManageWelcome(ctx);
-
-        if (!access.ok) {
-
-          return replyToCommand(
-            ctx,
-            `『𓆩 ★ دسترسی ★ 𓆪』
-
-${access.text}`
-          );
-
-        }
-
-
-        const reply =
-          ctx.message.reply_to_message;
-
-
-        if (
-          !reply ||
-          !reply.sticker
-        ) {
-
-          return replyToCommand(
-            ctx,
-`『𓆩 ★ تنظیم استیکر ★ 𓆪』
-
-روی یک استیکر ریپلای کنید و بنویسید:
-
-تنظیم استیکر`
-          );
-
-        }
-
-
-        setWelcomeMedia(
-          ctx.chat.id,
-          "sticker",
-          reply.sticker.file_id
-        );
-
-
-        return replyToCommand(
-          ctx,
-`『𓆩 ★ خوشامدگویی ★ 𓆪』
-
-استیکر خوشامدگویی با موفقیت تنظیم شد. 🧩
-
-از این به بعد اعضای جدید با همین استیکر خوشامدگویی می‌شوند.`
-        );
-
-      }
-
-      catch (error) {
-
-        console.log(
-          "WELCOME SETTINGS STICKER ERROR:",
-          error.message
-        );
-
-      }
-
-    }
-  );
-
-}
-
-
-// =====================================
-// تنظیم عکس
-// =====================================
-
-function registerPhoto(bot) {
-
-  bot.hears(
-    /^تنظیم\s+عکس$/u,
-    async ctx => {
-
-      try {
-
-        const access =
-          await canManageWelcome(ctx);
-
-        if (!access.ok) {
-
-          return replyToCommand(
-            ctx,
-            `『𓆩 ★ دسترسی ★ 𓆪』
-
-${access.text}`
-          );
-
-        }
-
-
-        const reply =
-          ctx.message.reply_to_message;
-
-
-        if (
-          !reply ||
-          !reply.photo ||
-          !reply.photo.length
-        ) {
-
-          return replyToCommand(
-            ctx,
-`『𓆩 ★ تنظیم عکس ★ 𓆪』
-
-روی یک عکس ریپلای کنید و بنویسید:
-
-تنظیم عکس`
-          );
-
-        }
-
-
-        const photo =
-          reply.photo[
-            reply.photo.length - 1
-          ];
-
-
-        setWelcomeMedia(
-          ctx.chat.id,
-          "photo",
-          photo.file_id
-        );
-
-
-        return replyToCommand(
-          ctx,
-`『𓆩 ★ خوشامدگویی ★ 𓆪』
-
-عکس خوشامدگویی با موفقیت تنظیم شد. 🖼️
-
-از این به بعد اعضای جدید با همین عکس خوشامدگویی می‌شوند.`
-        );
-
-      }
-
-      catch (error) {
-
-        console.log(
-          "WELCOME SETTINGS PHOTO ERROR:",
-          error.message
-        );
-
-      }
-
-    }
-  );
-
-}
-
-
-// =====================================
-// روشن کردن خوشامد
-// =====================================
-
-function registerEnable(bot) {
-
-  bot.hears(
-    /^خوشامد\s+روشن$/u,
-    async ctx => {
-
-      try {
-
-        const access =
-          await canManageWelcome(ctx);
-
-        if (!access.ok) {
-
-          return replyToCommand(
-            ctx,
-            `『𓆩 ★ دسترسی ★ 𓆪』
-
-${access.text}`
-          );
-
-        }
-
-
-        enableWelcome(
-          ctx.chat.id
-        );
-
-
-        return replyToCommand(
-          ctx,
-`『𓆩 ★ خوشامدگویی ★ 𓆪』
-
-سیستم خوشامدگویی فعال شد. ✅`
-        );
-
-      }
-
-      catch (error) {
-
-        console.log(
-          "WELCOME ENABLE ERROR:",
-          error.message
-        );
-
-      }
-
-    }
-  );
-
-}
-
-
-// =====================================
-// خاموش کردن خوشامد
-// =====================================
-
-function registerDisable(bot) {
-
-  bot.hears(
-    /^خوشامد\s+خاموش$/u,
-    async ctx => {
-
-      try {
-
-        const access =
-          await canManageWelcome(ctx);
-
-        if (!access.ok) {
-
-          return replyToCommand(
-            ctx,
-            `『𓆩 ★ دسترسی ★ 𓆪』
-
-${access.text}`
-          );
-
-        }
-
-
-        disableWelcome(
-          ctx.chat.id
-        );
-
-
-        return replyToCommand(
-          ctx,
-`『𓆩 ★ خوشامدگویی ★ 𓆪』
-
-سیستم خوشامدگویی خاموش شد.`
-        );
-
-      }
-
-      catch (error) {
-
-        console.log(
-          "WELCOME DISABLE ERROR:",
-          error.message
-        );
-
-      }
-
-    }
-  );
+  return settings;
 
 }
 
@@ -686,54 +133,195 @@ ${access.text}`
 // حذف رسانه خوشامد
 // =====================================
 
-function registerClear(bot) {
+function clearWelcomeMedia(chatId) {
 
-  bot.hears(
-    /^حذف\s+خوشامد$/u,
-    async ctx => {
+  const settings =
+    getWelcomeSettings(chatId);
 
-      try {
+  settings.type =
+    "text";
 
-        const access =
-          await canManageWelcome(ctx);
+  settings.fileId =
+    null;
 
-        if (!access.ok) {
+  return settings;
 
-          return replyToCommand(
-            ctx,
-            `『𓆩 ★ دسترسی ★ 𓆪』
-
-${access.text}`
-          );
-
-        }
+}
 
 
-        clearWelcomeMedia(
-          ctx.chat.id
-        );
+// =====================================
+// فعال کردن خوشامد
+// =====================================
+
+function enableWelcome(chatId) {
+
+  const settings =
+    getWelcomeSettings(chatId);
+
+  settings.enabled =
+    true;
+
+  return settings;
+
+}
 
 
-        return replyToCommand(
-          ctx,
-`『𓆩 ★ خوشامدگویی ★ 𓆪』
+// =====================================
+// غیرفعال کردن خوشامد
+// =====================================
 
-رسانه خوشامدگویی حذف شد.
+function disableWelcome(chatId) {
 
-از این به بعد فقط متن خوشامدگویی ارسال می‌شود.`
-        );
+  const settings =
+    getWelcomeSettings(chatId);
 
+  settings.enabled =
+    false;
+
+  return settings;
+
+}
+
+
+// =====================================
+// ارسال خوشامدگویی
+// =====================================
+
+async function sendWelcome(
+  ctx,
+  user
+) {
+
+  if (!isGroup(ctx)) {
+
+    return;
+
+  }
+
+
+  const settings =
+    getWelcomeSettings(
+      ctx.chat.id
+    );
+
+
+  if (!settings.enabled) {
+
+    return;
+
+  }
+
+
+  const text =
+    getWelcomeText(user);
+
+
+  // ===================================
+  // فقط متن
+  // ===================================
+
+  if (
+    settings.type === "text" ||
+    !settings.fileId
+  ) {
+
+    return ctx.reply(
+      text,
+      {
+        parse_mode: "HTML"
       }
+    );
 
-      catch (error) {
+  }
 
-        console.log(
-          "WELCOME CLEAR ERROR:",
-          error.message
-        );
 
+  // ===================================
+  // GIF
+  // ===================================
+
+  if (
+    settings.type === "animation"
+  ) {
+
+    return ctx.replyWithAnimation(
+      settings.fileId,
+      {
+        caption: text,
+        parse_mode: "HTML"
       }
+    );
 
+  }
+
+
+  // ===================================
+  // ویدیو
+  // ===================================
+
+  if (
+    settings.type === "video"
+  ) {
+
+    return ctx.replyWithVideo(
+      settings.fileId,
+      {
+        caption: text,
+        parse_mode: "HTML"
+      }
+    );
+
+  }
+
+
+  // ===================================
+  // استیکر
+  // ===================================
+
+  if (
+    settings.type === "sticker"
+  ) {
+
+    await ctx.replyWithSticker(
+      settings.fileId
+    );
+
+    return ctx.reply(
+      text,
+      {
+        parse_mode: "HTML"
+      }
+    );
+
+  }
+
+
+  // ===================================
+  // عکس
+  // ===================================
+
+  if (
+    settings.type === "photo"
+  ) {
+
+    return ctx.replyWithPhoto(
+      settings.fileId,
+      {
+        caption: text,
+        parse_mode: "HTML"
+      }
+    );
+
+  }
+
+
+  // ===================================
+  // حالت پیش‌فرض
+  // ===================================
+
+  return ctx.reply(
+    text,
+    {
+      parse_mode: "HTML"
     }
   );
 
@@ -741,28 +329,26 @@ ${access.text}`
 
 
 // =====================================
-// وضعیت خوشامد
+// ثبت سیستم خوشامد
+// فقط ورود اعضای جدید
+//
+// توجه:
+// هیچ دستور تنظیمی اینجا وجود ندارد.
+// تمام دستورهای تنظیم خوشامد در
+// welcome-settings.js قرار دارند.
 // =====================================
 
-function registerStatus(bot) {
+function registerWelcome(bot) {
 
-  bot.hears(
-    /^وضعیت\s+خوشامد$/u,
+  bot.on(
+    "new_chat_members",
     async ctx => {
 
       try {
 
-        const access =
-          await canManageWelcome(ctx);
+        if (!isGroup(ctx)) {
 
-        if (!access.ok) {
-
-          return replyToCommand(
-            ctx,
-            `『𓆩 ★ دسترسی ★ 𓆪』
-
-${access.text}`
-          );
+          return;
 
         }
 
@@ -773,183 +359,34 @@ ${access.text}`
           );
 
 
-        let mediaName =
-          "فقط متن";
+        if (!settings.enabled) {
 
-
-        if (
-          settings.type === "animation"
-        ) {
-
-          mediaName = "GIF";
-
-        }
-
-        else if (
-          settings.type === "video"
-        ) {
-
-          mediaName = "ویدیو";
-
-        }
-
-        else if (
-          settings.type === "sticker"
-        ) {
-
-          mediaName = "استیکر";
-
-        }
-
-        else if (
-          settings.type === "photo"
-        ) {
-
-          mediaName = "عکس";
-
-        }
-
-
-        return replyToCommand(
-          ctx,
-`『𓆩 ★ وضعیت خوشامدگویی ★ 𓆪』
-
-★ وضعیت:
-${settings.enabled ? "فعال ✅" : "خاموش ❌"}
-
-★ رسانه:
-${mediaName}`
-        );
-
-      }
-
-      catch (error) {
-
-        console.log(
-          "WELCOME STATUS ERROR:",
-          error.message
-        );
-
-      }
-
-    }
-  );
-
-}
-
-
-// =====================================
-// مقام خوشامد - فقط مالک
-// =====================================
-
-function registerManagerGrant(bot) {
-
-  bot.hears(
-    /^مقام\s+خوشامد\s+تنظیم$/u,
-    async ctx => {
-
-      try {
-
-        if (!isGroup(ctx)) {
           return;
-        }
-
-
-        const owner =
-          await isOwner(ctx);
-
-
-        if (!owner) {
-
-          return replyToCommand(
-            ctx,
-`『𓆩 ★ دسترسی ★ 𓆪』
-
-فقط مالک گروه می‌تواند مقام خوشامد را تنظیم کند.`
-          );
 
         }
 
 
-        const reply =
-          ctx.message.reply_to_message;
+        const members =
+          ctx.message.new_chat_members || [];
 
 
-        if (!reply || !reply.from) {
-
-          return replyToCommand(
-            ctx,
-`『𓆩 ★ مقام خوشامد ★ 𓆪』
-
-روی پیام مدیر موردنظر ریپلای کنید و بنویسید:
-
-مقام خوشامد تنظیم`
-          );
-
-        }
-
-
-        const targetId =
-          reply.from.id;
-
-
-        const targetRole =
-          await getUserRole(
-            ctx,
-            targetId
-          );
-
-
-        if (
-          targetRole !== "administrator" &&
-          targetRole !== "creator"
+        for (
+          const user of members
         ) {
 
-          return replyToCommand(
+          await sendWelcome(
             ctx,
-`『𓆩 ★ مقام خوشامد ★ 𓆪』
-
-این مقام فقط به مدیر گروه داده می‌شود.`
+            user
           );
 
         }
-
-
-        if (
-          targetRole === "creator"
-        ) {
-
-          return replyToCommand(
-            ctx,
-`『𓆩 ★ مقام خوشامد ★ 𓆪』
-
-مالک گروه از قبل تمام دسترسی‌های خوشامد را دارد.`
-          );
-
-        }
-
-
-        addWelcomeManager(
-          ctx.chat.id,
-          targetId
-        );
-
-
-        return replyToCommand(
-          ctx,
-`『𓆩 ★ مقام خوشامد ★ 𓆪』
-
-مقام خوشامد برای این مدیر فعال شد. ✅
-
-از این به بعد می‌تواند تنظیمات خوشامدگویی را مدیریت کند.`
-        );
 
       }
 
       catch (error) {
 
         console.log(
-          "WELCOME MANAGER GRANT ERROR:",
+          "WELCOME MEMBER ERROR:",
           error.message
         );
 
@@ -957,122 +394,6 @@ function registerManagerGrant(bot) {
 
     }
   );
-
-}
-
-
-// =====================================
-// حذف مقام خوشامد - فقط مالک
-// =====================================
-
-function registerManagerRemove(bot) {
-
-  bot.hears(
-    /^حذف\s+مقام\s+خوشامد$/u,
-    async ctx => {
-
-      try {
-
-        if (!isGroup(ctx)) {
-          return;
-        }
-
-
-        const owner =
-          await isOwner(ctx);
-
-
-        if (!owner) {
-
-          return replyToCommand(
-            ctx,
-`『𓆩 ★ دسترسی ★ 𓆪』
-
-فقط مالک گروه می‌تواند مقام خوشامد را حذف کند.`
-          );
-
-        }
-
-
-        const reply =
-          ctx.message.reply_to_message;
-
-
-        if (!reply || !reply.from) {
-
-          return replyToCommand(
-            ctx,
-`『𓆩 ★ حذف مقام خوشامد ★ 𓆪』
-
-روی پیام مدیر موردنظر ریپلای کنید و بنویسید:
-
-حذف مقام خوشامد`
-          );
-
-        }
-
-
-        const targetId =
-          reply.from.id;
-
-
-        removeWelcomeManager(
-          ctx.chat.id,
-          targetId
-        );
-
-
-        return replyToCommand(
-          ctx,
-`『𓆩 ★ مقام خوشامد ★ 𓆪』
-
-مقام خوشامد این مدیر حذف شد. ✅
-
-از این به بعد دسترسی تنظیم خوشامدگویی را ندارد.`
-        );
-
-      }
-
-      catch (error) {
-
-        console.log(
-          "WELCOME MANAGER REMOVE ERROR:",
-          error.message
-        );
-
-      }
-
-    }
-  );
-
-}
-
-
-// =====================================
-// ثبت همه دستورات
-// =====================================
-
-function registerWelcomeSettings(bot) {
-
-  registerGif(bot);
-
-  registerVideo(bot);
-
-  registerSticker(bot);
-
-  registerPhoto(bot);
-
-  registerEnable(bot);
-
-  registerDisable(bot);
-
-  registerClear(bot);
-
-  registerStatus(bot);
-
-  registerManagerGrant(bot);
-
-  registerManagerRemove(bot);
 
 }
 
@@ -1083,10 +404,20 @@ function registerWelcomeSettings(bot) {
 
 module.exports = {
 
-  registerWelcomeSettings,
-  canManageWelcome,
-  addWelcomeManager,
-  removeWelcomeManager,
-  hasWelcomeManager
+  registerWelcome,
+
+  getWelcomeSettings,
+
+  getWelcomeText,
+
+  sendWelcome,
+
+  setWelcomeMedia,
+
+  clearWelcomeMedia,
+
+  enableWelcome,
+
+  disableWelcome
 
 };
