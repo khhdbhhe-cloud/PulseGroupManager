@@ -2,6 +2,7 @@ const { Telegraf } = require("telegraf");
 const http = require("http");
 
 const { registerCommands } = require("./commands");
+const { registerPanelActions } = require("./panel-actions");
 
 
 // ===============================
@@ -23,8 +24,7 @@ if (!BOT_TOKEN) {
 }
 
 
-const bot =
-  new Telegraf(BOT_TOKEN);
+const bot = new Telegraf(BOT_TOKEN);
 
 
 
@@ -33,7 +33,7 @@ const bot =
 // ===============================
 
 http.createServer(
-  (req,res)=>{
+  (req, res) => {
 
     res.writeHead(
       200,
@@ -53,7 +53,7 @@ http.createServer(
 ).listen(
   PORT,
   "0.0.0.0",
-  ()=>{
+  () => {
 
     console.log(
       "Server running on port " + PORT
@@ -65,15 +65,18 @@ http.createServer(
 
 
 // ===============================
-// COMMANDS
+// REGISTER SYSTEMS
 // ===============================
 
 registerCommands(bot);
 
-// ===============================
-// BASIC EVENTS
-// ===============================
+registerPanelActions(bot);
 
+
+
+// ===============================
+// START MESSAGE
+// ===============================
 
 bot.start(
   async ctx => {
@@ -92,7 +95,9 @@ bot.start(
 
 
 
-// وقتی ربات خطا نداشت روشن می‌ماند
+// ===============================
+// ERROR HANDLER
+// ===============================
 
 bot.catch(
   (err, ctx) => {
@@ -110,7 +115,6 @@ bot.catch(
 // ===============================
 // LAUNCH
 // ===============================
-
 
 bot.launch()
 .then(
@@ -135,7 +139,9 @@ bot.launch()
 
 
 
-// جلوگیری از بسته شدن ناگهانی
+// ===============================
+// STOP HANDLER
+// ===============================
 
 process.once(
   "SIGINT",
