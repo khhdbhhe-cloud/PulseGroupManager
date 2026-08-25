@@ -5,6 +5,10 @@ const {
   clearWarnings
 } = require("./warnings");
 
+const {
+  getWarningSettings
+} = require("./warning-settings");
+
 const { checkAdmin } = require("./security");
 
 
@@ -25,6 +29,115 @@ function getTargetUser(ctx) {
   }
 
   return null;
+}
+
+
+// =====================================
+// اجرای مجازات
+// =====================================
+
+async function applyPunishment(
+  ctx,
+  target,
+  config
+) {
+
+  const chatId =
+    ctx.chat.id;
+
+  const userId =
+    target.id;
+
+  const duration =
+    config.duration * 60;
+
+
+  // ===================================
+  // سکوت
+  // ===================================
+
+  if (
+    config.punishment === "mute"
+  ) {
+
+    await ctx.telegram.restrictChatMember(
+      chatId,
+      userId,
+      {
+        permissions: {
+          can_send_messages: false,
+          can_send_audios: false,
+          can_send_documents: false,
+          can_send_photos: false,
+          can_send_videos: false,
+          can_send_video_notes: false,
+          can_send_voice_notes: false,
+          can_send_polls: false,
+          can_send_other_messages: false,
+          can_add_web_page_previews: false
+        },
+        use_independent_chat_permissions: true,
+        until_date:
+          Math.floor(Date.now() / 1000) + duration
+      }
+    );
+
+    return "سکوت";
+  }
+
+
+  // ===================================
+  // محدودیت
+  // ===================================
+
+  if (
+    config.punishment === "restrict"
+  ) {
+
+    await ctx.telegram.restrictChatMember(
+      chatId,
+      userId,
+      {
+        permissions: {
+          can_send_messages: true,
+          can_send_audios: false,
+          can_send_documents: false,
+          can_send_photos: false,
+          can_send_videos: false,
+          can_send_video_notes: false,
+          can_send_voice_notes: false,
+          can_send_polls: false,
+          can_send_other_messages: false,
+          can_add_web_page_previews: false
+        },
+        use_independent_chat_permissions: true,
+        until_date:
+          Math.floor(Date.now() / 1000) + duration
+      }
+    );
+
+    return "محدودیت";
+  }
+
+
+  // ===================================
+  // بن
+  // ===================================
+
+  if (
+    config.punishment === "ban"
+  ) {
+
+    await ctx.telegram.banChatMember(
+      chatId,
+      userId
+    );
+
+    return "بن";
+  }
+
+
+  return "نامشخص";
 }
 
 
@@ -58,6 +171,19 @@ function registerWarningActions(bot) {
         }
 
 
+        // فقط گروه
+        if (
+          !ctx.chat ||
+          (
+            ctx.chat.type !== "group" &&
+            ctx.chat.type !== "supergroup"
+          )
+        ) {
+
+          return;
+        }
+
+
         // کاربر هدف
         const target =
           getTargetUser(ctx);
@@ -76,6 +202,18 @@ function registerWarningActions(bot) {
         }
 
 
+        // جلوگیری از اخطار دادن به خود ربات
+        if (target.is_bot) {
+
+          return ctx.reply(
+`『𓆩 سیستم اخطار 𓆪』
+
+به ربات نمی‌توان اخطار داد.`
+          );
+
+        }
+
+
         // اضافه کردن اخطار
         const count =
           addWarning(
@@ -84,7 +222,22 @@ function registerWarningActions(bot) {
           );
 
 
-        await ctx.reply(
+        // تنظیمات گروه
+        const config =
+          getWarningSettings(
+            ctx.chat.id
+          );
+
+
+        // =================================
+        // هنوز به حد اخطار نرسیده
+        // =================================
+
+        if (
+          count < config.maxWarnings
+        ) {
+
+          return ctx.reply(
 `『𓆩 سیستم اخطار 𓆪』
 
 کاربر:
@@ -94,9 +247,78 @@ ${target.first_name || "بدون نام"}
 ${target.id}
 
 تعداد اخطار:
-★ ${count}
+★ ${count} از ${config.maxWarnings}
 
 اخطار با موفقیت ثبت شد.`
+          );
+
+        }
+
+
+        // =================================
+        // رسیدن به حد اخطار
+        // =================================
+
+        let punishment;
+
+        try {
+
+          punishment =
+            await applyPunishment(
+              ctx,
+              target,
+              config
+            );
+
+        }
+
+        catch (punishmentError) {
+
+          console.log(
+            "PUNISHMENT ERROR:",
+            punishmentError.message
+          );
+
+          return ctx.reply(
+`『𓆩 سیستم اخطار 𓆪』
+
+کاربر:
+${target.first_name || "بدون نام"}
+
+به حد ${config.maxWarnings} اخطار رسید.
+
+اما ربات نتوانست مجازات را اجرا کند.
+
+احتمالاً ربات دسترسی لازم برای مدیریت کاربر را ندارد.`
+          );
+
+        }
+
+
+        // بعد از اجرای مجازات
+        clearWarnings(
+          ctx.chat.id,
+          target.id
+        );
+
+
+        await ctx.reply(
+`『𓆩 سیستم اخطار 𓆪』
+
+کاربر:
+${target.first_name || "بدون نام"}
+
+به حد مجاز رسید:
+
+★ ${config.maxWarnings} اخطار
+
+مجازات:
+★ ${punishment}
+
+مدت:
+★ ${config.duration} دقیقه
+
+اخطارهای کاربر از نو شمارش می‌شوند.`
         );
 
       }
@@ -234,7 +456,7 @@ ${target.first_name || "بدون نام"}
 
 
         await ctx.reply(
-`『𓆩 سیستم اخطار 𓆩』
+`『𓆩 سیستم اخطار 𓆪』
 
 تمام اخطارهای کاربر:
 
