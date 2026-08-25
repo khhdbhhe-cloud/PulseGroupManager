@@ -14,10 +14,12 @@ const {
 // =====================================
 
 function settingButton(text, action, ownerId) {
+
   return Markup.button.callback(
     `『𓆩 ${text} 𓆪』`,
     `${action}:${ownerId}`
   );
+
 }
 
 
@@ -26,6 +28,7 @@ function settingButton(text, action, ownerId) {
 // =====================================
 
 function settingsPanel(ownerId) {
+
   return Markup.inlineKeyboard([
 
     [
@@ -77,6 +80,7 @@ function settingsPanel(ownerId) {
     ]
 
   ]);
+
 }
 
 
@@ -85,6 +89,7 @@ function settingsPanel(ownerId) {
 // =====================================
 
 function settingsText() {
+
   return `『𓆩 تنظیمات PulseGroupManager 𓆪』
 
 بخش تنظیمات گروه
@@ -92,6 +97,7 @@ function settingsText() {
 گزینه موردنظر را انتخاب کنید.
 
 ★ فقط مدیران و مالک گروه دسترسی دارند.`;
+
 }
 
 
@@ -101,20 +107,24 @@ function settingsText() {
 
 async function protectSettings(ctx) {
 
-  const access = await checkAdmin(ctx);
+  const access =
+    await checkAdmin(ctx);
 
   if (!access.ok) {
 
     try {
+
       await ctx.answerCbQuery(
         access.text,
         {
           show_alert: true
         }
       );
+
     } catch {}
 
     return false;
+
   }
 
 
@@ -147,11 +157,14 @@ async function protectSettings(ctx) {
       } catch {}
 
       return false;
+
     }
+
   }
 
 
   return true;
+
 }
 
 
@@ -206,14 +219,19 @@ function registerSettings(bot) {
           ctx.chat.type !== "supergroup"
         )
       ) {
+
         return;
+
       }
+
 
       const access =
         await checkAdmin(ctx);
 
       if (!access.ok) {
+
         return;
+
       }
 
 
@@ -228,10 +246,13 @@ function registerSettings(bot) {
               message_id:
                 ctx.message.message_id
             }
+
           }
         );
 
-      } catch (error) {
+      }
+
+      catch (error) {
 
         console.log(
           "SETTINGS OPEN ERROR:",
@@ -253,7 +274,9 @@ function registerSettings(bot) {
     async ctx => {
 
       if (!(await protectSettings(ctx))) {
+
         return;
+
       }
 
       await ctx.answerCbQuery();
@@ -265,7 +288,9 @@ function registerSettings(bot) {
           settingsPanel(ctx.from.id)
         );
 
-      } catch (error) {
+      }
+
+      catch (error) {
 
         console.log(
           "SETTINGS HOME ERROR:",
@@ -286,20 +311,70 @@ function registerSettings(bot) {
     /^set_welcome:(\d+)$/,
     async ctx => {
 
-      if (!(await protectSettings(ctx))) return;
+      if (!(await protectSettings(ctx))) {
+
+        return;
+
+      }
 
       await ctx.answerCbQuery();
+
 
       await ctx.editMessageText(
 `『𓆩 تنظیمات خوشامدگویی 𓆪』
 
-از این قسمت خوشامدگویی اعضای جدید تنظیم می‌شود.
+از این قسمت می‌توانید سیستم خوشامدگویی اعضای جدید را مدیریت کنید.
 
-★ فعال
-☆ غیرفعال
+★ وضعیت خوشامدگویی
 
-متن خوشامدگویی نیز قابل تنظیم خواهد بود.`,
+خوشامد روشن
+خوشامد خاموش
+
+★ تنظیم رسانه خوشامد
+
+تنظیم گیف
+تنظیم ویدیو
+تنظیم عکس
+تنظیم استیکر
+
+برای تنظیم رسانه:
+روی رسانه موردنظر ریپلای کنید و دستور مربوطه را ارسال کنید.
+
+مثال:
+
+روی GIF ریپلای کنید
+تنظیم گیف
+
+★ حذف رسانه
+
+حذف خوشامد
+
+با این دستور رسانه خوشامد حذف می‌شود و ربات به حالت متن برمی‌گردد.
+
+★ مشاهده وضعیت
+
+وضعیت خوشامد
+
+با این دستور وضعیت فعلی خوشامدگویی و نوع رسانه نمایش داده می‌شود.
+
+★ مقام خوشامد
+
+مقام خوشامد تنظیم
+
+فقط مالک گروه می‌تواند این مقام را به یک مدیر بدهد.
+
+حذف مقام خوشامد
+
+مقام خوشامد مدیر را حذف می‌کند.
+
+★ متن خوشامدگویی
+
+متن پیش‌فرض خوشامدگویی توسط سیستم ارسال می‌شود.
+
+تنظیم متن اختصاصی خوشامدگویی در بخش بعدی قابل اضافه شدن است.`,
+
         backToSettings(ctx.from.id)
+
       );
 
     }
@@ -329,6 +404,7 @@ function registerSettings(bot) {
 ★ مدیریت تنظیمات
 
 فقط مدیر و مالک اجازه تغییر دارند.`,
+
         backToSettings(ctx.from.id)
       );
 
@@ -349,7 +425,10 @@ function registerSettings(bot) {
       await ctx.answerCbQuery();
 
       const config =
-        getWarningSettings(ctx.chat.id);
+        getWarningSettings(
+          ctx.chat.id
+        );
+
 
       const punishmentText =
         config.punishment === "mute"
@@ -357,6 +436,7 @@ function registerSettings(bot) {
           : config.punishment === "restrict"
             ? "محدودیت"
             : "بن";
+
 
       await ctx.editMessageText(
 `『𓆩 تنظیمات اختیار 𓆪』
@@ -371,6 +451,7 @@ function registerSettings(bot) {
 ★ ${config.duration} دقیقه
 
 تعداد اخطار را انتخاب کنید:`,
+
         Markup.inlineKeyboard([
 
           [
@@ -470,6 +551,7 @@ function registerSettings(bot) {
           ]
 
         ])
+
       );
 
     }
@@ -486,17 +568,21 @@ function registerSettings(bot) {
 
       if (!(await protectSettings(ctx))) return;
 
+
       const count =
         Number(ctx.match[1]);
+
 
       setMaxWarnings(
         ctx.chat.id,
         count
       );
 
+
       await ctx.answerCbQuery(
         `تعداد اخطار روی ${count} تنظیم شد.`
       );
+
 
       await ctx.editMessageText(
 `『𓆩 تنظیم اخطار 𓆪』
@@ -506,6 +592,7 @@ function registerSettings(bot) {
 ★ ${count}
 
 بعد از رسیدن کاربر به این تعداد، مجازات انتخاب‌شده اجرا خواهد شد.`,
+
         backToSettings(ctx.from.id)
       );
 
@@ -523,13 +610,16 @@ function registerSettings(bot) {
 
       if (!(await protectSettings(ctx))) return;
 
+
       const punishment =
         ctx.match[1];
+
 
       setWarningPunishment(
         ctx.chat.id,
         punishment
       );
+
 
       const text =
         punishment === "mute"
@@ -538,9 +628,11 @@ function registerSettings(bot) {
             ? "محدودیت"
             : "بن";
 
+
       await ctx.answerCbQuery(
         `مجازات روی ${text} تنظیم شد.`
       );
+
 
       await ctx.editMessageText(
 `『𓆩 مجازات اخطار 𓆪』
@@ -550,6 +642,7 @@ function registerSettings(bot) {
 ★ ${text}
 
 این مجازات پس از رسیدن کاربر به حد تعیین‌شده اجرا می‌شود.`,
+
         backToSettings(ctx.from.id)
       );
 
@@ -567,20 +660,25 @@ function registerSettings(bot) {
 
       if (!(await protectSettings(ctx))) return;
 
+
       const minutes =
         Number(ctx.match[1]);
+
 
       setWarningDuration(
         ctx.chat.id,
         minutes
       );
 
+
       const hours =
         minutes / 60;
+
 
       await ctx.answerCbQuery(
         `مدت روی ${hours} ساعت تنظیم شد.`
       );
+
 
       await ctx.editMessageText(
 `『𓆩 مدت مجازات 𓆪』
@@ -590,6 +688,7 @@ function registerSettings(bot) {
 ★ ${hours} ساعت
 
 این مدت برای مجازات اخطار استفاده خواهد شد.`,
+
         backToSettings(ctx.from.id)
       );
 
@@ -609,6 +708,7 @@ function registerSettings(bot) {
 
       await ctx.answerCbQuery();
 
+
       await ctx.editMessageText(
 `『𓆩 تنظیمات سکوت 𓆪』
 
@@ -621,6 +721,7 @@ function registerSettings(bot) {
 ۶ ساعت
 ۱۲ ساعت
 ۲۴ ساعت`,
+
         backToSettings(ctx.from.id)
       );
 
@@ -640,6 +741,7 @@ function registerSettings(bot) {
 
       await ctx.answerCbQuery();
 
+
       await ctx.editMessageText(
 `『𓆩 تنظیمات محدودیت 𓆪』
 
@@ -651,6 +753,7 @@ function registerSettings(bot) {
 ★ فایل
 ★ ویس
 ★ استیکر`,
+
         backToSettings(ctx.from.id)
       );
 
@@ -670,6 +773,7 @@ function registerSettings(bot) {
 
       await ctx.answerCbQuery();
 
+
       await ctx.editMessageText(
 `『𓆩 تنظیمات بن 𓆪』
 
@@ -677,6 +781,7 @@ function registerSettings(bot) {
 
 ★ مالک گروه قابل مدیریت نیست.
 ★ مدیر عادی نمی‌تواند مدیر دیگر را مدیریت کند.`,
+
         backToSettings(ctx.from.id)
       );
 
@@ -696,11 +801,13 @@ function registerSettings(bot) {
 
       await ctx.answerCbQuery();
 
+
       await ctx.editMessageText(
 `『𓆩 تنظیمات فوروارد 𓆪』
 
 ★ فوروارد مجاز
 ☆ فوروارد ممنوع`,
+
         backToSettings(ctx.from.id)
       );
 
@@ -720,6 +827,7 @@ function registerSettings(bot) {
 
       await ctx.answerCbQuery();
 
+
       await ctx.editMessageText(
 `『𓆩 تنظیمات ضدفلود 𓆪』
 
@@ -727,6 +835,7 @@ function registerSettings(bot) {
 ☆ ضدفلود غیرفعال
 
 تعداد پیام و زمان بررسی در مرحله بعد قابل تنظیم است.`,
+
         backToSettings(ctx.from.id)
       );
 
@@ -746,12 +855,14 @@ function registerSettings(bot) {
 
       await ctx.answerCbQuery();
 
+
       await ctx.editMessageText(
 `『𓆩 تنظیمات ورود و خروج 𓆪』
 
 ★ خوشامدگویی
 ★ پیام خروج
 ★ فعال / غیرفعال`,
+
         backToSettings(ctx.from.id)
       );
 
@@ -771,12 +882,14 @@ function registerSettings(bot) {
 
       await ctx.answerCbQuery();
 
+
       await ctx.editMessageText(
 `『𓆩 تنظیمات پیام‌ها 𓆪』
 
 ★ حذف پیام‌های ممنوع
 ★ پاکسازی پیام‌ها
 ★ پیام‌های خودکار`,
+
         backToSettings(ctx.from.id)
       );
 
@@ -796,10 +909,12 @@ function registerSettings(bot) {
 
       await ctx.answerCbQuery();
 
+
       await ctx.editMessageText(
 `『𓆩 تنظیمات قوانین 𓆪』
 
 قوانین گروه از این قسمت تنظیم و ویرایش می‌شوند.`,
+
         backToSettings(ctx.from.id)
       );
 
@@ -816,10 +931,14 @@ function registerSettings(bot) {
     async ctx => {
 
       if (!(await protectSettings(ctx))) {
+
         return;
+
       }
 
+
       await ctx.answerCbQuery();
+
 
       try {
 
@@ -827,7 +946,9 @@ function registerSettings(bot) {
           `『𓆩 ★ بخش تنظیمات بسته شد ★ 𓆪』`
         );
 
-      } catch (error) {
+      }
+
+      catch (error) {
 
         console.log(
           "SETTINGS CLOSE ERROR:",
@@ -847,7 +968,9 @@ function registerSettings(bot) {
 // =====================================
 
 module.exports = {
+
   registerSettings,
   settingsPanel,
   settingsText
+
 };
