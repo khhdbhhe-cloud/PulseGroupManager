@@ -2,7 +2,7 @@ const { Markup } = require("telegraf");
 const { checkAdmin } = require("./security");
 
 // =====================================
-// دکمه‌های تنظیمات
+// دکمه تنظیمات
 // =====================================
 
 function settingButton(text, action, ownerId) {
@@ -71,15 +71,17 @@ function settingsPanel(ownerId) {
 }
 
 // =====================================
-// متن اصلی
+// متن تنظیمات
 // =====================================
 
 function settingsText() {
   return `『𓆩 تنظیمات PulseGroupManager 𓆪』
 
-تنظیمات موردنظر را انتخاب کنید.
+بخش تنظیمات گروه
 
-تمام تغییرات این بخش فقط توسط مدیران گروه قابل انجام است.`;
+گزینه موردنظر را انتخاب کنید.
+
+★ فقط مدیران و مالک گروه دسترسی دارند.`;
 }
 
 // =====================================
@@ -95,7 +97,9 @@ async function protectSettings(ctx) {
     try {
       await ctx.answerCbQuery(
         access.text,
-        { show_alert: true }
+        {
+          show_alert: true
+        }
       );
     } catch {}
 
@@ -106,15 +110,16 @@ async function protectSettings(ctx) {
 }
 
 // =====================================
-// دکمه بازگشت به تنظیمات
+// دکمه‌های برگشت
 // =====================================
 
 function backToSettings(ownerId) {
 
   return Markup.inlineKeyboard([
+
     [
       settingButton(
-        "بازگشت به تنظیمات",
+        "بازگشت",
         "settings_home",
         ownerId
       )
@@ -127,12 +132,13 @@ function backToSettings(ownerId) {
         ownerId
       )
     ]
+
   ]);
 
 }
 
 // =====================================
-// ثبت سیستم تنظیمات
+// ثبت تنظیمات
 // =====================================
 
 function registerSettings(bot) {
@@ -145,46 +151,95 @@ function registerSettings(bot) {
     /^تنظیمات$/u,
     async ctx => {
 
-      const access = await checkAdmin(ctx);
-
-      if (!access.ok) {
-        return ctx.reply(access.text);
+      // فقط داخل گروه
+      if (
+        !ctx.chat ||
+        (
+          ctx.chat.type !== "group" &&
+          ctx.chat.type !== "supergroup"
+        )
+      ) {
+        return;
       }
 
-      await ctx.reply(
-        settingsText(),
-        settingsPanel(ctx.from.id)
-      );
+      // فقط مدیر و مالک
+      const access =
+        await checkAdmin(ctx);
+
+      if (!access.ok) {
+
+        // کاربر عادی هیچ پنلی دریافت نمی‌کند
+        return;
+      }
+
+      // باز کردن تنظیمات با ریپلای به همان پیام
+      try {
+
+        await ctx.reply(
+          settingsText(),
+          {
+            ...settingsPanel(ctx.from.id),
+            reply_parameters: {
+              message_id: ctx.message.message_id
+            }
+          }
+        );
+
+      } catch (error) {
+
+        console.log(
+          "SETTINGS OPEN ERROR:",
+          error.message
+        );
+
+      }
 
     }
   );
 
   // ===================================
-  // بازگشت به صفحه اصلی تنظیمات
+  // برگشت به صفحه اصلی تنظیمات
   // ===================================
 
   bot.action(
     /^settings_home:(\d+)$/,
     async ctx => {
 
-      if (!(await protectSettings(ctx))) return;
+      if (!(await protectSettings(ctx))) {
+        return;
+      }
 
       if (
         String(ctx.from.id) !==
         String(ctx.match[1])
       ) {
+
         return ctx.answerCbQuery(
-          "این تنظیمات برای شما نیست.",
-          { show_alert: true }
+          "『𓆩 ★ این تنظیمات برای شما نیست ★ 𓆪』",
+          {
+            show_alert: true
+          }
         );
+
       }
 
       await ctx.answerCbQuery();
 
-      await ctx.editMessageText(
-        settingsText(),
-        settingsPanel(ctx.from.id)
-      );
+      try {
+
+        await ctx.editMessageText(
+          settingsText(),
+          settingsPanel(ctx.from.id)
+        );
+
+      } catch (error) {
+
+        console.log(
+          "SETTINGS HOME ERROR:",
+          error.message
+        );
+
+      }
 
     }
   );
@@ -204,7 +259,7 @@ function registerSettings(bot) {
       await ctx.editMessageText(
 `『𓆩 تنظیمات خوشامدگویی 𓆪』
 
-از این قسمت می‌توان خوشامدگویی اعضای جدید را تنظیم کرد.
+از این قسمت خوشامدگویی اعضای جدید تنظیم می‌شود.
 
 ★ فعال
 ☆ غیرفعال
@@ -231,14 +286,14 @@ function registerSettings(bot) {
       await ctx.editMessageText(
 `『𓆩 تنظیمات مدیریت 𓆪』
 
-تنظیم دسترسی‌های مدیریتی ربات.
+تنظیمات مربوط به دسترسی مدیران.
 
 ★ استفاده از پنل
 ★ اجرای دستورات
 ★ مدیریت کاربران
 ★ مدیریت تنظیمات
 
-فقط مدیر و مالک می‌توانند این قسمت را تغییر دهند.`,
+فقط مدیر و مالک اجازه تغییر دارند.`,
         backToSettings(ctx.from.id)
       );
 
@@ -263,15 +318,15 @@ function registerSettings(bot) {
 تعداد اختیار:
 ۳
 
-اقدام بعد از رسیدن به حد:
+بعد از رسیدن به حد:
 سکوت
 
-مدت:
+مدت سکوت:
 ۲ ساعت
 
-در مرحله بعد این قسمت به تنظیمات واقعی متصل می‌شود.
+این قسمت بعداً به تنظیمات واقعی متصل می‌شود.
 
-مثلاً:
+مثال:
 
 ۳ اختیار
 ↓
@@ -299,7 +354,7 @@ function registerSettings(bot) {
       await ctx.editMessageText(
 `『𓆩 تنظیمات سکوت 𓆪』
 
-مدت‌های قابل تنظیم:
+مدت سکوت:
 
 ۱ ساعت
 ۲ ساعت
@@ -329,7 +384,7 @@ function registerSettings(bot) {
       await ctx.editMessageText(
 `『𓆩 تنظیمات محدودیت 𓆪』
 
-نوع محدودیت کاربر را مشخص می‌کند.
+نوع محدودیت کاربر:
 
 ★ متن
 ★ عکس
@@ -360,9 +415,8 @@ function registerSettings(bot) {
 
 تنظیمات مربوط به بن کاربران.
 
-مالک گروه قابل مدیریت نیست.
-
-مدیر عادی نیز نمی‌تواند مدیر دیگر را مدیریت کند.`,
+★ مالک گروه قابل مدیریت نیست.
+★ مدیر عادی نمی‌تواند مدیر دیگر را مدیریت کند.`,
         backToSettings(ctx.from.id)
       );
 
@@ -385,9 +439,7 @@ function registerSettings(bot) {
 `『𓆩 تنظیمات فوروارد 𓆪』
 
 ★ فوروارد مجاز
-☆ فوروارد ممنوع
-
-تنظیم واقعی فوروارد در مرحله بعد اضافه می‌شود.`,
+☆ فوروارد ممنوع`,
         backToSettings(ctx.from.id)
       );
 
@@ -412,7 +464,7 @@ function registerSettings(bot) {
 ★ ضدفلود فعال
 ☆ ضدفلود غیرفعال
 
-تعداد پیام و زمان بررسی قابل تنظیم خواهد بود.`,
+تعداد پیام و زمان بررسی در مرحله بعد قابل تنظیم است.`,
         backToSettings(ctx.from.id)
       );
 
@@ -490,23 +542,44 @@ function registerSettings(bot) {
   );
 
   // ===================================
-  // بستن
+  // بستن تنظیمات
   // ===================================
 
   bot.action(
     /^settings_close:(\d+)$/,
     async ctx => {
 
-      if (!(await protectSettings(ctx))) return;
+      if (!(await protectSettings(ctx))) {
+        return;
+      }
+
+      if (
+        String(ctx.from.id) !==
+        String(ctx.match[1])
+      ) {
+
+        return ctx.answerCbQuery(
+          "『𓆩 ★ این تنظیمات برای شما نیست ★ 𓆪』",
+          {
+            show_alert: true
+          }
+        );
+
+      }
 
       await ctx.answerCbQuery();
 
       try {
-        await ctx.deleteMessage();
-      } catch {
 
         await ctx.editMessageText(
-          "تنظیمات بسته شد."
+          `『𓆩 ★ بخش تنظیمات بسته شد ★ 𓆪』`
+        );
+
+      } catch (error) {
+
+        console.log(
+          "SETTINGS CLOSE ERROR:",
+          error.message
         );
 
       }
