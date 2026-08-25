@@ -1,3 +1,8 @@
+// =====================================
+// PulseGroupManager
+// Warning Actions
+// =====================================
+
 const {
   getWarnings,
   addWarning,
@@ -29,6 +34,114 @@ function getTargetUser(ctx) {
   }
 
   return null;
+}
+
+
+// =====================================
+// بررسی وضعیت مدیریتی کاربر هدف
+// =====================================
+
+async function getTargetRole(ctx, userId) {
+
+  try {
+
+    const member =
+      await ctx.telegram.getChatMember(
+        ctx.chat.id,
+        userId
+      );
+
+    if (member.status === "creator") {
+
+      return "owner";
+
+    }
+
+    if (member.status === "administrator") {
+
+      return "admin";
+
+    }
+
+    return "member";
+
+  }
+
+  catch (error) {
+
+    console.log(
+      "TARGET ROLE ERROR:",
+      error.message
+    );
+
+    return "member";
+
+  }
+
+}
+
+
+// =====================================
+// جلوگیری از اخطار به مالک و مدیر
+// =====================================
+
+async function protectTarget(ctx, target) {
+
+  const role =
+    await getTargetRole(
+      ctx,
+      target.id
+    );
+
+
+  // مالک گروه
+  if (role === "owner") {
+
+    await ctx.reply(
+`『𓆩 ★ سیستم اخطار ★ 𓆪』
+
+کاربر گرامی،
+این کاربر مالک گروه است.
+
+امکان اخطار دادن به مالک وجود ندارد.`,
+      {
+        reply_parameters: {
+          message_id:
+            ctx.message.message_id
+        }
+      }
+    );
+
+    return false;
+
+  }
+
+
+  // مدیر گروه
+  if (role === "admin") {
+
+    await ctx.reply(
+`『𓆩 ★ سیستم اخطار ★ 𓆪』
+
+کاربر گرامی،
+این کاربر مدیر گروه است.
+
+امکان اخطار دادن به مدیر وجود ندارد.`,
+      {
+        reply_parameters: {
+          message_id:
+            ctx.message.message_id
+        }
+      }
+    );
+
+    return false;
+
+  }
+
+
+  return true;
+
 }
 
 
@@ -181,6 +294,7 @@ function registerWarningActions(bot) {
         ) {
 
           return;
+
         }
 
 
@@ -206,10 +320,33 @@ function registerWarningActions(bot) {
         if (target.is_bot) {
 
           return ctx.reply(
-`『𓆩 سیستم اخطار 𓆪』
+`『𓆩 سیستم اخطار ★ 𓆪』
 
-به ربات نمی‌توان اخطار داد.`
+به ربات نمی‌توان اخطار داد.`,
+            {
+              reply_parameters: {
+                message_id:
+                  ctx.message.message_id
+              }
+            }
           );
+
+        }
+
+
+        // =================================
+        // جلوگیری از اخطار به مالک و مدیر
+        // =================================
+
+        const allowed =
+          await protectTarget(
+            ctx,
+            target
+          );
+
+        if (!allowed) {
+
+          return;
 
         }
 
