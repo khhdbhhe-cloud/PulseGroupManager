@@ -34,6 +34,7 @@ function getTargetUser(ctx) {
   }
 
   return null;
+
 }
 
 
@@ -101,7 +102,21 @@ function replyToCommand(ctx) {
 // جلوگیری از اخطار به مالک و مدیر
 // =====================================
 
-async function protectTarget(ctx, target) {
+async function checkTargetForWarning(
+  ctx,
+  target
+) {
+
+  if (!target) {
+
+    return {
+      ok: false,
+      text:
+        "برای اخطار دادن باید روی پیام کاربر ریپلای کنید."
+    };
+
+  }
+
 
   const role =
     await getTargetRole(
@@ -110,43 +125,64 @@ async function protectTarget(ctx, target) {
     );
 
 
-  // مالک گروه
   if (role === "owner") {
 
-    await ctx.reply(
-`『𓆩 ★ سیستم اخطار ★ 𓆪』
-
-کاربر گرامی،
-این کاربر مالک گروه است.
-
-امکان اخطار دادن به مالک وجود ندارد.`,
-      replyToCommand(ctx)
-    );
-
-    return false;
+    return {
+      ok: false,
+      text:
+        "مالک گروه قابل اخطار نیست."
+    };
 
   }
 
 
-  // مدیر گروه
   if (role === "admin") {
 
-    await ctx.reply(
-`『𓆩 ★ سیستم اخطار ★ 𓆪』
-
-کاربر گرامی،
-این کاربر مدیر گروه است.
-
-امکان اخطار دادن به مدیر وجود ندارد.`,
-      replyToCommand(ctx)
-    );
-
-    return false;
+    return {
+      ok: false,
+      text:
+        "مدیر گروه قابل اخطار نیست."
+    };
 
   }
 
 
-  return true;
+  return {
+    ok: true,
+    role
+  };
+
+}
+
+
+// =====================================
+// نام کاربر
+// =====================================
+
+function getUserName(user) {
+
+  if (!user) {
+
+    return "کاربر";
+
+  }
+
+
+  if (user.first_name) {
+
+    return user.first_name;
+
+  }
+
+
+  if (user.username) {
+
+    return "@" + user.username;
+
+  }
+
+
+  return "کاربر";
 
 }
 
@@ -155,10 +191,11 @@ async function protectTarget(ctx, target) {
 // اجرای مجازات
 // =====================================
 
-async function applyPunishment(
+async function executePunishment(
   ctx,
   target,
-  config
+  punishment,
+  duration
 ) {
 
   const chatId =
@@ -167,17 +204,12 @@ async function applyPunishment(
   const userId =
     target.id;
 
-  const duration =
-    config.duration * 60;
-
 
   // ===================================
   // سکوت
   // ===================================
 
-  if (
-    config.punishment === "mute"
-  ) {
+  if (punishment === "mute") {
 
     await ctx.telegram.restrictChatMember(
       chatId,
@@ -193,32 +225,34 @@ async function applyPunishment(
           can_send_voice_notes: false,
           can_send_polls: false,
           can_send_other_messages: false,
-          can_add_web_page_previews: false
+          can_add_web_page_previews: false,
+          can_change_info: false,
+          can_invite_users: false,
+          can_pin_messages: false
         },
-        use_independent_chat_permissions: true,
         until_date:
-          Math.floor(Date.now() / 1000) + duration
+          Math.floor(Date.now() / 1000) +
+          (Number(duration) * 60)
       }
     );
 
     return "سکوت";
+
   }
 
 
   // ===================================
-  // محدودیت
+  // محدود
   // ===================================
 
-  if (
-    config.punishment === "restrict"
-  ) {
+  if (punishment === "restrict") {
 
     await ctx.telegram.restrictChatMember(
       chatId,
       userId,
       {
         permissions: {
-          can_send_messages: true,
+          can_send_messages: false,
           can_send_audios: false,
           can_send_documents: false,
           can_send_photos: false,
@@ -227,15 +261,19 @@ async function applyPunishment(
           can_send_voice_notes: false,
           can_send_polls: false,
           can_send_other_messages: false,
-          can_add_web_page_previews: false
+          can_add_web_page_previews: false,
+          can_change_info: false,
+          can_invite_users: true,
+          can_pin_messages: false
         },
-        use_independent_chat_permissions: true,
         until_date:
-          Math.floor(Date.now() / 1000) + duration
+          Math.floor(Date.now() / 1000) +
+          (Number(duration) * 60)
       }
     );
 
-    return "محدودیت";
+    return "محدود";
+
   }
 
 
@@ -243,9 +281,7 @@ async function applyPunishment(
   // بن
   // ===================================
 
-  if (
-    config.punishment === "ban"
-  ) {
+  if (punishment === "ban") {
 
     await ctx.telegram.banChatMember(
       chatId,
@@ -253,15 +289,161 @@ async function applyPunishment(
     );
 
     return "بن";
+
   }
 
 
   return "نامشخص";
+
 }
 
 
 // =====================================
-// ثبت دستورات اخطار
+// ثبت اخطار
+// =====================================
+
+async function addWarningToUser(
+  ctx,
+  target,
+  amount
+) {
+
+  const chatId =
+    ctx.chat.id;
+
+  const userId =
+    target.id;
+
+
+  const settings =
+    getWarningSettings(chatId);
+
+
+  const maxWarnings =
+    Number(settings.maxWarnings);
+
+
+  let currentWarnings =
+    getWarnings(
+      chatId,
+      userId
+    );
+
+
+  if (!Number.isFinite(currentWarnings)) {
+
+    currentWarnings = 0;
+
+  }
+
+
+  let added = 0;
+
+
+  for (
+    let i = 0;
+    i < amount;
+    i++
+  ) {
+
+    currentWarnings =
+      addWarning(
+        chatId,
+        userId
+      );
+
+    added++;
+
+    if (
+      currentWarnings >=
+      maxWarnings
+    ) {
+
+      break;
+
+    }
+
+  }
+
+
+  const finalWarnings =
+    getWarnings(
+      chatId,
+      userId
+    );
+
+
+  // ===================================
+  // رسیدن به حد اخطار
+  // ===================================
+
+  if (
+    finalWarnings >=
+    maxWarnings
+  ) {
+
+    try {
+
+      const punishment =
+        await executePunishment(
+          ctx,
+          target,
+          settings.punishment,
+          settings.duration
+        );
+
+
+      clearWarnings(
+        chatId,
+        userId
+      );
+
+
+      return {
+        ok: true,
+        warnings: finalWarnings,
+        punishment,
+        punished: true,
+        added
+      };
+
+    }
+
+    catch (error) {
+
+      console.log(
+        "PUNISHMENT ERROR:",
+        error.message
+      );
+
+
+      return {
+        ok: false,
+        warnings: finalWarnings,
+        punishment: settings.punishment,
+        punished: false,
+        added,
+        error: error.message
+      };
+
+    }
+
+  }
+
+
+  return {
+    ok: true,
+    warnings: finalWarnings,
+    punishment: null,
+    punished: false,
+    added
+  };
+
+}
+
+
+// =====================================
+// ثبت دستورات
 // =====================================
 
 function registerWarningActions(bot) {
@@ -269,17 +451,20 @@ function registerWarningActions(bot) {
 
   // ===================================
   // اخطار
+  // مثال:
+  // اخطار
+  // اخطار 2
   // ===================================
 
   bot.hears(
-    /^اخطار$/u,
+    /^اخطار(?:\s+([۰-۹٠-٩0-9]+))?$/u,
     async ctx => {
 
       try {
 
-        // فقط مدیران
         const access =
           await checkAdmin(ctx);
+
 
         if (!access.ok) {
 
@@ -291,173 +476,123 @@ function registerWarningActions(bot) {
         }
 
 
-        // فقط گروه
-        if (
-          !ctx.chat ||
-          (
-            ctx.chat.type !== "group" &&
-            ctx.chat.type !== "supergroup"
-          )
-        ) {
-
-          return;
-
-        }
-
-
-        // کاربر هدف
         const target =
           getTargetUser(ctx);
 
 
-        if (!target) {
-
-          return ctx.reply(
-`『𓆩 سیستم اخطار 𓆪』
-
-برای دادن اخطار، روی پیام کاربر ریپلای کنید و بنویسید:
-
-اخطار`,
-            replyToCommand(ctx)
-          );
-
-        }
-
-
-        // جلوگیری از اخطار دادن به ربات
-        if (target.is_bot) {
-
-          return ctx.reply(
-`『𓆩 ★ سیستم اخطار ★ 𓆪』
-
-به ربات نمی‌توان اخطار داد.`,
-            replyToCommand(ctx)
-          );
-
-        }
-
-
-        // جلوگیری از اخطار به مالک و مدیر
-        const allowed =
-          await protectTarget(
+        const targetCheck =
+          await checkTargetForWarning(
             ctx,
             target
           );
 
-        if (!allowed) {
 
-          return;
-
-        }
-
-
-        // اضافه کردن اخطار
-        const count =
-          addWarning(
-            ctx.chat.id,
-            target.id
-          );
-
-
-        // تنظیمات گروه
-        const config =
-          getWarningSettings(
-            ctx.chat.id
-          );
-
-
-        // =================================
-        // هنوز به حد اخطار نرسیده
-        // =================================
-
-        if (
-          count < config.maxWarnings
-        ) {
+        if (!targetCheck.ok) {
 
           return ctx.reply(
-`『𓆩 ★ سیستم اخطار ★ 𓆪』
-
-کاربر:
-${target.first_name || "بدون نام"}
-
-آیدی:
-${target.id}
-
-تعداد اخطار:
-★ ${count} از ${config.maxWarnings}
-
-اخطار با موفقیت ثبت شد.`,
+            targetCheck.text,
             replyToCommand(ctx)
           );
 
         }
 
 
-        // =================================
-        // رسیدن به حد اخطار
-        // =================================
+        let amount = 1;
 
-        let punishment;
 
-        try {
+        if (ctx.match[1]) {
 
-          punishment =
-            await applyPunishment(
-              ctx,
-              target,
-              config
+          amount =
+            Number(
+              String(ctx.match[1])
+                .replace(
+                  /[۰-۹]/g,
+                  char =>
+                    "۰۱۲۳۴۵۶۷۸۹".indexOf(char)
+                )
+                .replace(
+                  /[٠-٩]/g,
+                  char =>
+                    "٠١٢٣٤٥٦٧٨٩".indexOf(char)
+                )
             );
 
         }
 
-        catch (punishmentError) {
 
-          console.log(
-            "PUNISHMENT ERROR:",
-            punishmentError.message
-          );
+        if (
+          !Number.isInteger(amount) ||
+          amount < 1 ||
+          amount > 20
+        ) {
 
           return ctx.reply(
-`『𓆩 سیستم اخطار 𓆪』
+`『𓆩 ★ اخطار ★ 𓆪』
 
-کاربر:
-${target.first_name || "بدون نام"}
-
-به حد ${config.maxWarnings} اخطار رسید.
-
-اما ربات نتوانست مجازات را اجرا کند.
-
-احتمالاً ربات دسترسی لازم برای مدیریت کاربر را ندارد.`,
+تعداد اخطار باید بین ۱ تا ۲۰ باشد.`,
             replyToCommand(ctx)
           );
 
         }
 
 
-        // بعد از اجرای مجازات
-        clearWarnings(
-          ctx.chat.id,
-          target.id
-        );
+        const result =
+          await addWarningToUser(
+            ctx,
+            target,
+            amount
+          );
 
 
-        await ctx.reply(
-`『𓆩 ★ سیستم اخطار ★ 𓆪』
+        const userName =
+          getUserName(target);
 
-کاربر:
-${target.first_name || "بدون نام"}
 
-به حد مجاز رسید:
+        if (!result.ok) {
 
-★ ${config.maxWarnings} اخطار
+          return ctx.reply(
+`『𓆩 ★ اخطار ★ 𓆪』
+
+${userName} به اخطار ${result.warnings} رسید.
+
+اما اجرای مجازات انجام نشد.
 
 مجازات:
-★ ${punishment}
+★ ${result.punishment}`,
+            replyToCommand(ctx)
+          );
 
-مدت:
-★ ${config.duration} دقیقه
+        }
 
-اخطارهای کاربر از نو شمارش می‌شوند.`,
+
+        if (result.punished) {
+
+          return ctx.reply(
+`『𓆩 ★ اخطار ★ 𓆪』
+
+کاربر: ${userName}
+
+★ تعداد اخطار: ${result.warnings}
+★ حد اخطار: ${getWarningSettings(ctx.chat.id).maxWarnings}
+
+مجازات اجرا شد:
+
+★ ${result.punishment}`,
+            replyToCommand(ctx)
+          );
+
+        }
+
+
+        return ctx.reply(
+`『𓆩 ★ اخطار ★ 𓆪』
+
+کاربر: ${userName}
+
+★ اخطار فعلی: ${result.warnings}
+★ حد اخطار: ${getWarningSettings(ctx.chat.id).maxWarnings}
+
+اخطار با موفقیت ثبت شد.`,
           replyToCommand(ctx)
         );
 
@@ -466,7 +601,7 @@ ${target.first_name || "بدون نام"}
       catch (error) {
 
         console.log(
-          "WARNING ERROR:",
+          "ADD WARNING ERROR:",
           error.message
         );
 
@@ -481,13 +616,14 @@ ${target.first_name || "بدون نام"}
   // ===================================
 
   bot.hears(
-    /^حذف اخطار$/u,
+    /^حذف\s+اخطار$/u,
     async ctx => {
 
       try {
 
         const access =
           await checkAdmin(ctx);
+
 
         if (!access.ok) {
 
@@ -506,33 +642,63 @@ ${target.first_name || "بدون نام"}
         if (!target) {
 
           return ctx.reply(
-`『𓆩 سیستم اخطار 𓆪』
-
-برای حذف اخطار، روی پیام کاربر ریپلای کنید و بنویسید:
-
-حذف اخطار`,
+            "برای حذف اخطار باید روی پیام کاربر ریپلای کنید.",
             replyToCommand(ctx)
           );
 
         }
 
 
-        const count =
+        const role =
+          await getTargetRole(
+            ctx,
+            target.id
+          );
+
+
+        if (
+          role === "owner" ||
+          role === "admin"
+        ) {
+
+          return ctx.reply(
+            "این کاربر قابل مدیریت نیست.",
+            replyToCommand(ctx)
+          );
+
+        }
+
+
+        const current =
+          getWarnings(
+            ctx.chat.id,
+            target.id
+          );
+
+
+        if (current <= 0) {
+
+          return ctx.reply(
+            "این کاربر اخطاری ندارد.",
+            replyToCommand(ctx)
+          );
+
+        }
+
+
+        const remaining =
           removeWarning(
             ctx.chat.id,
             target.id
           );
 
 
-        await ctx.reply(
-`『𓆩 ★ سیستم اخطار ★ 𓆪』
+        return ctx.reply(
+`『𓆩 ★ حذف اخطار ★ 𓆪』
 
-کاربر:
-${target.first_name || "بدون نام"}
+کاربر: ${getUserName(target)}
 
-تعداد اخطار باقی‌مانده:
-
-★ ${count}`,
+★ اخطار باقی‌مانده: ${remaining}`,
           replyToCommand(ctx)
         );
 
@@ -556,13 +722,14 @@ ${target.first_name || "بدون نام"}
   // ===================================
 
   bot.hears(
-    /^پاک کردن اخطار$/u,
+    /^پاک\s+کردن\s+اخطار$/u,
     async ctx => {
 
       try {
 
         const access =
           await checkAdmin(ctx);
+
 
         if (!access.ok) {
 
@@ -581,13 +748,27 @@ ${target.first_name || "بدون نام"}
         if (!target) {
 
           return ctx.reply(
-`『𓆩 سیستم اخطار 𓆪』
+            "برای پاک کردن اخطار باید روی پیام کاربر ریپلای کنید.",
+            replyToCommand(ctx)
+          );
 
-برای پاک کردن تمام اخطارهای یک کاربر:
+        }
 
-روی پیام کاربر ریپلای کنید و بنویسید:
 
-پاک کردن اخطار`,
+        const role =
+          await getTargetRole(
+            ctx,
+            target.id
+          );
+
+
+        if (
+          role === "owner" ||
+          role === "admin"
+        ) {
+
+          return ctx.reply(
+            "این کاربر قابل مدیریت نیست.",
             replyToCommand(ctx)
           );
 
@@ -600,14 +781,10 @@ ${target.first_name || "بدون نام"}
         );
 
 
-        await ctx.reply(
-`『𓆩 ★ سیستم اخطار ★ 𓆪』
+        return ctx.reply(
+`『𓆩 ★ اخطار ★ 𓆪』
 
-تمام اخطارهای کاربر:
-
-${target.first_name || "بدون نام"}
-
-پاک شد.`,
+تمام اخطارهای ${getUserName(target)} پاک شد. ★`,
           replyToCommand(ctx)
         );
 
@@ -616,7 +793,85 @@ ${target.first_name || "بدون نام"}
       catch (error) {
 
         console.log(
-          "CLEAR WARNING ERROR:",
+          "CLEAR WARNINGS ERROR:",
+          error.message
+        );
+
+      }
+
+    }
+  );
+
+
+  // ===================================
+  // وضعیت اخطار کاربر
+  // ===================================
+
+  bot.hears(
+    /^وضعیت\s+اخطار$/u,
+    async ctx => {
+
+      try {
+
+        const access =
+          await checkAdmin(ctx);
+
+
+        if (!access.ok) {
+
+          return ctx.reply(
+            access.text,
+            replyToCommand(ctx)
+          );
+
+        }
+
+
+        const target =
+          getTargetUser(ctx);
+
+
+        if (!target) {
+
+          return ctx.reply(
+            "برای دیدن وضعیت اخطار باید روی پیام کاربر ریپلای کنید.",
+            replyToCommand(ctx)
+          );
+
+        }
+
+
+        const warnings =
+          getWarnings(
+            ctx.chat.id,
+            target.id
+          );
+
+
+        const settings =
+          getWarningSettings(
+            ctx.chat.id
+          );
+
+
+        return ctx.reply(
+`『𓆩 ★ وضعیت اخطار ★ 𓆪』
+
+کاربر: ${getUserName(target)}
+
+★ اخطار فعلی: ${warnings}
+★ حد اخطار: ${settings.maxWarnings}
+★ مجازات: ${settings.punishment}
+★ مدت: ${settings.duration} دقیقه`,
+          replyToCommand(ctx)
+        );
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "WARNING STATUS ERROR:",
           error.message
         );
 
@@ -629,9 +884,15 @@ ${target.first_name || "بدون نام"}
 
 
 // =====================================
-// EXPORT
+// خروجی
 // =====================================
 
 module.exports = {
+
+  getTargetUser,
+  getTargetRole,
+  executePunishment,
+  addWarningToUser,
   registerWarningActions
+
 };
