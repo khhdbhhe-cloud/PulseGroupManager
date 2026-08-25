@@ -1,19 +1,40 @@
-const { Markup } = require("telegraf");
 const { mainPanel, panelText } = require("./panel");
 const { checkAdmin } = require("./security");
+
+
+function getReplyUser(ctx) {
+
+  if (
+    ctx.message &&
+    ctx.message.reply_to_message &&
+    ctx.message.reply_to_message.from
+  ) {
+
+    return ctx.message.reply_to_message.from;
+
+  }
+
+  return null;
+
+}
+
 
 
 function registerCommands(bot) {
 
 
-  // پنل مدیریت فقط برای مدیرها
+  // =========================
+  // PANEL
+  // =========================
 
   bot.hears(
     /^پنل$/u,
     async ctx => {
 
+
       const access =
         await checkAdmin(ctx);
+
 
       if(!access.ok){
 
@@ -24,40 +45,68 @@ function registerCommands(bot) {
       }
 
 
+      const target =
+        getReplyUser(ctx);
+
+
+
+      let text =
+        panelText();
+
+
+      if(target){
+
+        text +=
+`\n\n『𓆩 کاربر انتخاب شده 𓆪』
+
+نام: ${target.first_name || "ندارد"}
+
+آیدی:
+${target.id}`;
+
+      }
+
+
+
       await ctx.reply(
-        panelText(),
+        text,
         mainPanel(
           ctx.from.id
         )
       );
 
+
     }
   );
 
 
 
-  // راهنما جدا از پنل
+
+
+  // =========================
+  // HELP
+  // =========================
 
   bot.hears(
     /^راهنما$/u,
     async ctx => {
 
+
       await ctx.reply(
-`『𓆩 راهنمای ربات 𓆪』
+`『𓆩 راهنمای PulseGroupManager 𓆪』
 
 دستورات مدیریت:
 
-• پنل
-• بن
-• آن‌بن
-• میوت
-• اخطار
-• اطلاعات کاربر
-• آمار کاربر
+پنل
+بن
+آن‌بن
+میوت
+اخطار
+شناسنامه
+آمار
 
-دستورات فقط برای مدیران فعال هستند.
+فقط مدیران گروه دسترسی دارند.`
 
-برای مدیریت بهتر گروه از پنل استفاده کنید.`
       );
 
     }
@@ -65,14 +114,20 @@ function registerCommands(bot) {
 
 
 
-  // تست ربات
+
+
+  // =========================
+  // TEST
+  // =========================
 
   bot.hears(
     /^ربات$/u,
     async ctx => {
 
       await ctx.reply(
-        "『𓆩 PulseGroupManager 𓆪』\n\nربات فعاله ✅"
+`『𓆩 PulseGroupManager 𓆪』
+
+ربات فعال است ✅`
       );
 
     }
