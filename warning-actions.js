@@ -82,6 +82,22 @@ async function getTargetRole(ctx, userId) {
 
 
 // =====================================
+// پاسخ ریپلای روی پیام مدیر
+// =====================================
+
+function replyToCommand(ctx) {
+
+  return {
+    reply_parameters: {
+      message_id:
+        ctx.message.message_id
+    }
+  };
+
+}
+
+
+// =====================================
 // جلوگیری از اخطار به مالک و مدیر
 // =====================================
 
@@ -104,12 +120,7 @@ async function protectTarget(ctx, target) {
 این کاربر مالک گروه است.
 
 امکان اخطار دادن به مالک وجود ندارد.`,
-      {
-        reply_parameters: {
-          message_id:
-            ctx.message.message_id
-        }
-      }
+      replyToCommand(ctx)
     );
 
     return false;
@@ -127,12 +138,7 @@ async function protectTarget(ctx, target) {
 این کاربر مدیر گروه است.
 
 امکان اخطار دادن به مدیر وجود ندارد.`,
-      {
-        reply_parameters: {
-          message_id:
-            ctx.message.message_id
-        }
-      }
+      replyToCommand(ctx)
     );
 
     return false;
@@ -278,7 +284,8 @@ function registerWarningActions(bot) {
         if (!access.ok) {
 
           return ctx.reply(
-            access.text
+            access.text,
+            replyToCommand(ctx)
           );
 
         }
@@ -310,34 +317,27 @@ function registerWarningActions(bot) {
 
 برای دادن اخطار، روی پیام کاربر ریپلای کنید و بنویسید:
 
-اخطار`
+اخطار`,
+            replyToCommand(ctx)
           );
 
         }
 
 
-        // جلوگیری از اخطار دادن به خود ربات
+        // جلوگیری از اخطار دادن به ربات
         if (target.is_bot) {
 
           return ctx.reply(
-`『𓆩 سیستم اخطار ★ 𓆪』
+`『𓆩 ★ سیستم اخطار ★ 𓆪』
 
 به ربات نمی‌توان اخطار داد.`,
-            {
-              reply_parameters: {
-                message_id:
-                  ctx.message.message_id
-              }
-            }
+            replyToCommand(ctx)
           );
 
         }
 
 
-        // =================================
         // جلوگیری از اخطار به مالک و مدیر
-        // =================================
-
         const allowed =
           await protectTarget(
             ctx,
@@ -375,7 +375,7 @@ function registerWarningActions(bot) {
         ) {
 
           return ctx.reply(
-`『𓆩 سیستم اخطار 𓆪』
+`『𓆩 ★ سیستم اخطار ★ 𓆪』
 
 کاربر:
 ${target.first_name || "بدون نام"}
@@ -386,7 +386,8 @@ ${target.id}
 تعداد اخطار:
 ★ ${count} از ${config.maxWarnings}
 
-اخطار با موفقیت ثبت شد.`
+اخطار با موفقیت ثبت شد.`,
+            replyToCommand(ctx)
           );
 
         }
@@ -426,7 +427,8 @@ ${target.first_name || "بدون نام"}
 
 اما ربات نتوانست مجازات را اجرا کند.
 
-احتمالاً ربات دسترسی لازم برای مدیریت کاربر را ندارد.`
+احتمالاً ربات دسترسی لازم برای مدیریت کاربر را ندارد.`,
+            replyToCommand(ctx)
           );
 
         }
@@ -440,7 +442,7 @@ ${target.first_name || "بدون نام"}
 
 
         await ctx.reply(
-`『𓆩 سیستم اخطار 𓆪』
+`『𓆩 ★ سیستم اخطار ★ 𓆪』
 
 کاربر:
 ${target.first_name || "بدون نام"}
@@ -455,7 +457,8 @@ ${target.first_name || "بدون نام"}
 مدت:
 ★ ${config.duration} دقیقه
 
-اخطارهای کاربر از نو شمارش می‌شوند.`
+اخطارهای کاربر از نو شمارش می‌شوند.`,
+          replyToCommand(ctx)
         );
 
       }
@@ -489,7 +492,8 @@ ${target.first_name || "بدون نام"}
         if (!access.ok) {
 
           return ctx.reply(
-            access.text
+            access.text,
+            replyToCommand(ctx)
           );
 
         }
@@ -506,7 +510,8 @@ ${target.first_name || "بدون نام"}
 
 برای حذف اخطار، روی پیام کاربر ریپلای کنید و بنویسید:
 
-حذف اخطار`
+حذف اخطار`,
+            replyToCommand(ctx)
           );
 
         }
@@ -520,14 +525,15 @@ ${target.first_name || "بدون نام"}
 
 
         await ctx.reply(
-`『𓆩 سیستم اخطار 𓆪』
+`『𓆩 ★ سیستم اخطار ★ 𓆪』
 
 کاربر:
 ${target.first_name || "بدون نام"}
 
 تعداد اخطار باقی‌مانده:
 
-★ ${count}`
+★ ${count}`,
+          replyToCommand(ctx)
         );
 
       }
@@ -561,7 +567,8 @@ ${target.first_name || "بدون نام"}
         if (!access.ok) {
 
           return ctx.reply(
-            access.text
+            access.text,
+            replyToCommand(ctx)
           );
 
         }
@@ -580,7 +587,8 @@ ${target.first_name || "بدون نام"}
 
 روی پیام کاربر ریپلای کنید و بنویسید:
 
-پاک کردن اخطار`
+پاک کردن اخطار`,
+            replyToCommand(ctx)
           );
 
         }
@@ -593,13 +601,14 @@ ${target.first_name || "بدون نام"}
 
 
         await ctx.reply(
-`『𓆩 سیستم اخطار 𓆪』
+`『𓆩 ★ سیستم اخطار ★ 𓆪』
 
 تمام اخطارهای کاربر:
 
 ${target.first_name || "بدون نام"}
 
-پاک شد.`
+پاک شد.`,
+          replyToCommand(ctx)
         );
 
       }
