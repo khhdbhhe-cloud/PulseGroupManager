@@ -5,6 +5,7 @@ const { registerCommands } = require("./commands");
 const { registerPanelActions } = require("./panel-actions");
 const { registerHelp } = require("./help");
 const { registerSettings } = require("./settings");
+const { registerWarningActions } = require("./warning-actions");
 
 
 // ===============================
@@ -75,6 +76,8 @@ registerPanelActions(bot);
 registerHelp(bot);
 
 registerSettings(bot);
+
+registerWarningActions(bot);
 
 
 // ===============================
