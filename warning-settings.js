@@ -3,12 +3,14 @@
 // Warning Settings
 // =====================================
 
-// تنظیمات پیش‌فرض
+const { checkAdmin } = require("./security");
+
+// تنظیمات هر گروه
 const settings = new Map();
 
 
 // =====================================
-// تنظیمات پیش‌فرض هر گروه
+// تنظیمات پیش‌فرض
 // =====================================
 
 function getDefaultSettings() {
@@ -84,7 +86,6 @@ function setWarningPunishment(
 
 // =====================================
 // مدت مجازات
-// دقیقه
 // =====================================
 
 function setWarningDuration(
@@ -104,6 +105,106 @@ function setWarningDuration(
 
 
 // =====================================
+// ثبت دستورات مستقیم تنظیم اخطار
+// =====================================
+
+function registerWarningSettings(bot) {
+
+  bot.hears(
+    /^تعداد اخطار\s+(\d+)$/u,
+    async ctx => {
+
+      try {
+
+        // فقط داخل گروه
+        if (
+          !ctx.chat ||
+          (
+            ctx.chat.type !== "group" &&
+            ctx.chat.type !== "supergroup"
+          )
+        ) {
+          return;
+        }
+
+
+        // فقط مدیر و مالک
+        const access =
+          await checkAdmin(ctx);
+
+        if (!access.ok) {
+          return;
+        }
+
+
+        const number =
+          Number(ctx.match[1]);
+
+
+        // محدوده مجاز
+        if (
+          number < 1 ||
+          number > 20
+        ) {
+
+          return ctx.reply(
+            `『𓆩 ★ تنظیم اخطار ★ 𓆪』
+
+تعداد اخطار باید بین ۱ تا ۲۰ باشد.`,
+            {
+              reply_parameters: {
+                message_id:
+                  ctx.message.message_id
+              }
+            }
+          );
+
+        }
+
+
+        // ذخیره تنظیم
+        setMaxWarnings(
+          ctx.chat.id,
+          number
+        );
+
+
+        // پاسخ روی همان پیام
+        await ctx.reply(
+`『𓆩 ★ تنظیمات اخطار ★ 𓆪』
+
+تعداد اخطار تنظیم شد:
+
+★ ${number} اخطار
+
+بعد از رسیدن کاربر به این تعداد،
+مجازات انتخاب‌شده اجرا می‌شود.`,
+          {
+            reply_parameters: {
+              message_id:
+                ctx.message.message_id
+            }
+          }
+        );
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "WARNING SETTINGS ERROR:",
+          error.message
+        );
+
+      }
+
+    }
+  );
+
+}
+
+
+// =====================================
 // خروجی
 // =====================================
 
@@ -112,6 +213,7 @@ module.exports = {
   getWarningSettings,
   setMaxWarnings,
   setWarningPunishment,
-  setWarningDuration
+  setWarningDuration,
+  registerWarningSettings
 
 };
