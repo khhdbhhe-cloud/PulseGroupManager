@@ -43,7 +43,7 @@ function helpPanel(ownerId) {
     ],
 
     [
-      helpButton("بازگشت", "help_close", ownerId)
+      helpButton("بستن", "help_close", ownerId)
     ]
 
   ]);
@@ -283,28 +283,36 @@ function commandsHelpText() {
 function registerHelp(bot) {
 
 
+  // ===================================
   // دستور راهنما
+  // ===================================
 
   bot.hears(
     /^راهنما$/u,
     async ctx => {
 
-      const access = await checkAdmin(ctx);
+      const access =
+        await checkAdmin(ctx);
 
       if (!access.ok) {
-        return ctx.reply(access.text);
+
+        return ctx.reply(
+          access.text
+        );
+
       }
 
-      // فقط تغییر این بخش:
-      // راهنما روی پیام اصلی کاربر ریپلای می‌شود.
 
       await ctx.reply(
         helpText(),
         {
           ...helpPanel(ctx.from.id),
+
           reply_parameters: {
-            message_id: ctx.message.message_id
+            message_id:
+              ctx.message.message_id
           }
+
         }
       );
 
@@ -312,17 +320,26 @@ function registerHelp(bot) {
   );
 
 
+  // ===================================
   // بن
+  // ===================================
 
   bot.action(
     /^help_ban:(\d+)$/,
     async ctx => {
 
-      if (String(ctx.from.id) !== ctx.match[1]) {
+      if (
+        String(ctx.from.id) !==
+        ctx.match[1]
+      ) {
+
         return ctx.answerCbQuery(
           "این راهنما برای شما نیست.",
-          { show_alert: true }
+          {
+            show_alert: true
+          }
         );
+
       }
 
       await ctx.answerCbQuery();
@@ -344,17 +361,26 @@ function registerHelp(bot) {
   );
 
 
+  // ===================================
   // سکوت
+  // ===================================
 
   bot.action(
     /^help_mute:(\d+)$/,
     async ctx => {
 
-      if (String(ctx.from.id) !== ctx.match[1]) {
+      if (
+        String(ctx.from.id) !==
+        ctx.match[1]
+      ) {
+
         return ctx.answerCbQuery(
           "این راهنما برای شما نیست.",
-          { show_alert: true }
+          {
+            show_alert: true
+          }
         );
+
       }
 
       await ctx.answerCbQuery();
@@ -376,17 +402,26 @@ function registerHelp(bot) {
   );
 
 
+  // ===================================
   // اخطار
+  // ===================================
 
   bot.action(
     /^help_warn:(\d+)$/,
     async ctx => {
 
-      if (String(ctx.from.id) !== ctx.match[1]) {
+      if (
+        String(ctx.from.id) !==
+        ctx.match[1]
+      ) {
+
         return ctx.answerCbQuery(
           "این راهنما برای شما نیست.",
-          { show_alert: true }
+          {
+            show_alert: true
+          }
         );
+
       }
 
       await ctx.answerCbQuery();
@@ -415,17 +450,26 @@ function registerHelp(bot) {
   );
 
 
+  // ===================================
   // تنظیمات اخطار
+  // ===================================
 
   bot.action(
     /^help_warn_settings:(\d+)$/,
     async ctx => {
 
-      if (String(ctx.from.id) !== ctx.match[1]) {
+      if (
+        String(ctx.from.id) !==
+        ctx.match[1]
+      ) {
+
         return ctx.answerCbQuery(
           "این راهنما برای شما نیست.",
-          { show_alert: true }
+          {
+            show_alert: true
+          }
         );
+
       }
 
       await ctx.answerCbQuery();
@@ -447,17 +491,26 @@ function registerHelp(bot) {
   );
 
 
+  // ===================================
   // شناسنامه
+  // ===================================
 
   bot.action(
     /^help_info:(\d+)$/,
     async ctx => {
 
-      if (String(ctx.from.id) !== ctx.match[1]) {
+      if (
+        String(ctx.from.id) !==
+        ctx.match[1]
+      ) {
+
         return ctx.answerCbQuery(
           "این راهنما برای شما نیست.",
-          { show_alert: true }
+          {
+            show_alert: true
+          }
         );
+
       }
 
       await ctx.answerCbQuery();
@@ -479,17 +532,26 @@ function registerHelp(bot) {
   );
 
 
+  // ===================================
   // قفل‌ها
+  // ===================================
 
   bot.action(
     /^help_locks:(\d+)$/,
     async ctx => {
 
-      if (String(ctx.from.id) !== ctx.match[1]) {
+      if (
+        String(ctx.from.id) !==
+        ctx.match[1]
+      ) {
+
         return ctx.answerCbQuery(
           "این راهنما برای شما نیست.",
-          { show_alert: true }
+          {
+            show_alert: true
+          }
         );
+
       }
 
       await ctx.answerCbQuery();
@@ -511,17 +573,26 @@ function registerHelp(bot) {
   );
 
 
+  // ===================================
   // مدیریت کاربران
+  // ===================================
 
   bot.action(
     /^help_users:(\d+)$/,
     async ctx => {
 
-      if (String(ctx.from.id) !== ctx.match[1]) {
+      if (
+        String(ctx.from.id) !==
+        ctx.match[1]
+      ) {
+
         return ctx.answerCbQuery(
           "این راهنما برای شما نیست.",
-          { show_alert: true }
+          {
+            show_alert: true
+          }
         );
+
       }
 
       await ctx.answerCbQuery();
@@ -543,17 +614,26 @@ function registerHelp(bot) {
   );
 
 
+  // ===================================
   // دستورات
+  // ===================================
 
   bot.action(
     /^help_commands:(\d+)$/,
     async ctx => {
 
-      if (String(ctx.from.id) !== ctx.match[1]) {
+      if (
+        String(ctx.from.id) !==
+        ctx.match[1]
+      ) {
+
         return ctx.answerCbQuery(
           "این راهنما برای شما نیست.",
-          { show_alert: true }
+          {
+            show_alert: true
+          }
         );
+
       }
 
       await ctx.answerCbQuery();
@@ -575,17 +655,26 @@ function registerHelp(bot) {
   );
 
 
+  // ===================================
   // بازگشت به صفحه اصلی راهنما
+  // ===================================
 
   bot.action(
     /^help_back:(\d+)$/,
     async ctx => {
 
-      if (String(ctx.from.id) !== ctx.match[1]) {
+      if (
+        String(ctx.from.id) !==
+        ctx.match[1]
+      ) {
+
         return ctx.answerCbQuery(
           "این راهنما برای شما نیست.",
-          { show_alert: true }
+          {
+            show_alert: true
+          }
         );
+
       }
 
       await ctx.answerCbQuery();
@@ -599,28 +688,54 @@ function registerHelp(bot) {
   );
 
 
+  // ===================================
   // بستن راهنما
+  // ===================================
 
   bot.action(
     /^help_close:(\d+)$/,
     async ctx => {
 
-      if (String(ctx.from.id) !== ctx.match[1]) {
+      if (
+        String(ctx.from.id) !==
+        ctx.match[1]
+      ) {
+
         return ctx.answerCbQuery(
           "این راهنما برای شما نیست.",
-          { show_alert: true }
+          {
+            show_alert: true
+          }
         );
+
       }
 
       await ctx.answerCbQuery();
 
+
       try {
+
         await ctx.deleteMessage();
-      } catch {
-        await ctx.editMessageText(
-          "راهنما بسته شد."
-        );
+
       }
+
+      catch (error) {
+
+        console.log(
+          "HELP DELETE ERROR:",
+          error.message
+        );
+
+      }
+
+
+      // پیام جدید بعد از بسته شدن راهنما
+
+      await ctx.reply(
+`『𓆩 ★ راهنما بسته شد ★ 𓆪』
+
+بخش راهنمای ربات با موفقیت بسته شد.`
+      );
 
     }
   );
@@ -628,8 +743,14 @@ function registerHelp(bot) {
 }
 
 
+// =====================================
+// خروجی
+// =====================================
+
 module.exports = {
+
   registerHelp,
   helpPanel,
   helpText
+
 };
