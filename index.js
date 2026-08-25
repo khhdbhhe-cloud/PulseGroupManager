@@ -1,23 +1,31 @@
 const { Telegraf } = require("telegraf");
 const http = require("http");
 
-const { registerCommands } = require("./commands");
-const { registerPanelActions } = require("./panel-actions");
-const { registerHelp } = require("./help");
-const { registerSettings } = require("./settings");
-const { registerWarningActions } = require("./warning-actions");
-const { registerWarningSettings } = require("./warning-settings");
+const { registerCommands } =
+  require("./commands");
+
+const { registerPanelActions } =
+  require("./panel-actions");
+
+const { registerHelp } =
+  require("./help");
+
+const { registerSettings } =
+  require("./settings");
+
+const { registerWarningActions } =
+  require("./warning-actions");
+
+const { registerWarningSettings } =
+  require("./warning-settings");
 
 const { registerWelcome } =
   require("./welcome");
 
-const { registerWelcomeSettings } =
-  require("./welcome-settings");
 
-
-// ===============================
+// =====================================
 // CONFIG
-// ===============================
+// =====================================
 
 const BOT_TOKEN =
   process.env.BOT_TOKEN;
@@ -41,28 +49,31 @@ const bot =
   new Telegraf(BOT_TOKEN);
 
 
-// ===============================
+// =====================================
 // RENDER SERVER
-// ===============================
+// =====================================
 
-http.createServer(
-  (req, res) => {
+const server =
+  http.createServer(
+    (req, res) => {
 
-    res.writeHead(
-      200,
-      {
-        "Content-Type":
-          "text/plain; charset=utf-8"
-      }
-    );
+      res.writeHead(
+        200,
+        {
+          "Content-Type":
+            "text/plain; charset=utf-8"
+        }
+      );
 
-    res.end(
-      "PulseGroupManager ONLINE"
-    );
+      res.end(
+        "PulseGroupManager ONLINE"
+      );
 
-  }
+    }
+  );
 
-).listen(
+
+server.listen(
   PORT,
   "0.0.0.0",
   () => {
@@ -75,9 +86,9 @@ http.createServer(
 );
 
 
-// ===============================
+// =====================================
 // REGISTER SYSTEMS
-// ===============================
+// =====================================
 
 registerCommands(bot);
 
@@ -92,25 +103,23 @@ registerWarningActions(bot);
 registerWarningSettings(bot);
 
 
-// ===============================
+// =====================================
 // WELCOME SYSTEM
-// ===============================
+// =====================================
 
-// سیستم اصلی خوشامد
 registerWelcome(bot);
 
-// دستورات تنظیم خوشامد
-registerWelcomeSettings(bot);
 
-
-// ===============================
-// START
-// ===============================
+// =====================================
+// START COMMAND
+// =====================================
 
 bot.start(
   async ctx => {
 
-    await ctx.reply(
+    try {
+
+      await ctx.reply(
 `『𓆩 PulseGroupManager 𓆪』
 
 ربات مدیریت گروه فعال شد ✅
@@ -123,15 +132,26 @@ bot.start(
 
 راهنما:
 راهنما`
-    );
+      );
+
+    }
+
+    catch (error) {
+
+      console.log(
+        "START COMMAND ERROR:",
+        error.message
+      );
+
+    }
 
   }
 );
 
 
-// ===============================
-// ERROR HANDLER
-// ===============================
+// =====================================
+// GLOBAL ERROR HANDLER
+// =====================================
 
 bot.catch(
   (err, ctx) => {
@@ -145,9 +165,9 @@ bot.catch(
 );
 
 
-// ===============================
+// =====================================
 // LAUNCH
-// ===============================
+// =====================================
 
 bot.launch()
 .then(
@@ -171,16 +191,25 @@ bot.launch()
 );
 
 
-// ===============================
+// =====================================
 // STOP HANDLER
-// ===============================
+// =====================================
 
 process.once(
   "SIGINT",
-  () => bot.stop("SIGINT")
+  () => {
+
+    bot.stop("SIGINT");
+
+  }
 );
+
 
 process.once(
   "SIGTERM",
-  () => bot.stop("SIGTERM")
+  () => {
+
+    bot.stop("SIGTERM");
+
+  }
 );
