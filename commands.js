@@ -2,6 +2,10 @@ const { mainPanel, panelText } = require("./panel");
 const { checkAdmin } = require("./security");
 
 
+// =====================================
+// گرفتن کاربر ریپلای‌شده
+// =====================================
+
 function getReplyUser(ctx) {
 
   if (
@@ -15,28 +19,28 @@ function getReplyUser(ctx) {
   }
 
   return null;
-
 }
 
 
+// =====================================
+// ثبت دستورات
+// =====================================
 
 function registerCommands(bot) {
 
 
-  // =========================
-  // PANEL
-  // =========================
+  // ===================================
+  // پنل مدیریت
+  // ===================================
 
   bot.hears(
     /^پنل$/u,
     async ctx => {
 
-
       const access =
         await checkAdmin(ctx);
 
-
-      if(!access.ok){
+      if (!access.ok) {
 
         return ctx.reply(
           access.text
@@ -49,23 +53,23 @@ function registerCommands(bot) {
         getReplyUser(ctx);
 
 
-
       let text =
         panelText();
 
 
-      if(target){
+      // اگر روی پیام کاربر ریپلای شده باشد
+      if (target) {
 
         text +=
 `\n\n『𓆩 کاربر انتخاب شده 𓆪』
 
-نام: ${target.first_name || "ندارد"}
+نام:
+${target.first_name || "ندارد"}
 
 آیدی:
 ${target.id}`;
 
       }
-
 
 
       await ctx.reply(
@@ -75,50 +79,13 @@ ${target.id}`;
         )
       );
 
-
     }
   );
 
 
-
-
-
-  // =========================
-  // HELP
-  // =========================
-
-  bot.hears(
-    /^راهنما$/u,
-    async ctx => {
-
-
-      await ctx.reply(
-`『𓆩 راهنمای PulseGroupManager 𓆪』
-
-دستورات مدیریت:
-
-پنل
-بن
-آن‌بن
-میوت
-اخطار
-شناسنامه
-آمار
-
-فقط مدیران گروه دسترسی دارند.`
-
-      );
-
-    }
-  );
-
-
-
-
-
-  // =========================
-  // TEST
-  // =========================
+  // ===================================
+  // دستور تست ربات
+  // ===================================
 
   bot.hears(
     /^ربات$/u,
@@ -133,9 +100,12 @@ ${target.id}`;
     }
   );
 
-
 }
 
+
+// =====================================
+// EXPORT
+// =====================================
 
 module.exports = {
   registerCommands
