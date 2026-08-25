@@ -105,13 +105,40 @@ function setWarningDuration(
 
 
 // =====================================
-// ثبت دستورات مستقیم تنظیم اخطار
+// تبدیل اعداد فارسی به انگلیسی
+// =====================================
+
+function convertPersianNumber(value) {
+
+  const persian =
+    "۰۱۲۳۴۵۶۷۸۹";
+
+  const arabic =
+    "٠١٢٣٤٥٦٧٨٩";
+
+  return String(value)
+    .replace(
+      /[۰-۹]/g,
+      char =>
+        persian.indexOf(char)
+    )
+    .replace(
+      /[٠-٩]/g,
+      char =>
+        arabic.indexOf(char)
+    );
+
+}
+
+
+// =====================================
+// ثبت دستور مستقیم تنظیم اخطار
 // =====================================
 
 function registerWarningSettings(bot) {
 
   bot.hears(
-    /^تعداد اخطار\s+(\d+)$/u,
+    /^تعداد\s+اخطار\s+([۰-۹٠-٩0-9]+)$/u,
     async ctx => {
 
       try {
@@ -124,7 +151,9 @@ function registerWarningSettings(bot) {
             ctx.chat.type !== "supergroup"
           )
         ) {
+
           return;
+
         }
 
 
@@ -133,22 +162,30 @@ function registerWarningSettings(bot) {
           await checkAdmin(ctx);
 
         if (!access.ok) {
+
           return;
+
         }
 
 
+        // تبدیل عدد فارسی/عربی به انگلیسی
         const number =
-          Number(ctx.match[1]);
+          Number(
+            convertPersianNumber(
+              ctx.match[1]
+            )
+          );
 
 
         // محدوده مجاز
         if (
+          !Number.isInteger(number) ||
           number < 1 ||
           number > 20
         ) {
 
           return ctx.reply(
-            `『𓆩 ★ تنظیم اخطار ★ 𓆪』
+`『𓆩 ★ تنظیم اخطار ★ 𓆪』
 
 تعداد اخطار باید بین ۱ تا ۲۰ باشد.`,
             {
@@ -169,7 +206,7 @@ function registerWarningSettings(bot) {
         );
 
 
-        // پاسخ روی همان پیام
+        // پاسخ روی همان پیام مدیر
         await ctx.reply(
 `『𓆩 ★ تنظیمات اخطار ★ 𓆪』
 
