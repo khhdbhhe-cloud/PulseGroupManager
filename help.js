@@ -295,9 +295,17 @@ function registerHelp(bot) {
         return ctx.reply(access.text);
       }
 
+      // فقط تغییر این بخش:
+      // راهنما روی پیام اصلی کاربر ریپلای می‌شود.
+
       await ctx.reply(
         helpText(),
-        helpPanel(ctx.from.id)
+        {
+          ...helpPanel(ctx.from.id),
+          reply_parameters: {
+            message_id: ctx.message.message_id
+          }
+        }
       );
 
     }
