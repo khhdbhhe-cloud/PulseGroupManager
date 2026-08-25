@@ -2,6 +2,10 @@ const { Markup } = require("telegraf");
 const { permissionText } = require("./permissions");
 
 
+// =====================================
+// ساخت دکمه
+// =====================================
+
 function button(text, action, ownerId) {
 
   return Markup.button.callback(
@@ -12,6 +16,9 @@ function button(text, action, ownerId) {
 }
 
 
+// =====================================
+// پنل اصلی مدیریت
+// =====================================
 
 function mainPanel(ownerId) {
 
@@ -52,7 +59,7 @@ function mainPanel(ownerId) {
     [
       button(
         "سیستم اخطار",
-        "warns",
+        "warnings",
         ownerId
       )
     ],
@@ -60,7 +67,7 @@ function mainPanel(ownerId) {
     [
       button(
         "ورود و خروج",
-        "welcome",
+        "joinleave",
         ownerId
       )
     ],
@@ -75,8 +82,8 @@ function mainPanel(ownerId) {
 
     [
       button(
-        "تنظیمات",
-        "settings",
+        "آمار گروه",
+        "stats",
         ownerId
       )
     ],
@@ -84,7 +91,7 @@ function mainPanel(ownerId) {
     [
       button(
         "بستن پنل",
-        "close",
+        "panel_close",
         ownerId
       )
     ]
@@ -94,8 +101,11 @@ function mainPanel(ownerId) {
 }
 
 
+// =====================================
+// پنل مدیریت کاربر
+// =====================================
 
-function userPanel(ownerId){
+function userPanel(ownerId) {
 
   return Markup.inlineKeyboard([
 
@@ -138,7 +148,7 @@ function userPanel(ownerId){
     [
       button(
         "بازگشت",
-        "back",
+        "panel_home",
         ownerId
       )
     ]
@@ -148,12 +158,15 @@ function userPanel(ownerId){
 }
 
 
+// =====================================
+// پنل دسترسی‌ها
+// =====================================
 
 function permissionsPanel(
   ownerId,
   chatId,
   userId
-){
+) {
 
   return Markup.inlineKeyboard([
 
@@ -176,7 +189,7 @@ function permissionsPanel(
     [
       button(
         "بازگشت",
-        "back",
+        "panel_home",
         ownerId
       )
     ]
@@ -186,18 +199,33 @@ function permissionsPanel(
 }
 
 
+// =====================================
+// متن پنل
+// =====================================
 
-function panelText(){
+function panelText() {
 
   return (
 `『𓆩 پنل مدیریت 𓆪』
 
-بخش موردنظر را انتخاب کنید.`
+بخش موردنظر را انتخاب کنید.
+
+★ مدیریت کاربران
+★ مدیریت پیام‌ها
+★ قفل‌های گروه
+★ سیستم اخطار
+★ ورود و خروج
+★ قوانین
+★ آمار گروه
+★ دسترسی‌ها`
   );
 
 }
 
 
+// =====================================
+// EXPORT
+// =====================================
 
 module.exports = {
 
