@@ -7,15 +7,23 @@ const { registerHelp } = require("./help");
 const { registerSettings } = require("./settings");
 const { registerWarningActions } = require("./warning-actions");
 const { registerWarningSettings } = require("./warning-settings");
-const { registerWelcome } = require("./welcome");
+
+const { registerWelcome } =
+  require("./welcome");
+
+const { registerWelcomeSettings } =
+  require("./welcome-settings");
 
 
 // ===============================
 // CONFIG
 // ===============================
 
-const BOT_TOKEN = process.env.BOT_TOKEN;
-const PORT = process.env.PORT || 10000;
+const BOT_TOKEN =
+  process.env.BOT_TOKEN;
+
+const PORT =
+  process.env.PORT || 10000;
 
 
 if (!BOT_TOKEN) {
@@ -44,7 +52,7 @@ http.createServer(
       200,
       {
         "Content-Type":
-        "text/plain; charset=utf-8"
+          "text/plain; charset=utf-8"
       }
     );
 
@@ -83,7 +91,16 @@ registerWarningActions(bot);
 
 registerWarningSettings(bot);
 
+
+// ===============================
+// WELCOME SYSTEM
+// ===============================
+
+// سیستم اصلی خوشامد
 registerWelcome(bot);
+
+// دستورات تنظیم خوشامد
+registerWelcomeSettings(bot);
 
 
 // ===============================
