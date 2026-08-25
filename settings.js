@@ -85,11 +85,12 @@ function settingsText() {
 }
 
 // =====================================
-// بررسی دسترسی
+// بررسی دسترسی + صاحب پنل
 // =====================================
 
 async function protectSettings(ctx) {
 
+  // اول بررسی می‌کنیم کاربر مدیر یا مالک هست
   const access = await checkAdmin(ctx);
 
   if (!access.ok) {
@@ -105,6 +106,55 @@ async function protectSettings(ctx) {
 
     return false;
   }
+
+
+  // ===================================
+  // بررسی صاحب تنظیمات
+  // ===================================
+
+  /*
+    آیدی صاحب تنظیمات داخل دکمه ذخیره شده.
+
+    مثال:
+
+    set_mute:123456789
+
+    عدد آخر = صاحب تنظیمات
+  */
+
+  if (
+    ctx.callbackQuery &&
+    ctx.match &&
+    ctx.match[1]
+  ) {
+
+    const ownerId =
+      String(ctx.match[1]);
+
+    const currentUserId =
+      String(ctx.from.id);
+
+
+    // اگر این پنل متعلق به شخص دیگری باشد
+    if (
+      ownerId !== currentUserId
+    ) {
+
+      try {
+
+        await ctx.answerCbQuery(
+          "『𓆩 ★ این بخش برای شما نیست ★ 𓆪』",
+          {
+            show_alert: true
+          }
+        );
+
+      } catch {}
+
+      return false;
+    }
+  }
+
 
   return true;
 }
@@ -167,20 +217,20 @@ function registerSettings(bot) {
         await checkAdmin(ctx);
 
       if (!access.ok) {
-
-        // کاربر عادی هیچ پنلی دریافت نمی‌کند
         return;
       }
 
-      // باز کردن تنظیمات با ریپلای به همان پیام
+      // تنظیمات روی همان پیام ریپلای می‌شود
       try {
 
         await ctx.reply(
           settingsText(),
           {
             ...settingsPanel(ctx.from.id),
+
             reply_parameters: {
-              message_id: ctx.message.message_id
+              message_id:
+                ctx.message.message_id
             }
           }
         );
@@ -197,30 +247,19 @@ function registerSettings(bot) {
     }
   );
 
+
   // ===================================
-  // برگشت به صفحه اصلی تنظیمات
+  // بازگشت به صفحه اصلی تنظیمات
   // ===================================
 
   bot.action(
     /^settings_home:(\d+)$/,
     async ctx => {
 
-      if (!(await protectSettings(ctx))) {
-        return;
-      }
-
       if (
-        String(ctx.from.id) !==
-        String(ctx.match[1])
+        !(await protectSettings(ctx))
       ) {
-
-        return ctx.answerCbQuery(
-          "『𓆩 ★ این تنظیمات برای شما نیست ★ 𓆪』",
-          {
-            show_alert: true
-          }
-        );
-
+        return;
       }
 
       await ctx.answerCbQuery();
@@ -244,6 +283,7 @@ function registerSettings(bot) {
     }
   );
 
+
   // ===================================
   // خوشامدگویی
   // ===================================
@@ -252,7 +292,9 @@ function registerSettings(bot) {
     /^set_welcome:(\d+)$/,
     async ctx => {
 
-      if (!(await protectSettings(ctx))) return;
+      if (
+        !(await protectSettings(ctx))
+      ) return;
 
       await ctx.answerCbQuery();
 
@@ -271,6 +313,7 @@ function registerSettings(bot) {
     }
   );
 
+
   // ===================================
   // مدیریت
   // ===================================
@@ -279,7 +322,9 @@ function registerSettings(bot) {
     /^set_management:(\d+)$/,
     async ctx => {
 
-      if (!(await protectSettings(ctx))) return;
+      if (
+        !(await protectSettings(ctx))
+      ) return;
 
       await ctx.answerCbQuery();
 
@@ -300,6 +345,7 @@ function registerSettings(bot) {
     }
   );
 
+
   // ===================================
   // اختیار
   // ===================================
@@ -308,7 +354,9 @@ function registerSettings(bot) {
     /^set_warn:(\d+)$/,
     async ctx => {
 
-      if (!(await protectSettings(ctx))) return;
+      if (
+        !(await protectSettings(ctx))
+      ) return;
 
       await ctx.answerCbQuery();
 
@@ -339,6 +387,7 @@ function registerSettings(bot) {
     }
   );
 
+
   // ===================================
   // سکوت
   // ===================================
@@ -347,7 +396,9 @@ function registerSettings(bot) {
     /^set_mute:(\d+)$/,
     async ctx => {
 
-      if (!(await protectSettings(ctx))) return;
+      if (
+        !(await protectSettings(ctx))
+      ) return;
 
       await ctx.answerCbQuery();
 
@@ -369,6 +420,7 @@ function registerSettings(bot) {
     }
   );
 
+
   // ===================================
   // محدودیت
   // ===================================
@@ -377,7 +429,9 @@ function registerSettings(bot) {
     /^set_restrict:(\d+)$/,
     async ctx => {
 
-      if (!(await protectSettings(ctx))) return;
+      if (
+        !(await protectSettings(ctx))
+      ) return;
 
       await ctx.answerCbQuery();
 
@@ -398,6 +452,7 @@ function registerSettings(bot) {
     }
   );
 
+
   // ===================================
   // بن
   // ===================================
@@ -406,7 +461,9 @@ function registerSettings(bot) {
     /^set_ban:(\d+)$/,
     async ctx => {
 
-      if (!(await protectSettings(ctx))) return;
+      if (
+        !(await protectSettings(ctx))
+      ) return;
 
       await ctx.answerCbQuery();
 
@@ -423,6 +480,7 @@ function registerSettings(bot) {
     }
   );
 
+
   // ===================================
   // فوروارد
   // ===================================
@@ -431,7 +489,9 @@ function registerSettings(bot) {
     /^set_forward:(\d+)$/,
     async ctx => {
 
-      if (!(await protectSettings(ctx))) return;
+      if (
+        !(await protectSettings(ctx))
+      ) return;
 
       await ctx.answerCbQuery();
 
@@ -446,6 +506,7 @@ function registerSettings(bot) {
     }
   );
 
+
   // ===================================
   // ضدفلود
   // ===================================
@@ -454,7 +515,9 @@ function registerSettings(bot) {
     /^set_flood:(\d+)$/,
     async ctx => {
 
-      if (!(await protectSettings(ctx))) return;
+      if (
+        !(await protectSettings(ctx))
+      ) return;
 
       await ctx.answerCbQuery();
 
@@ -471,6 +534,7 @@ function registerSettings(bot) {
     }
   );
 
+
   // ===================================
   // ورود و خروج
   // ===================================
@@ -479,7 +543,9 @@ function registerSettings(bot) {
     /^set_joinleave:(\d+)$/,
     async ctx => {
 
-      if (!(await protectSettings(ctx))) return;
+      if (
+        !(await protectSettings(ctx))
+      ) return;
 
       await ctx.answerCbQuery();
 
@@ -495,6 +561,7 @@ function registerSettings(bot) {
     }
   );
 
+
   // ===================================
   // پیام‌ها
   // ===================================
@@ -503,7 +570,9 @@ function registerSettings(bot) {
     /^set_messages:(\d+)$/,
     async ctx => {
 
-      if (!(await protectSettings(ctx))) return;
+      if (
+        !(await protectSettings(ctx))
+      ) return;
 
       await ctx.answerCbQuery();
 
@@ -519,6 +588,7 @@ function registerSettings(bot) {
     }
   );
 
+
   // ===================================
   // قوانین
   // ===================================
@@ -527,7 +597,9 @@ function registerSettings(bot) {
     /^set_rules:(\d+)$/,
     async ctx => {
 
-      if (!(await protectSettings(ctx))) return;
+      if (
+        !(await protectSettings(ctx))
+      ) return;
 
       await ctx.answerCbQuery();
 
@@ -541,6 +613,7 @@ function registerSettings(bot) {
     }
   );
 
+
   // ===================================
   // بستن تنظیمات
   // ===================================
@@ -549,22 +622,10 @@ function registerSettings(bot) {
     /^settings_close:(\d+)$/,
     async ctx => {
 
-      if (!(await protectSettings(ctx))) {
-        return;
-      }
-
       if (
-        String(ctx.from.id) !==
-        String(ctx.match[1])
+        !(await protectSettings(ctx))
       ) {
-
-        return ctx.answerCbQuery(
-          "『𓆩 ★ این تنظیمات برای شما نیست ★ 𓆪』",
-          {
-            show_alert: true
-          }
-        );
-
+        return;
       }
 
       await ctx.answerCbQuery();
@@ -588,6 +649,7 @@ function registerSettings(bot) {
   );
 
 }
+
 
 // =====================================
 // EXPORT
