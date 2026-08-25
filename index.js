@@ -4,6 +4,7 @@ const http = require("http");
 const { registerCommands } = require("./commands");
 const { registerPanelActions } = require("./panel-actions");
 const { registerHelp } = require("./help");
+const { registerSettings } = require("./settings");
 
 
 // ===============================
@@ -25,7 +26,8 @@ if (!BOT_TOKEN) {
 }
 
 
-const bot = new Telegraf(BOT_TOKEN);
+const bot =
+  new Telegraf(BOT_TOKEN);
 
 
 // ===============================
@@ -72,9 +74,11 @@ registerPanelActions(bot);
 
 registerHelp(bot);
 
+registerSettings(bot);
+
 
 // ===============================
-// START MESSAGE
+// START
 // ===============================
 
 bot.start(
@@ -85,10 +89,13 @@ bot.start(
 
 ربات مدیریت گروه فعال شد ✅
 
-برای دیدن پنل:
+پنل:
 پنل
 
-برای راهنما:
+تنظیمات:
+تنظیمات
+
+راهنما:
 راهنما`
     );
 
