@@ -72,11 +72,22 @@ ${target.id}`;
       }
 
 
+      // =================================
+      // پنل روی همان پیام مدیر ریپلای شود
+      // =================================
+
       await ctx.reply(
         text,
-        mainPanel(
-          ctx.from.id
-        )
+        {
+          ...mainPanel(
+            ctx.from.id
+          ),
+
+          reply_parameters: {
+            message_id:
+              ctx.message.message_id
+          }
+        }
       );
 
     }
