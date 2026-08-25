@@ -7,10 +7,12 @@ const { checkAdmin } = require("./security");
 // =====================================
 
 function helpButton(text, action, ownerId) {
+
   return Markup.button.callback(
     `『𓆩 ${text} 𓆪』`,
     `${action}:${ownerId}`
   );
+
 }
 
 
@@ -291,30 +293,42 @@ function registerHelp(bot) {
     /^راهنما$/u,
     async ctx => {
 
-      const access =
-        await checkAdmin(ctx);
+      try {
 
-      if (!access.ok) {
+        const access =
+          await checkAdmin(ctx);
 
-        return ctx.reply(
-          access.text
+        if (!access.ok) {
+
+          return ctx.reply(
+            access.text
+          );
+
+        }
+
+        await ctx.reply(
+          helpText(),
+          {
+            ...helpPanel(ctx.from.id),
+
+            reply_parameters: {
+              message_id:
+                ctx.message.message_id
+            }
+
+          }
         );
 
       }
 
+      catch (error) {
 
-      await ctx.reply(
-        helpText(),
-        {
-          ...helpPanel(ctx.from.id),
+        console.log(
+          "HELP ERROR:",
+          error.message
+        );
 
-          reply_parameters: {
-            message_id:
-              ctx.message.message_id
-          }
-
-        }
-      );
+      }
 
     }
   );
@@ -436,6 +450,7 @@ function registerHelp(bot) {
               ctx.from.id
             )
           ],
+
           [
             helpButton(
               "بازگشت به راهنما",
@@ -443,6 +458,7 @@ function registerHelp(bot) {
               ctx.from.id
             )
           ]
+
         ])
       );
 
@@ -713,28 +729,11 @@ function registerHelp(bot) {
       await ctx.answerCbQuery();
 
 
-      try {
+      // همان پیام راهنما را تغییر می‌دهیم
+      // تا ریپلای اصلی آن حفظ شود.
 
-        await ctx.deleteMessage();
-
-      }
-
-      catch (error) {
-
-        console.log(
-          "HELP DELETE ERROR:",
-          error.message
-        );
-
-      }
-
-
-      // پیام جدید بعد از بسته شدن راهنما
-
-      await ctx.reply(
-`『𓆩 ★ راهنما بسته شد ★ 𓆪』
-
-بخش راهنمای ربات با موفقیت بسته شد.`
+      await ctx.editMessageText(
+        `『𓆩 ★ راهنما بسته شد ★ 𓆪』`
       );
 
     }
