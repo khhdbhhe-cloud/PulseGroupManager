@@ -7,6 +7,7 @@ const { registerHelp } = require("./help");
 const { registerSettings } = require("./settings");
 const { registerWarningActions } = require("./warning-actions");
 const { registerWarningSettings } = require("./warning-settings");
+const { registerWelcome } = require("./welcome");
 
 
 // ===============================
@@ -81,6 +82,8 @@ registerSettings(bot);
 registerWarningActions(bot);
 
 registerWarningSettings(bot);
+
+registerWelcome(bot);
 
 
 // ===============================
