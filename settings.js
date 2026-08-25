@@ -1,6 +1,14 @@
 const { Markup } = require("telegraf");
 const { checkAdmin } = require("./security");
 
+const {
+  getWarningSettings,
+  setMaxWarnings,
+  setWarningPunishment,
+  setWarningDuration
+} = require("./warning-settings");
+
+
 // =====================================
 // دکمه تنظیمات
 // =====================================
@@ -11,6 +19,7 @@ function settingButton(text, action, ownerId) {
     `${action}:${ownerId}`
   );
 }
+
 
 // =====================================
 // صفحه اصلی تنظیمات
@@ -70,6 +79,7 @@ function settingsPanel(ownerId) {
   ]);
 }
 
+
 // =====================================
 // متن تنظیمات
 // =====================================
@@ -84,13 +94,13 @@ function settingsText() {
 ★ فقط مدیران و مالک گروه دسترسی دارند.`;
 }
 
+
 // =====================================
 // بررسی دسترسی + صاحب پنل
 // =====================================
 
 async function protectSettings(ctx) {
 
-  // اول بررسی می‌کنیم کاربر مدیر یا مالک هست
   const access = await checkAdmin(ctx);
 
   if (!access.ok) {
@@ -108,20 +118,6 @@ async function protectSettings(ctx) {
   }
 
 
-  // ===================================
-  // بررسی صاحب تنظیمات
-  // ===================================
-
-  /*
-    آیدی صاحب تنظیمات داخل دکمه ذخیره شده.
-
-    مثال:
-
-    set_mute:123456789
-
-    عدد آخر = صاحب تنظیمات
-  */
-
   if (
     ctx.callbackQuery &&
     ctx.match &&
@@ -135,7 +131,6 @@ async function protectSettings(ctx) {
       String(ctx.from.id);
 
 
-    // اگر این پنل متعلق به شخص دیگری باشد
     if (
       ownerId !== currentUserId
     ) {
@@ -158,6 +153,7 @@ async function protectSettings(ctx) {
 
   return true;
 }
+
 
 // =====================================
 // دکمه‌های برگشت
@@ -187,11 +183,13 @@ function backToSettings(ownerId) {
 
 }
 
+
 // =====================================
 // ثبت تنظیمات
 // =====================================
 
 function registerSettings(bot) {
+
 
   // ===================================
   // دستور تنظیمات
@@ -201,7 +199,6 @@ function registerSettings(bot) {
     /^تنظیمات$/u,
     async ctx => {
 
-      // فقط داخل گروه
       if (
         !ctx.chat ||
         (
@@ -212,7 +209,6 @@ function registerSettings(bot) {
         return;
       }
 
-      // فقط مدیر و مالک
       const access =
         await checkAdmin(ctx);
 
@@ -220,7 +216,7 @@ function registerSettings(bot) {
         return;
       }
 
-      // تنظیمات روی همان پیام ریپلای می‌شود
+
       try {
 
         await ctx.reply(
@@ -249,16 +245,14 @@ function registerSettings(bot) {
 
 
   // ===================================
-  // بازگشت به صفحه اصلی تنظیمات
+  // بازگشت
   // ===================================
 
   bot.action(
     /^settings_home:(\d+)$/,
     async ctx => {
 
-      if (
-        !(await protectSettings(ctx))
-      ) {
+      if (!(await protectSettings(ctx))) {
         return;
       }
 
@@ -292,9 +286,7 @@ function registerSettings(bot) {
     /^set_welcome:(\d+)$/,
     async ctx => {
 
-      if (
-        !(await protectSettings(ctx))
-      ) return;
+      if (!(await protectSettings(ctx))) return;
 
       await ctx.answerCbQuery();
 
@@ -322,9 +314,7 @@ function registerSettings(bot) {
     /^set_management:(\d+)$/,
     async ctx => {
 
-      if (
-        !(await protectSettings(ctx))
-      ) return;
+      if (!(await protectSettings(ctx))) return;
 
       await ctx.answerCbQuery();
 
@@ -347,40 +337,259 @@ function registerSettings(bot) {
 
 
   // ===================================
-  // اختیار
+  // اختیار / اخطار
   // ===================================
 
   bot.action(
     /^set_warn:(\d+)$/,
     async ctx => {
 
-      if (
-        !(await protectSettings(ctx))
-      ) return;
+      if (!(await protectSettings(ctx))) return;
 
       await ctx.answerCbQuery();
+
+      const config =
+        getWarningSettings(ctx.chat.id);
+
+      const punishmentText =
+        config.punishment === "mute"
+          ? "سکوت"
+          : config.punishment === "restrict"
+            ? "محدودیت"
+            : "بن";
 
       await ctx.editMessageText(
 `『𓆩 تنظیمات اختیار 𓆪』
 
-تعداد اختیار:
-۳
+تعداد اخطار فعلی:
+★ ${config.maxWarnings}
 
-بعد از رسیدن به حد:
-سکوت
+مجازات فعلی:
+★ ${punishmentText}
 
-مدت سکوت:
-۲ ساعت
+مدت مجازات:
+★ ${config.duration} دقیقه
 
-این قسمت بعداً به تنظیمات واقعی متصل می‌شود.
+تعداد اخطار را انتخاب کنید:`,
+        Markup.inlineKeyboard([
 
-مثال:
+          [
+            settingButton(
+              "۱ اخطار",
+              "warn_count_1",
+              ctx.from.id
+            ),
 
-۳ اختیار
-↓
-سکوت
-↓
-۲ ساعت`,
+            settingButton(
+              "۲ اخطار",
+              "warn_count_2",
+              ctx.from.id
+            )
+          ],
+
+          [
+            settingButton(
+              "۳ اخطار",
+              "warn_count_3",
+              ctx.from.id
+            ),
+
+            settingButton(
+              "۵ اخطار",
+              "warn_count_5",
+              ctx.from.id
+            )
+          ],
+
+          [
+            settingButton(
+              "۱۰ اخطار",
+              "warn_count_10",
+              ctx.from.id
+            )
+          ],
+
+          [
+            settingButton(
+              "مجازات: سکوت",
+              "warn_punish_mute",
+              ctx.from.id
+            )
+          ],
+
+          [
+            settingButton(
+              "مجازات: محدودیت",
+              "warn_punish_restrict",
+              ctx.from.id
+            )
+          ],
+
+          [
+            settingButton(
+              "مجازات: بن",
+              "warn_punish_ban",
+              ctx.from.id
+            )
+          ],
+
+          [
+            settingButton(
+              "مدت ۱ ساعت",
+              "warn_duration_60",
+              ctx.from.id
+            ),
+
+            settingButton(
+              "مدت ۲ ساعت",
+              "warn_duration_120",
+              ctx.from.id
+            )
+          ],
+
+          [
+            settingButton(
+              "مدت ۳ ساعت",
+              "warn_duration_180",
+              ctx.from.id
+            ),
+
+            settingButton(
+              "مدت ۶ ساعت",
+              "warn_duration_360",
+              ctx.from.id
+            )
+          ],
+
+          [
+            settingButton(
+              "بازگشت",
+              "settings_home",
+              ctx.from.id
+            )
+          ]
+
+        ])
+      );
+
+    }
+  );
+
+
+  // ===================================
+  // تعداد اخطار
+  // ===================================
+
+  bot.action(
+    /^warn_count_(1|2|3|5|10):(\d+)$/,
+    async ctx => {
+
+      if (!(await protectSettings(ctx))) return;
+
+      const count =
+        Number(ctx.match[1]);
+
+      setMaxWarnings(
+        ctx.chat.id,
+        count
+      );
+
+      await ctx.answerCbQuery(
+        `تعداد اخطار روی ${count} تنظیم شد.`
+      );
+
+      await ctx.editMessageText(
+`『𓆩 تنظیم اخطار 𓆪』
+
+تعداد اخطار مجاز:
+
+★ ${count}
+
+بعد از رسیدن کاربر به این تعداد، مجازات انتخاب‌شده اجرا خواهد شد.`,
+        backToSettings(ctx.from.id)
+      );
+
+    }
+  );
+
+
+  // ===================================
+  // نوع مجازات
+  // ===================================
+
+  bot.action(
+    /^warn_punish_(mute|restrict|ban):(\d+)$/,
+    async ctx => {
+
+      if (!(await protectSettings(ctx))) return;
+
+      const punishment =
+        ctx.match[1];
+
+      setWarningPunishment(
+        ctx.chat.id,
+        punishment
+      );
+
+      const text =
+        punishment === "mute"
+          ? "سکوت"
+          : punishment === "restrict"
+            ? "محدودیت"
+            : "بن";
+
+      await ctx.answerCbQuery(
+        `مجازات روی ${text} تنظیم شد.`
+      );
+
+      await ctx.editMessageText(
+`『𓆩 مجازات اخطار 𓆪』
+
+مجازات انتخاب‌شده:
+
+★ ${text}
+
+این مجازات پس از رسیدن کاربر به حد تعیین‌شده اجرا می‌شود.`,
+        backToSettings(ctx.from.id)
+      );
+
+    }
+  );
+
+
+  // ===================================
+  // مدت مجازات
+  // ===================================
+
+  bot.action(
+    /^warn_duration_(60|120|180|360):(\d+)$/,
+    async ctx => {
+
+      if (!(await protectSettings(ctx))) return;
+
+      const minutes =
+        Number(ctx.match[1]);
+
+      setWarningDuration(
+        ctx.chat.id,
+        minutes
+      );
+
+      const hours =
+        minutes / 60;
+
+      await ctx.answerCbQuery(
+        `مدت روی ${hours} ساعت تنظیم شد.`
+      );
+
+      await ctx.editMessageText(
+`『𓆩 مدت مجازات 𓆪』
+
+مدت انتخاب‌شده:
+
+★ ${hours} ساعت
+
+این مدت برای مجازات اخطار استفاده خواهد شد.`,
         backToSettings(ctx.from.id)
       );
 
@@ -396,9 +605,7 @@ function registerSettings(bot) {
     /^set_mute:(\d+)$/,
     async ctx => {
 
-      if (
-        !(await protectSettings(ctx))
-      ) return;
+      if (!(await protectSettings(ctx))) return;
 
       await ctx.answerCbQuery();
 
@@ -429,9 +636,7 @@ function registerSettings(bot) {
     /^set_restrict:(\d+)$/,
     async ctx => {
 
-      if (
-        !(await protectSettings(ctx))
-      ) return;
+      if (!(await protectSettings(ctx))) return;
 
       await ctx.answerCbQuery();
 
@@ -461,9 +666,7 @@ function registerSettings(bot) {
     /^set_ban:(\d+)$/,
     async ctx => {
 
-      if (
-        !(await protectSettings(ctx))
-      ) return;
+      if (!(await protectSettings(ctx))) return;
 
       await ctx.answerCbQuery();
 
@@ -489,9 +692,7 @@ function registerSettings(bot) {
     /^set_forward:(\d+)$/,
     async ctx => {
 
-      if (
-        !(await protectSettings(ctx))
-      ) return;
+      if (!(await protectSettings(ctx))) return;
 
       await ctx.answerCbQuery();
 
@@ -515,9 +716,7 @@ function registerSettings(bot) {
     /^set_flood:(\d+)$/,
     async ctx => {
 
-      if (
-        !(await protectSettings(ctx))
-      ) return;
+      if (!(await protectSettings(ctx))) return;
 
       await ctx.answerCbQuery();
 
@@ -543,9 +742,7 @@ function registerSettings(bot) {
     /^set_joinleave:(\d+)$/,
     async ctx => {
 
-      if (
-        !(await protectSettings(ctx))
-      ) return;
+      if (!(await protectSettings(ctx))) return;
 
       await ctx.answerCbQuery();
 
@@ -570,9 +767,7 @@ function registerSettings(bot) {
     /^set_messages:(\d+)$/,
     async ctx => {
 
-      if (
-        !(await protectSettings(ctx))
-      ) return;
+      if (!(await protectSettings(ctx))) return;
 
       await ctx.answerCbQuery();
 
@@ -597,9 +792,7 @@ function registerSettings(bot) {
     /^set_rules:(\d+)$/,
     async ctx => {
 
-      if (
-        !(await protectSettings(ctx))
-      ) return;
+      if (!(await protectSettings(ctx))) return;
 
       await ctx.answerCbQuery();
 
@@ -622,9 +815,7 @@ function registerSettings(bot) {
     /^settings_close:(\d+)$/,
     async ctx => {
 
-      if (
-        !(await protectSettings(ctx))
-      ) {
+      if (!(await protectSettings(ctx))) {
         return;
       }
 
