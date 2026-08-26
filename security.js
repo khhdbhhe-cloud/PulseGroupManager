@@ -1,6 +1,25 @@
 // =====================================
-// PulseGroupManager - Security System
+// PulseGroupManager
+// SECURITY SYSTEM - FINAL
 // =====================================
+
+
+// =====================================
+// بررسی اینکه داخل گروه هستیم
+// =====================================
+
+function isGroup(ctx) {
+
+  return !!(
+    ctx &&
+    ctx.chat &&
+    (
+      ctx.chat.type === "group" ||
+      ctx.chat.type === "supergroup"
+    )
+  );
+
+}
 
 
 // =====================================
@@ -12,23 +31,8 @@ async function getRole(ctx, userId) {
   try {
 
     if (
-      !ctx ||
-      !ctx.chat ||
+      !isGroup(ctx) ||
       !userId
-    ) {
-
-      return "member";
-
-    }
-
-
-    const chatType =
-      ctx.chat.type;
-
-
-    if (
-      chatType !== "group" &&
-      chatType !== "supergroup"
     ) {
 
       return "member";
@@ -43,52 +47,78 @@ async function getRole(ctx, userId) {
       );
 
 
-    if (
-      member.status === "creator"
-    ) {
+    if (!member) {
 
-      return "creator";
+      return "member";
 
     }
 
 
-    if (
-      member.status === "administrator"
-    ) {
+    switch (member.status) {
 
-      return "administrator";
+      // -------------------------------
+      // مالک گروه
+      // -------------------------------
+
+      case "creator":
+
+        return "creator";
+
+
+      // -------------------------------
+      // مدیر گروه
+      // -------------------------------
+
+      case "administrator":
+
+        return "administrator";
+
+
+      // -------------------------------
+      // کاربر محدود
+      // -------------------------------
+
+      case "restricted":
+
+        return "restricted";
+
+
+      // -------------------------------
+      // کاربر خارج شده
+      // -------------------------------
+
+      case "left":
+
+        return "left";
+
+
+      // -------------------------------
+      // کاربر بن شده
+      // -------------------------------
+
+      case "kicked":
+
+        return "kicked";
+
+
+      // -------------------------------
+      // کاربر عادی
+      // -------------------------------
+
+      case "member":
+
+        return "member";
+
+
+      // -------------------------------
+      // حالت ناشناخته
+      // -------------------------------
+
+      default:
+
+        return "member";
 
     }
-
-
-    if (
-      member.status === "restricted"
-    ) {
-
-      return "restricted";
-
-    }
-
-
-    if (
-      member.status === "left"
-    ) {
-
-      return "left";
-
-    }
-
-
-    if (
-      member.status === "kicked"
-    ) {
-
-      return "kicked";
-
-    }
-
-
-    return "member";
 
   }
 
@@ -109,44 +139,64 @@ async function getRole(ctx, userId) {
 // =====================================
 // بررسی مدیر یا مالک
 // =====================================
+//
+// creator       = مالک
+// administrator = مدیر
+// member        = کاربر عادی
+//
+// کاربر عادی هیچ دسترسی مدیریتی ندارد.
+// =====================================
 
 async function checkAdmin(ctx) {
 
   try {
 
-    // فقط داخل گروه
-    if (
-      !ctx ||
-      !ctx.chat ||
-      (
-        ctx.chat.type !== "group" &&
-        ctx.chat.type !== "supergroup"
-      )
-    ) {
+    // ---------------------------------
+    // فقط گروه
+    // ---------------------------------
+
+    if (!isGroup(ctx)) {
 
       return {
+
         ok: false,
+
+        role: "member",
+
         text:
           "این دستور فقط داخل گروه قابل استفاده است."
+
       };
 
     }
 
 
-    // بررسی وجود فرستنده
+    // ---------------------------------
+    // بررسی فرستنده
+    // ---------------------------------
+
     if (
       !ctx.from ||
       !ctx.from.id
     ) {
 
       return {
+
         ok: false,
+
+        role: "member",
+
         text:
           "امکان شناسایی کاربر وجود ندارد."
+
       };
 
     }
 
+
+    // ---------------------------------
+    // دریافت نقش
+    // ---------------------------------
 
     const role =
       await getRole(
@@ -155,38 +205,53 @@ async function checkAdmin(ctx) {
       );
 
 
+    // ---------------------------------
     // مالک
-    if (
-      role === "creator"
-    ) {
+    // ---------------------------------
+
+    if (role === "creator") {
 
       return {
+
         ok: true,
+
         role: "creator"
+
       };
 
     }
 
 
+    // ---------------------------------
     // مدیر
-    if (
-      role === "administrator"
-    ) {
+    // ---------------------------------
+
+    if (role === "administrator") {
 
       return {
+
         ok: true,
+
         role: "administrator"
+
       };
 
     }
 
 
+    // ---------------------------------
     // کاربر عادی
+    // ---------------------------------
+
     return {
+
       ok: false,
+
       role,
+
       text:
-        "فقط مدیران گروه می‌توانند از این دستور استفاده کنند."
+        "⛔ فقط مدیران و مالک گروه می‌توانند از این قابلیت استفاده کنند."
+
     };
 
   }
@@ -198,10 +263,19 @@ async function checkAdmin(ctx) {
       error.message
     );
 
+
+    // در صورت خطا:
+    // دسترسی داده نمی‌شود.
+
     return {
+
       ok: false,
+
+      role: "member",
+
       text:
-        "خطایی هنگام بررسی دسترسی رخ داد."
+        "⛔ امکان بررسی دسترسی شما وجود ندارد."
+
     };
 
   }
@@ -210,30 +284,36 @@ async function checkAdmin(ctx) {
 
 
 // =====================================
-// بررسی مالک گروه
+// بررسی فقط مالک
 // =====================================
 
 async function checkOwner(ctx) {
 
   try {
 
-    if (
-      !ctx ||
-      !ctx.chat ||
-      (
-        ctx.chat.type !== "group" &&
-        ctx.chat.type !== "supergroup"
-      )
-    ) {
+    // ---------------------------------
+    // فقط گروه
+    // ---------------------------------
+
+    if (!isGroup(ctx)) {
 
       return {
+
         ok: false,
+
+        role: "member",
+
         text:
           "این دستور فقط داخل گروه قابل استفاده است."
+
       };
 
     }
 
+
+    // ---------------------------------
+    // بررسی فرستنده
+    // ---------------------------------
 
     if (
       !ctx.from ||
@@ -241,13 +321,22 @@ async function checkOwner(ctx) {
     ) {
 
       return {
+
         ok: false,
+
+        role: "member",
+
         text:
           "امکان شناسایی کاربر وجود ندارد."
+
       };
 
     }
 
+
+    // ---------------------------------
+    // نقش کاربر
+    // ---------------------------------
 
     const role =
       await getRole(
@@ -256,23 +345,32 @@ async function checkOwner(ctx) {
       );
 
 
-    if (
-      role !== "creator"
-    ) {
+    // ---------------------------------
+    // فقط مالک
+    // ---------------------------------
+
+    if (role !== "creator") {
 
       return {
+
         ok: false,
+
         role,
+
         text:
-          "فقط مالک گروه می‌تواند این تنظیمات را تغییر دهد."
+          "⛔ فقط مالک گروه می‌تواند این تنظیمات را تغییر دهد."
+
       };
 
     }
 
 
     return {
+
       ok: true,
+
       role: "creator"
+
     };
 
   }
@@ -284,10 +382,16 @@ async function checkOwner(ctx) {
       error.message
     );
 
+
     return {
+
       ok: false,
+
+      role: "member",
+
       text:
-        "خطایی هنگام بررسی مالک گروه رخ داد."
+        "⛔ امکان بررسی مالک گروه وجود ندارد."
+
     };
 
   }
@@ -296,7 +400,7 @@ async function checkOwner(ctx) {
 
 
 // =====================================
-// بررسی مدیر بودن یک کاربر مشخص
+// بررسی یک کاربر مشخص
 // =====================================
 
 async function isAdmin(
@@ -304,12 +408,77 @@ async function isAdmin(
   userId
 ) {
 
-  const role =
-    await getRole(
-      ctx,
-      userId
+  try {
+
+    const role =
+      await getRole(
+        ctx,
+        userId
+      );
+
+
+    return (
+      role === "creator" ||
+      role === "administrator"
     );
 
+  }
+
+  catch (error) {
+
+    console.log(
+      "IS ADMIN ERROR:",
+      error.message
+    );
+
+    return false;
+
+  }
+
+}
+
+
+// =====================================
+// بررسی مالک یک کاربر مشخص
+// =====================================
+
+async function isOwner(
+  ctx,
+  userId
+) {
+
+  try {
+
+    const role =
+      await getRole(
+        ctx,
+        userId
+      );
+
+
+    return role === "creator";
+
+  }
+
+  catch (error) {
+
+    console.log(
+      "IS OWNER ERROR:",
+      error.message
+    );
+
+    return false;
+
+  }
+
+}
+
+
+// =====================================
+// بررسی دسترسی مدیریتی بر اساس نقش
+// =====================================
+
+function hasAdminAccess(role) {
 
   return (
     role === "creator" ||
@@ -320,14 +489,36 @@ async function isAdmin(
 
 
 // =====================================
+// بررسی دسترسی مالک
+// =====================================
+
+function hasOwnerAccess(role) {
+
+  return role === "creator";
+
+}
+
+
+// =====================================
 // خروجی
 // =====================================
 
 module.exports = {
 
+  isGroup,
+
   getRole,
+
   checkAdmin,
+
   checkOwner,
-  isAdmin
+
+  isAdmin,
+
+  isOwner,
+
+  hasAdminAccess,
+
+  hasOwnerAccess
 
 };
