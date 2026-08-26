@@ -1,6 +1,6 @@
 // =====================================
 // PulseGroupManager
-// MAIN INDEX - FINAL
+// MAIN INDEX
 // =====================================
 
 const { Telegraf } = require("telegraf");
@@ -68,7 +68,7 @@ const bot =
 
 
 // =====================================
-// RENDER SERVER
+// RENDER HTTP SERVER
 // =====================================
 
 const server =
@@ -101,8 +101,7 @@ server.listen(
     );
 
     console.log(
-      "SERVER RUNNING ON PORT:",
-      PORT
+      "Server running on port " + PORT
     );
 
     console.log(
@@ -114,7 +113,7 @@ server.listen(
 
 
 // =====================================
-// GLOBAL TELEGRAM LOGGER
+// DEBUG LOGGER
 // =====================================
 
 bot.use(
@@ -128,7 +127,7 @@ bot.use(
       ) {
 
         console.log(
-          "TELEGRAM MESSAGE:",
+          "MESSAGE RECEIVED:",
           {
             chatId:
               ctx.chat
@@ -153,8 +152,8 @@ bot.use(
 
     catch (error) {
 
-      console.error(
-        "GLOBAL MIDDLEWARE ERROR:",
+      console.log(
+        "MIDDLEWARE ERROR:",
         error.message
       );
 
@@ -165,79 +164,37 @@ bot.use(
 
 
 // =====================================
-// REGISTER SYSTEMS
+// WELCOME
 // =====================================
-
-console.log(
-  "================================="
-);
-
-console.log(
-  "Starting PulseGroupManager"
-);
-
-console.log(
-  "================================="
-);
-
-
-// -------------------------------------
-// Welcome
-// -------------------------------------
 
 registerWelcome(
   bot
 );
 
 
-// -------------------------------------
-// Commands
-// -------------------------------------
+// =====================================
+// OTHER SYSTEMS
+// =====================================
 
 registerCommands(
   bot
 );
 
-
-// -------------------------------------
-// Panel
-// -------------------------------------
-
 registerPanelActions(
   bot
 );
-
-
-// -------------------------------------
-// Help
-// -------------------------------------
 
 registerHelp(
   bot
 );
 
-
-// -------------------------------------
-// Settings
-// -------------------------------------
-
 registerSettings(
   bot
 );
 
-
-// -------------------------------------
-// Warning Actions
-// -------------------------------------
-
 registerWarningActions(
   bot
 );
-
-
-// -------------------------------------
-// Warning Settings
-// -------------------------------------
 
 registerWarningSettings(
   bot
@@ -245,7 +202,7 @@ registerWarningSettings(
 
 
 // =====================================
-// START COMMAND
+// START
 // =====================================
 
 bot.start(
@@ -258,15 +215,21 @@ bot.start(
 
 ربات مدیریت گروه فعال شد ✅
 
-برای استفاده از پنل و امکانات مدیریتی،
-باید مدیر یا مالک گروه باشید.`
+پنل:
+پنل
+
+تنظیمات:
+تنظیمات
+
+راهنما:
+راهنما`
       );
 
     }
 
     catch (error) {
 
-      console.error(
+      console.log(
         "START COMMAND ERROR:",
         error.message
       );
@@ -284,25 +247,28 @@ bot.start(
 bot.catch(
   (error, ctx) => {
 
-    console.error(
+    console.log(
       "================================="
     );
 
-    console.error(
+    console.log(
       "BOT ERROR:",
       error.message
     );
 
-    if (ctx && ctx.chat) {
+    if (
+      ctx &&
+      ctx.chat
+    ) {
 
-      console.error(
-        "CHAT:",
+      console.log(
+        "ERROR CHAT:",
         ctx.chat.id
       );
 
     }
 
-    console.error(
+    console.log(
       "================================="
     );
 
@@ -318,15 +284,7 @@ async function startBot() {
 
   try {
 
-    console.log(
-      "Preparing Telegram connection..."
-    );
-
-
-    // ---------------------------------
     // حذف Webhook قبلی
-    // ---------------------------------
-
     await bot.telegram.deleteWebhook({
       drop_pending_updates: false
     });
@@ -337,10 +295,7 @@ async function startBot() {
     );
 
 
-    // ---------------------------------
     // شروع Polling
-    // ---------------------------------
-
     await bot.launch({
       dropPendingUpdates: false
     });
@@ -355,7 +310,7 @@ async function startBot() {
     );
 
     console.log(
-      "BOT IS LISTENING FOR TELEGRAM"
+      "BOT IS LISTENING"
     );
 
     console.log(
@@ -366,40 +321,10 @@ async function startBot() {
 
   catch (error) {
 
-    console.error(
-      "================================="
-    );
-
-    console.error(
+    console.log(
       "BOT LAUNCH ERROR:",
       error.message
     );
-
-    console.error(
-      "================================="
-    );
-
-
-    // 409 یعنی یک نمونه دیگر
-    // با همین توکن در حال Polling است.
-    if (
-      error &&
-      (
-        String(
-          error.message || ""
-        ).includes("409") ||
-        String(
-          error.message || ""
-        ).includes("Conflict")
-      )
-    ) {
-
-      console.error(
-        "ERROR 409: ANOTHER BOT INSTANCE IS RUNNING."
-      );
-
-    }
-
 
     process.exit(1);
 
@@ -412,16 +337,12 @@ startBot();
 
 
 // =====================================
-// STOP HANDLER
+// STOP
 // =====================================
 
 process.once(
   "SIGINT",
   () => {
-
-    console.log(
-      "Stopping bot..."
-    );
 
     bot.stop(
       "SIGINT"
@@ -434,10 +355,6 @@ process.once(
 process.once(
   "SIGTERM",
   () => {
-
-    console.log(
-      "Stopping bot..."
-    );
 
     bot.stop(
       "SIGTERM"
