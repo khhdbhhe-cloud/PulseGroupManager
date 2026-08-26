@@ -1,6 +1,6 @@
 // =====================================
 // PulseGroupManager
-// MAIN BOT FILE - FIXED VERSION
+// MAIN BOT - WEBHOOK VERSION
 // =====================================
 
 const { Telegraf } =
@@ -18,31 +18,25 @@ const {
   registerCommands
 } = require("./commands");
 
-
 const {
   registerPanelActions
 } = require("./panel-actions");
-
 
 const {
   registerHelp
 } = require("./help");
 
-
 const {
   registerSettings
 } = require("./settings");
-
 
 const {
   registerWarningActions
 } = require("./warning-actions");
 
-
 const {
   registerWarningSettings
 } = require("./warning-settings");
-
 
 const {
   registerWelcome
@@ -58,6 +52,12 @@ const BOT_TOKEN =
 
 const PORT =
   process.env.PORT || 10000;
+
+const WEBHOOK_PATH =
+  "/telegram-webhook";
+
+const PUBLIC_URL =
+  "https://pulsegroupmanager.onrender.com";
 
 
 if (!BOT_TOKEN) {
@@ -80,155 +80,230 @@ const bot =
 
 
 // =====================================
-// RENDER SERVER
+// RENDER HTTP SERVER
 // =====================================
 
 const server =
   http.createServer(
-    (req, res) => {
+    async (req, res) => {
 
-      res.writeHead(
-        200,
-        {
-          "Content-Type":
-            "text/plain; charset=utf-8"
+      try {
+
+        // -----------------------------
+        // Health check
+        // -----------------------------
+
+        if (
+          req.method === "GET" &&
+          req.url === "/"
+        ) {
+
+          res.writeHead(
+            200,
+            {
+              "Content-Type":
+                "text/plain; charset=utf-8"
+            }
+          );
+
+          return res.end(
+            "PulseGroupManager ONLINE"
+          );
+
         }
-      );
 
-      res.end(
-        "PulseGroupManager ONLINE"
-      );
+
+        // -----------------------------
+        // Telegram Webhook
+        // -----------------------------
+
+        if (
+          req.method === "POST" &&
+          req.url === WEBHOOK_PATH
+        ) {
+
+          let body = "";
+
+
+          req.on(
+            "data",
+            chunk => {
+
+              body +=
+                chunk.toString();
+
+            }
+          );
+
+
+          req.on(
+            "end",
+            async () => {
+
+              try {
+
+                const update =
+                  JSON.parse(body);
+
+
+                console.log(
+                  "TELEGRAM UPDATE RECEIVED"
+                );
+
+
+                await bot.handleUpdate(
+                  update
+                );
+
+
+                res.writeHead(
+                  200,
+                  {
+                    "Content-Type":
+                      "text/plain"
+                  }
+                );
+
+                res.end("OK");
+
+              }
+
+              catch (error) {
+
+                console.log(
+                  "WEBHOOK UPDATE ERROR:",
+                  error.message
+                );
+
+
+                res.writeHead(
+                  500,
+                  {
+                    "Content-Type":
+                      "text/plain"
+                  }
+                );
+
+                res.end("ERROR");
+
+              }
+
+            }
+          );
+
+
+          return;
+
+        }
+
+
+        // -----------------------------
+        // Not found
+        // -----------------------------
+
+        res.writeHead(
+          404,
+          {
+            "Content-Type":
+              "text/plain"
+          }
+        );
+
+        res.end("Not Found");
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "SERVER ERROR:",
+          error.message
+        );
+
+
+        res.writeHead(
+          500,
+          {
+            "Content-Type":
+              "text/plain"
+          }
+        );
+
+        res.end("Server Error");
+
+      }
 
     }
   );
 
 
-server.listen(
-  PORT,
-  "0.0.0.0",
-  () => {
+// =====================================
+// REGISTER SYSTEMS
+// =====================================
 
-    console.log(
-      "Server running on port " + PORT
-    );
+console.log(
+  "================================="
+);
 
-  }
+console.log(
+  "REGISTERING SYSTEMS..."
+);
+
+console.log(
+  "================================="
 );
 
 
-// =====================================
-// GLOBAL MESSAGE LOGGER
-// =====================================
-//
-// مهم:
-// اینجا از bot.use استفاده شده.
-// next() باعث می‌شود پیام بعد از لاگ
-// به تمام سیستم‌های دیگر هم برسد.
-//
-// قبلاً bot.on("message") باعث می‌شد
-// زنجیره پردازش متوقف شود.
-//
-// =====================================
-
-bot.use(
-  async (ctx, next) => {
-
-    try {
-
-      if (
-        ctx.chat &&
-        ctx.message
-      ) {
-
-        console.log(
-          "MESSAGE RECEIVED:",
-          {
-            chatId:
-              ctx.chat.id,
-
-            chatType:
-              ctx.chat.type,
-
-            text:
-              ctx.message.text ||
-              "[non-text message]"
-          }
-        );
-
-      }
-
-    }
-
-    catch (error) {
-
-      console.log(
-        "MESSAGE LOGGER ERROR:",
-        error.message
-      );
-
-    }
-
-
-    // بسیار مهم
-    // اجازه ادامه پردازش پیام
-
-    return next();
-
-  }
-);
-
-
-// =====================================
-// WELCOME SYSTEM
-// =====================================
+// خوشامد
 
 registerWelcome(bot);
 
 
-// =====================================
-// COMMAND SYSTEM
-// =====================================
+// دستورات
 
 registerCommands(bot);
 
 
-// =====================================
-// PANEL
-// =====================================
+// پنل
 
 registerPanelActions(bot);
 
 
-// =====================================
-// HELP
-// =====================================
+// راهنما
 
 registerHelp(bot);
 
 
-// =====================================
-// SETTINGS
-// =====================================
+// تنظیمات
 
 registerSettings(bot);
 
 
-// =====================================
-// WARNING ACTIONS
-// =====================================
+// اخطارها
 
 registerWarningActions(bot);
 
 
-// =====================================
-// WARNING SETTINGS
-// =====================================
+// تنظیمات اخطار
 
 registerWarningSettings(bot);
 
 
+console.log(
+  "================================="
+);
+
+console.log(
+  "ALL SYSTEMS REGISTERED"
+);
+
+console.log(
+  "================================="
+);
+
+
 // =====================================
-// START
+// START COMMAND
 // =====================================
 
 bot.start(
@@ -271,7 +346,7 @@ bot.start(
 // =====================================
 
 bot.catch(
-  (err, ctx) => {
+  (error, ctx) => {
 
     console.log(
       "================================="
@@ -279,19 +354,21 @@ bot.catch(
 
     console.log(
       "BOT ERROR:",
-      err.message
+      error.message
     );
 
     console.log(
       "CHAT:",
-      ctx && ctx.chat
+      ctx &&
+      ctx.chat
         ? ctx.chat.id
         : "unknown"
     );
 
     console.log(
-      "MESSAGE:",
-      ctx && ctx.message
+      "TEXT:",
+      ctx &&
+      ctx.message
         ? ctx.message.text ||
           "[non-text]"
         : "unknown"
@@ -306,76 +383,168 @@ bot.catch(
 
 
 // =====================================
-// LAUNCH
+// START SERVER
 // =====================================
 
-bot.launch()
-.then(
-  () => {
+server.listen(
+  PORT,
+  "0.0.0.0",
+  async () => {
 
     console.log(
       "================================="
     );
 
     console.log(
-      "PulseGroupManager STARTED"
+      "SERVER RUNNING"
     );
 
     console.log(
-      "BOT IS LISTENING"
+      "PORT:",
+      PORT
     );
 
     console.log(
-      "WELCOME: ACTIVE"
-    );
-
-    console.log(
-      "COMMANDS: ACTIVE"
-    );
-
-    console.log(
-      "PANEL: ACTIVE"
-    );
-
-    console.log(
-      "SETTINGS: ACTIVE"
-    );
-
-    console.log(
-      "HELP: ACTIVE"
-    );
-
-    console.log(
-      "WARNINGS: ACTIVE"
+      "WEBHOOK MODE: ACTIVE"
     );
 
     console.log(
       "================================="
     );
 
-  }
-)
-.catch(
-  error => {
 
-    console.log(
-      "START ERROR:",
-      error.message
-    );
+    try {
+
+      // -----------------------------
+      // حذف Webhook قبلی
+      // -----------------------------
+
+      await bot.telegram.deleteWebhook(
+        {
+          drop_pending_updates: false
+        }
+      );
+
+
+      console.log(
+        "OLD WEBHOOK CLEARED"
+      );
+
+
+      // -----------------------------
+      // تنظیم Webhook جدید
+      // -----------------------------
+
+      const webhookUrl =
+        PUBLIC_URL +
+        WEBHOOK_PATH;
+
+
+      await bot.telegram.setWebhook(
+        webhookUrl
+      );
+
+
+      console.log(
+        "================================="
+      );
+
+      console.log(
+        "WEBHOOK SET SUCCESSFULLY"
+      );
+
+      console.log(
+        webhookUrl
+      );
+
+      console.log(
+        "================================="
+      );
+
+
+      // -----------------------------
+      // اطلاعات Webhook
+      // -----------------------------
+
+      const info =
+        await bot.telegram.getWebhookInfo();
+
+
+      console.log(
+        "WEBHOOK INFO:",
+        {
+          url:
+            info.url,
+
+          pending:
+            info.pending_update_count,
+
+          lastError:
+            info.last_error_message ||
+            "none"
+        }
+      );
+
+
+      console.log(
+        "================================="
+      );
+
+      console.log(
+        "PulseGroupManager ONLINE"
+      );
+
+      console.log(
+        "NO POLLING"
+      );
+
+      console.log(
+        "NO GETUPDATES CONFLICT"
+      );
+
+      console.log(
+        "================================="
+      );
+
+    }
+
+    catch (error) {
+
+      console.log(
+        "WEBHOOK SETUP ERROR:",
+        error.message
+      );
+
+    }
 
   }
 );
 
 
 // =====================================
-// STOP
+// STOP HANDLERS
 // =====================================
 
 process.once(
   "SIGINT",
-  () => {
+  async () => {
 
-    bot.stop("SIGINT");
+    try {
+
+      await bot.telegram.deleteWebhook();
+
+    }
+
+    catch (error) {
+
+      console.log(
+        "SIGINT WEBHOOK ERROR:",
+        error.message
+      );
+
+    }
+
+    process.exit(0);
 
   }
 );
@@ -383,9 +552,24 @@ process.once(
 
 process.once(
   "SIGTERM",
-  () => {
+  async () => {
 
-    bot.stop("SIGTERM");
+    try {
+
+      await bot.telegram.deleteWebhook();
+
+    }
+
+    catch (error) {
+
+      console.log(
+        "SIGTERM WEBHOOK ERROR:",
+        error.message
+      );
+
+    }
+
+    process.exit(0);
 
   }
 );
