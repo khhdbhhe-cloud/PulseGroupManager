@@ -87,7 +87,15 @@ server.listen(
 
 
 // =====================================
-// REGISTER SYSTEMS
+// WELCOME SYSTEM
+// =====================================
+
+// خوشامد را قبل از سایر سیستم‌های پیام ثبت می‌کنیم
+registerWelcome(bot);
+
+
+// =====================================
+// REGISTER OTHER SYSTEMS
 // =====================================
 
 registerCommands(bot);
@@ -101,13 +109,6 @@ registerSettings(bot);
 registerWarningActions(bot);
 
 registerWarningSettings(bot);
-
-
-// =====================================
-// WELCOME SYSTEM
-// =====================================
-
-registerWelcome(bot);
 
 
 // =====================================
