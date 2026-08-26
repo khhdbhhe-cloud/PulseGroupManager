@@ -1,6 +1,6 @@
 // =====================================
 // PulseGroupManager
-// WELCOME SYSTEM
+// WELCOME SYSTEM - FULL
 // =====================================
 
 const { checkAdmin } =
@@ -15,124 +15,6 @@ const {
   getDefaultWelcomeText,
   formatWelcomeText
 } = require("./welcome-text");
-
-
-// =====================================
-// تنظیمات موقت خوشامد
-// =====================================
-
-const welcomeSettings =
-  new Map();
-
-
-// =====================================
-// تنظیمات پیش‌فرض
-// =====================================
-
-function getDefaultSettings() {
-
-  return {
-
-    enabled: true,
-
-    type: "text",
-
-    fileId: null,
-
-    text: null
-
-  };
-
-}
-
-
-// =====================================
-// دریافت تنظیمات خوشامد
-// =====================================
-
-function getWelcomeSettings(chatId) {
-
-  const id =
-    String(chatId);
-
-
-  if (!welcomeSettings.has(id)) {
-
-    const group =
-      getGroup(id);
-
-
-    const saved =
-      group.welcome || {};
-
-
-    welcomeSettings.set(
-      id,
-      {
-
-        enabled:
-          saved.enabled !== undefined
-            ? saved.enabled
-            : true,
-
-        type:
-          saved.type || "text",
-
-        fileId:
-          saved.fileId || null,
-
-        text:
-          saved.text || null
-
-      }
-    );
-
-  }
-
-
-  return welcomeSettings.get(id);
-
-}
-
-
-// =====================================
-// ذخیره تنظیمات خوشامد
-// =====================================
-
-function saveWelcomeSettings(
-  chatId
-) {
-
-  const id =
-    String(chatId);
-
-  const settings =
-    getWelcomeSettings(id);
-
-  const group =
-    getGroup(id);
-
-
-  group.welcome = {
-
-    enabled:
-      settings.enabled,
-
-    type:
-      settings.type,
-
-    fileId:
-      settings.fileId,
-
-    text:
-      settings.text
-
-  };
-
-
-  saveDB();
-
-}
 
 
 // =====================================
@@ -153,7 +35,265 @@ function isGroup(ctx) {
 
 
 // =====================================
-// ساخت متن خوشامد
+// HTML امن
+// =====================================
+
+function escapeHtml(text) {
+
+  return String(text || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+}
+
+
+// =====================================
+// نام کاربر
+// =====================================
+
+function getUserName(user) {
+
+  if (!user)
+    return "دوست عزیز";
+
+  const first =
+    user.first_name || "";
+
+  const last =
+    user.last_name || "";
+
+  const name =
+    `${first} ${last}`.trim();
+
+  return escapeHtml(
+    name || "دوست عزیز"
+  );
+
+}
+
+
+// =====================================
+// منشن کاربر
+// =====================================
+
+function getUserMention(user) {
+
+  if (
+    !user ||
+    !user.id
+  ) {
+
+    return "دوست عزیز";
+
+  }
+
+  return (
+    `<a href="tg://user?id=${user.id}">` +
+    `${getUserName(user)}` +
+    `</a>`
+  );
+
+}
+
+
+// =====================================
+// نام روز هفته
+// =====================================
+
+function getPersianDay() {
+
+  const days = [
+    "یکشنبه",
+    "دوشنبه",
+    "سه‌شنبه",
+    "چهارشنبه",
+    "پنجشنبه",
+    "جمعه",
+    "شنبه"
+  ];
+
+  return days[
+    new Date().getDay()
+  ];
+
+}
+
+
+// =====================================
+// تبدیل اعداد به فارسی
+// =====================================
+
+function toPersianNumbers(value) {
+
+  const map = {
+    "0": "۰",
+    "1": "۱",
+    "2": "۲",
+    "3": "۳",
+    "4": "۴",
+    "5": "۵",
+    "6": "۶",
+    "7": "۷",
+    "8": "۸",
+    "9": "۹"
+  };
+
+  return String(value).replace(
+    /\d/g,
+    number => map[number]
+  );
+
+}
+
+
+// =====================================
+// تاریخ شمسی
+// =====================================
+
+function getPersianDate() {
+
+  const date =
+    new Date();
+
+  try {
+
+    const formatter =
+      new Intl.DateTimeFormat(
+        "fa-IR-u-ca-persian",
+        {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit"
+        }
+      );
+
+    return formatter.format(date);
+
+  }
+
+  catch (error) {
+
+    return "۱۴۰۵/۰۶/۰۴";
+
+  }
+
+}
+
+
+// =====================================
+// ساعت
+// =====================================
+
+function getTime() {
+
+  const date =
+    new Date();
+
+  const hours =
+    String(
+      date.getHours()
+    ).padStart(2, "0");
+
+  const minutes =
+    String(
+      date.getMinutes()
+    ).padStart(2, "0");
+
+  const seconds =
+    String(
+      date.getSeconds()
+    ).padStart(2, "0");
+
+  return toPersianNumbers(
+    `${hours}:${minutes}:${seconds}`
+  );
+
+}
+
+
+// =====================================
+// دریافت تنظیمات خوشامد
+// =====================================
+
+function getWelcomeSettings(chatId) {
+
+  const group =
+    getGroup(chatId);
+
+
+  if (!group.welcome) {
+
+    group.welcome = {
+
+      enabled: true,
+
+      type: "text",
+
+      fileId: null,
+
+      text: null
+
+    };
+
+    saveDB();
+
+  }
+
+
+  if (
+    group.welcome.enabled ===
+    undefined
+  ) {
+
+    group.welcome.enabled =
+      true;
+
+  }
+
+
+  if (
+    !group.welcome.type
+  ) {
+
+    group.welcome.type =
+      "text";
+
+  }
+
+
+  if (
+    group.welcome.fileId ===
+    undefined
+  ) {
+
+    group.welcome.fileId =
+      null;
+
+  }
+
+
+  if (
+    group.welcome.text ===
+    undefined
+  ) {
+
+    group.welcome.text =
+      null;
+
+  }
+
+
+  saveDB();
+
+  return group.welcome;
+
+}
+
+
+// =====================================
+// متن پیش‌فرض خوشامد
 // =====================================
 
 function getWelcomeText(
@@ -167,18 +307,48 @@ function getWelcomeText(
     );
 
 
-  const template =
-    settings.text ||
-    getDefaultWelcomeText(
+  // اگر مدیر متن اختصاصی تنظیم کرده باشد
+  if (settings.text) {
+
+    return formatWelcomeText(
+      settings.text,
       user,
       chat
     );
 
+  }
 
-  return formatWelcomeText(
-    template,
-    user,
-    chat
+
+  // -----------------------------------
+  // خوشامد پیش‌فرض جدید
+  // -----------------------------------
+
+  const day =
+    getPersianDay();
+
+  const date =
+    getPersianDate();
+
+  const time =
+    getTime();
+
+
+  const mention =
+    getUserMention(user);
+
+
+  const groupName =
+    escapeHtml(
+      chat.title ||
+      "گروه"
+    );
+
+
+  return (
+`• سلام ${mention} . به گروه 🫀𝐏 𝐔 𝐋 𝐒 𝐄 خوش آمدید 🌷
+
+📆 تاریخ : ${day} , ${date}
+⏰ ساعت : ${time}`
   );
 
 }
@@ -197,15 +367,15 @@ function replyToCommand(
     text,
     {
 
+      parse_mode:
+        "HTML",
+
       reply_parameters: {
 
         message_id:
           ctx.message.message_id
 
-      },
-
-      parse_mode:
-        "HTML"
+      }
 
     }
   );
@@ -232,19 +402,14 @@ function setWelcomeMedia(
   settings.type =
     type;
 
-
   settings.fileId =
     fileId;
-
 
   settings.enabled =
     true;
 
 
-  saveWelcomeSettings(
-    chatId
-  );
-
+  saveDB();
 
   return settings;
 
@@ -268,15 +433,11 @@ function clearWelcomeMedia(
   settings.type =
     "text";
 
-
   settings.fileId =
     null;
 
 
-  saveWelcomeSettings(
-    chatId
-  );
-
+  saveDB();
 
   return settings;
 
@@ -301,10 +462,7 @@ function enableWelcome(
     true;
 
 
-  saveWelcomeSettings(
-    chatId
-  );
-
+  saveDB();
 
   return settings;
 
@@ -329,10 +487,7 @@ function disableWelcome(
     false;
 
 
-  saveWelcomeSettings(
-    chatId
-  );
-
+  saveDB();
 
   return settings;
 
@@ -350,11 +505,15 @@ async function sendWelcome(
 
   try {
 
-    if (!isGroup(ctx)) {
-
+    if (!isGroup(ctx))
       return;
 
-    }
+
+    if (
+      !user ||
+      !user.id
+    )
+      return;
 
 
     const settings =
@@ -363,12 +522,62 @@ async function sendWelcome(
       );
 
 
+    console.log(
+      "================================="
+    );
+
+    console.log(
+      "WELCOME NEW MEMBER"
+    );
+
+    console.log(
+      "GROUP:",
+      ctx.chat.title
+    );
+
+    console.log(
+      "USER:",
+      user.first_name
+    );
+
+    console.log(
+      "USER ID:",
+      user.id
+    );
+
+    console.log(
+      "WELCOME ENABLED:",
+      settings.enabled
+    );
+
+    console.log(
+      "WELCOME TYPE:",
+      settings.type
+    );
+
+    console.log(
+      "================================="
+    );
+
+
+    // ---------------------------------
+    // اگر خاموش است
+    // ---------------------------------
+
     if (!settings.enabled) {
+
+      console.log(
+        "WELCOME: DISABLED"
+      );
 
       return;
 
     }
 
+
+    // ---------------------------------
+    // ساخت متن
+    // ---------------------------------
 
     const text =
       getWelcomeText(
@@ -377,16 +586,16 @@ async function sendWelcome(
       );
 
 
-    // -------------------------------
+    // ---------------------------------
     // متن
-    // -------------------------------
+    // ---------------------------------
 
     if (
       settings.type === "text" ||
       !settings.fileId
     ) {
 
-      return ctx.reply(
+      return await ctx.reply(
         text,
         {
           parse_mode:
@@ -397,15 +606,16 @@ async function sendWelcome(
     }
 
 
-    // -------------------------------
+    // ---------------------------------
     // GIF
-    // -------------------------------
+    // ---------------------------------
 
     if (
-      settings.type === "animation"
+      settings.type ===
+      "animation"
     ) {
 
-      return ctx.replyWithAnimation(
+      return await ctx.replyWithAnimation(
         settings.fileId,
         {
 
@@ -421,15 +631,16 @@ async function sendWelcome(
     }
 
 
-    // -------------------------------
+    // ---------------------------------
     // ویدیو
-    // -------------------------------
+    // ---------------------------------
 
     if (
-      settings.type === "video"
+      settings.type ===
+      "video"
     ) {
 
-      return ctx.replyWithVideo(
+      return await ctx.replyWithVideo(
         settings.fileId,
         {
 
@@ -445,12 +656,38 @@ async function sendWelcome(
     }
 
 
-    // -------------------------------
-    // استیکر
-    // -------------------------------
+    // ---------------------------------
+    // عکس
+    // ---------------------------------
 
     if (
-      settings.type === "sticker"
+      settings.type ===
+      "photo"
+    ) {
+
+      return await ctx.replyWithPhoto(
+        settings.fileId,
+        {
+
+          caption:
+            text,
+
+          parse_mode:
+            "HTML"
+
+        }
+      );
+
+    }
+
+
+    // ---------------------------------
+    // استیکر
+    // ---------------------------------
+
+    if (
+      settings.type ===
+      "sticker"
     ) {
 
       await ctx.replyWithSticker(
@@ -458,7 +695,7 @@ async function sendWelcome(
       );
 
 
-      return ctx.reply(
+      return await ctx.reply(
         text,
         {
           parse_mode:
@@ -469,31 +706,11 @@ async function sendWelcome(
     }
 
 
-    // -------------------------------
-    // عکس
-    // -------------------------------
+    // ---------------------------------
+    // حالت ناشناخته
+    // ---------------------------------
 
-    if (
-      settings.type === "photo"
-    ) {
-
-      return ctx.replyWithPhoto(
-        settings.fileId,
-        {
-
-          caption:
-            text,
-
-          parse_mode:
-            "HTML"
-
-        }
-      );
-
-    }
-
-
-    return ctx.reply(
+    return await ctx.reply(
       text,
       {
         parse_mode:
@@ -506,8 +723,23 @@ async function sendWelcome(
   catch (error) {
 
     console.log(
-      "WELCOME SEND ERROR:",
+      "================================="
+    );
+
+    console.log(
+      "WELCOME SEND ERROR"
+    );
+
+    console.log(
       error.message
+    );
+
+    console.log(
+      error
+    );
+
+    console.log(
+      "================================="
     );
 
   }
@@ -516,19 +748,30 @@ async function sendWelcome(
 
 
 // =====================================
-// ثبت ورود اعضا
+// ثبت سیستم خوشامد
 // =====================================
 
 function registerWelcome(bot) {
 
+  console.log(
+    "================================="
+  );
 
   console.log(
     "WELCOME SYSTEM REGISTERED"
   );
 
+  console.log(
+    "NEW MEMBER LISTENER ACTIVE"
+  );
+
+  console.log(
+    "================================="
+  );
+
 
   // ===================================
-  // ورود عضو
+  // ورود عضو جدید
   // ===================================
 
   bot.on(
@@ -537,7 +780,31 @@ function registerWelcome(bot) {
 
       try {
 
+        console.log(
+          "================================="
+        );
+
+        console.log(
+          "NEW CHAT MEMBER EVENT RECEIVED"
+        );
+
+        console.log(
+          "CHAT:",
+          ctx.chat
+            ? ctx.chat.title
+            : "UNKNOWN"
+        );
+
+        console.log(
+          "================================="
+        );
+
+
         if (!isGroup(ctx)) {
+
+          console.log(
+            "WELCOME: NOT A GROUP"
+          );
 
           return;
 
@@ -545,8 +812,10 @@ function registerWelcome(bot) {
 
 
         const members =
-          ctx.message
-            .new_chat_members;
+          (
+            ctx.message &&
+            ctx.message.new_chat_members
+          ) || [];
 
 
         if (
@@ -554,10 +823,18 @@ function registerWelcome(bot) {
           members.length === 0
         ) {
 
+          console.log(
+            "WELCOME: NO NEW MEMBERS"
+          );
+
           return;
 
         }
 
+
+        // --------------------------------
+        // ثبت آمار ورود
+        // --------------------------------
 
         const group =
           getGroup(
@@ -565,9 +842,20 @@ function registerWelcome(bot) {
           );
 
 
-        // -------------------------------
-        // ثبت آمار ورود
-        // -------------------------------
+        if (!group.stats)
+          group.stats = {};
+
+
+        if (
+          typeof group.stats.joins !==
+          "number"
+        ) {
+
+          group.stats.joins =
+            0;
+
+        }
+
 
         group.stats.joins +=
           members.length;
@@ -576,9 +864,9 @@ function registerWelcome(bot) {
         saveDB();
 
 
-        // -------------------------------
-        // خوشامد تک‌تک اعضا
-        // -------------------------------
+        // --------------------------------
+        // خوشامد اعضا
+        // --------------------------------
 
         for (
           const user of members
@@ -596,9 +884,11 @@ function registerWelcome(bot) {
       catch (error) {
 
         console.log(
-          "NEW MEMBER ERROR:",
+          "NEW MEMBER HANDLER ERROR:",
           error.message
         );
+
+        console.log(error);
 
       }
 
@@ -946,7 +1236,7 @@ function registerWelcome(bot) {
 
 
   // ===================================
-  // حذف رسانه
+  // حذف خوشامد
   // ===================================
 
   bot.hears(
@@ -1014,25 +1304,29 @@ function registerWelcome(bot) {
 
 
       if (
-        settings.type === "animation"
+        settings.type ===
+        "animation"
       )
         media = "GIF";
 
 
-      if (
-        settings.type === "video"
+      else if (
+        settings.type ===
+        "video"
       )
         media = "ویدیو";
 
 
-      if (
-        settings.type === "photo"
+      else if (
+        settings.type ===
+        "photo"
       )
         media = "عکس";
 
 
-      if (
-        settings.type === "sticker"
+      else if (
+        settings.type ===
+        "sticker"
       )
         media = "استیکر";
 
