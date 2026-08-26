@@ -1,15 +1,10 @@
 // =====================================
 // PulseGroupManager
-// MAIN INDEX
+// MAIN INDEX - FINAL
 // =====================================
 
 const { Telegraf } = require("telegraf");
 const http = require("http");
-
-
-// =====================================
-// SYSTEMS
-// =====================================
 
 const {
   registerCommands
@@ -63,15 +58,17 @@ if (!BOT_TOKEN) {
 
 
 // =====================================
-// CREATE BOT
+// BOT
 // =====================================
 
 const bot =
-  new Telegraf(BOT_TOKEN);
+  new Telegraf(
+    BOT_TOKEN
+  );
 
 
 // =====================================
-// RENDER HTTP SERVER
+// RENDER SERVER
 // =====================================
 
 const server =
@@ -104,11 +101,8 @@ server.listen(
     );
 
     console.log(
-      "Server running on port " + PORT
-    );
-
-    console.log(
-      "PulseGroupManager HTTP SERVER ONLINE"
+      "SERVER RUNNING ON PORT:",
+      PORT
     );
 
     console.log(
@@ -120,11 +114,7 @@ server.listen(
 
 
 // =====================================
-// DEBUG UPDATE RECEIVER
-// =====================================
-//
-// فقط لاگ می‌گیرد.
-// هیچ پاسخی ارسال نمی‌کند.
+// GLOBAL TELEGRAM LOGGER
 // =====================================
 
 bot.use(
@@ -132,25 +122,23 @@ bot.use(
 
     try {
 
-      console.log(
-        "TELEGRAM UPDATE RECEIVED"
-      );
-
-
       if (
-        ctx.chat &&
         ctx.message &&
-        typeof ctx.message.text === "string"
+        ctx.message.text
       ) {
 
         console.log(
-          "MESSAGE RECEIVED:",
+          "TELEGRAM MESSAGE:",
           {
             chatId:
-              ctx.chat.id,
+              ctx.chat
+                ? ctx.chat.id
+                : null,
 
             chatType:
-              ctx.chat.type,
+              ctx.chat
+                ? ctx.chat.type
+                : null,
 
             text:
               ctx.message.text
@@ -159,100 +147,101 @@ bot.use(
 
       }
 
+      await next();
 
     }
 
     catch (error) {
 
-      console.log(
-        "UPDATE LOGGER ERROR:",
+      console.error(
+        "GLOBAL MIDDLEWARE ERROR:",
         error.message
       );
 
     }
-
-
-    return next();
 
   }
 );
 
 
 // =====================================
-// WELCOME
+// REGISTER SYSTEMS
 // =====================================
 
 console.log(
-  "Registering welcome system..."
+  "================================="
 );
-
-registerWelcome(bot);
-
-
-// =====================================
-// COMMANDS
-// =====================================
 
 console.log(
-  "Registering command system..."
+  "Starting PulseGroupManager"
 );
-
-registerCommands(bot);
-
-
-// =====================================
-// PANEL
-// =====================================
 
 console.log(
-  "Registering panel actions..."
+  "================================="
 );
 
-registerPanelActions(bot);
 
+// -------------------------------------
+// Welcome
+// -------------------------------------
 
-// =====================================
-// HELP
-// =====================================
-
-console.log(
-  "Registering help system..."
+registerWelcome(
+  bot
 );
 
-registerHelp(bot);
 
+// -------------------------------------
+// Commands
+// -------------------------------------
 
-// =====================================
-// SETTINGS
-// =====================================
-
-console.log(
-  "Registering settings system..."
+registerCommands(
+  bot
 );
 
-registerSettings(bot);
 
+// -------------------------------------
+// Panel
+// -------------------------------------
 
-// =====================================
-// WARNING ACTIONS
-// =====================================
-
-console.log(
-  "Registering warning actions..."
+registerPanelActions(
+  bot
 );
 
-registerWarningActions(bot);
 
+// -------------------------------------
+// Help
+// -------------------------------------
 
-// =====================================
-// WARNING SETTINGS
-// =====================================
-
-console.log(
-  "Registering warning settings..."
+registerHelp(
+  bot
 );
 
-registerWarningSettings(bot);
+
+// -------------------------------------
+// Settings
+// -------------------------------------
+
+registerSettings(
+  bot
+);
+
+
+// -------------------------------------
+// Warning Actions
+// -------------------------------------
+
+registerWarningActions(
+  bot
+);
+
+
+// -------------------------------------
+// Warning Settings
+// -------------------------------------
+
+registerWarningSettings(
+  bot
+);
 
 
 // =====================================
@@ -269,21 +258,15 @@ bot.start(
 
 ربات مدیریت گروه فعال شد ✅
 
-پنل:
-پنل
-
-تنظیمات:
-تنظیمات
-
-راهنما:
-راهنما`
+برای استفاده از پنل و امکانات مدیریتی،
+باید مدیر یا مالک گروه باشید.`
       );
 
     }
 
     catch (error) {
 
-      console.log(
+      console.error(
         "START COMMAND ERROR:",
         error.message
       );
@@ -295,33 +278,40 @@ bot.start(
 
 
 // =====================================
-// BOT ERROR HANDLER
+// ERROR HANDLER
 // =====================================
 
 bot.catch(
   (error, ctx) => {
 
     console.error(
+      "================================="
+    );
+
+    console.error(
       "BOT ERROR:",
       error.message
     );
 
-
     if (ctx && ctx.chat) {
 
       console.error(
-        "ERROR CHAT:",
+        "CHAT:",
         ctx.chat.id
       );
 
     }
+
+    console.error(
+      "================================="
+    );
 
   }
 );
 
 
 // =====================================
-// LAUNCH BOT
+// LAUNCH
 // =====================================
 
 async function startBot() {
@@ -329,23 +319,31 @@ async function startBot() {
   try {
 
     console.log(
-      "================================="
+      "Preparing Telegram connection..."
     );
+
+
+    // ---------------------------------
+    // حذف Webhook قبلی
+    // ---------------------------------
+
+    await bot.telegram.deleteWebhook({
+      drop_pending_updates: false
+    });
+
 
     console.log(
-      "Starting PulseGroupManager..."
-    );
-
-    console.log(
-      "Telegram polling starting..."
-    );
-
-    console.log(
-      "================================="
+      "WEBHOOK CLEARED"
     );
 
 
-    await bot.launch();
+    // ---------------------------------
+    // شروع Polling
+    // ---------------------------------
+
+    await bot.launch({
+      dropPendingUpdates: false
+    });
 
 
     console.log(
@@ -357,7 +355,7 @@ async function startBot() {
     );
 
     console.log(
-      "Bot is listening for updates..."
+      "BOT IS LISTENING FOR TELEGRAM"
     );
 
     console.log(
@@ -369,38 +367,41 @@ async function startBot() {
   catch (error) {
 
     console.error(
+      "================================="
+    );
+
+    console.error(
       "BOT LAUNCH ERROR:",
       error.message
     );
 
+    console.error(
+      "================================="
+    );
 
+
+    // 409 یعنی یک نمونه دیگر
+    // با همین توکن در حال Polling است.
     if (
       error &&
-      error.message &&
-      error.message.includes("409")
+      (
+        String(
+          error.message || ""
+        ).includes("409") ||
+        String(
+          error.message || ""
+        ).includes("Conflict")
+      )
     ) {
 
       console.error(
-        "================================="
-      );
-
-      console.error(
-        "409 CONFLICT"
-      );
-
-      console.error(
-        "Another instance is using this bot token."
-      );
-
-      console.error(
-        "Stop the other instance before starting this one."
-      );
-
-      console.error(
-        "================================="
+        "ERROR 409: ANOTHER BOT INSTANCE IS RUNNING."
       );
 
     }
+
+
+    process.exit(1);
 
   }
 
@@ -411,40 +412,20 @@ startBot();
 
 
 // =====================================
-// SAFE STOP
+// STOP HANDLER
 // =====================================
-
-function stopBot(signal) {
-
-  try {
-
-    console.log(
-      "Stopping bot:",
-      signal
-    );
-
-
-    bot.stop(signal);
-
-  }
-
-  catch (error) {
-
-    console.log(
-      "BOT STOP ERROR:",
-      error.message
-    );
-
-  }
-
-}
-
 
 process.once(
   "SIGINT",
   () => {
 
-    stopBot("SIGINT");
+    console.log(
+      "Stopping bot..."
+    );
+
+    bot.stop(
+      "SIGINT"
+    );
 
   }
 );
@@ -454,7 +435,13 @@ process.once(
   "SIGTERM",
   () => {
 
-    stopBot("SIGTERM");
+    console.log(
+      "Stopping bot..."
+    );
+
+    bot.stop(
+      "SIGTERM"
+    );
 
   }
 );
