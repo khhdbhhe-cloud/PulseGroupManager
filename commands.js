@@ -20,6 +20,7 @@ const {
 function isGroup(ctx) {
 
   return !!(
+    ctx &&
     ctx.chat &&
     (
       ctx.chat.type === "group" ||
@@ -58,6 +59,34 @@ async function replyToCommand(
 
 
 // =====================================
+// بررسی دسترسی مدیر / مالک
+// =====================================
+
+async function requireAdmin(ctx) {
+
+  const access =
+    await checkAdmin(ctx);
+
+
+  if (!access.ok) {
+
+    await replyToCommand(
+      ctx,
+      access.text ||
+      "⛔ فقط مدیران و مالک گروه دسترسی دارند."
+    );
+
+    return false;
+
+  }
+
+
+  return true;
+
+}
+
+
+// =====================================
 // ثبت دستورات
 // =====================================
 
@@ -76,6 +105,10 @@ function registerCommands(bot) {
   );
 
   console.log(
+    "ACCESS: ADMIN + OWNER ONLY"
+  );
+
+  console.log(
     "================================="
   );
 
@@ -85,12 +118,17 @@ function registerCommands(bot) {
   // ===================================
 
   bot.hears(
-    "ربات",
+    /^ربات$/u,
     async ctx => {
 
       try {
 
         if (!isGroup(ctx))
+          return;
+
+
+        // فقط مدیر و مالک
+        if (!await requireAdmin(ctx))
           return;
 
 
@@ -136,12 +174,17 @@ ${ctx.from.id}`
   // ===================================
 
   bot.hears(
-    "تست",
+    /^تست$/u,
     async ctx => {
 
       try {
 
         if (!isGroup(ctx))
+          return;
+
+
+        // فقط مدیر و مالک
+        if (!await requireAdmin(ctx))
           return;
 
 
@@ -180,12 +223,17 @@ ${ctx.from.id}`
   // ===================================
 
   bot.hears(
-    "وضعیت ربات",
+    /^وضعیت\s+ربات$/u,
     async ctx => {
 
       try {
 
         if (!isGroup(ctx))
+          return;
+
+
+        // فقط مدیر و مالک
+        if (!await requireAdmin(ctx))
           return;
 
 
@@ -229,7 +277,7 @@ ${ctx.chat.title || "بدون نام"}`
   // ===================================
 
   bot.hears(
-    "پنل",
+    /^پنل$/u,
     async ctx => {
 
       try {
@@ -243,26 +291,29 @@ ${ctx.chat.title || "بدون نام"}`
         );
 
 
-        const access =
-          await checkAdmin(ctx);
+        // فقط مدیر و مالک
+        if (!await requireAdmin(ctx))
+          return;
 
 
-        if (!access.ok) {
-
-          return replyToCommand(
-            ctx,
-            access.text
-          );
-
-        }
-
-
-        return await replyToCommand(
-          ctx,
+        return await ctx.reply(
           panelText(),
-          mainPanel(
-            ctx.from.id
-          )
+          {
+
+            ...mainPanel(
+              ctx.from.id
+            ),
+
+            reply_parameters: {
+
+              message_id:
+                ctx.message.message_id
+
+            },
+
+            parse_mode: "HTML"
+
+          }
         );
 
       }
@@ -281,11 +332,11 @@ ${ctx.chat.title || "بدون نام"}`
 
 
   // ===================================
-  // دستور تست انگلیسی
+  // دستور انگلیسی BOT
   // ===================================
 
   bot.hears(
-    "bot",
+    /^bot$/i,
     async ctx => {
 
       try {
@@ -294,12 +345,17 @@ ${ctx.chat.title || "بدون نام"}`
           return;
 
 
+        // فقط مدیر و مالک
+        if (!await requireAdmin(ctx))
+          return;
+
+
         return await replyToCommand(
           ctx,
 
 `『𓆩 ★ PulseGroupManager ★ 𓆪』
 
-🤖 ربات فعاله ✅`
+🤖 ربات فعاله و آماده‌ست ✅`
         );
 
       }
@@ -318,16 +374,21 @@ ${ctx.chat.title || "بدون نام"}`
 
 
   // ===================================
-  // تست فارسی جایگزین
+  // آنلاین
   // ===================================
 
   bot.hears(
-    "آنلاین",
+    /^آنلاین$/u,
     async ctx => {
 
       try {
 
         if (!isGroup(ctx))
+          return;
+
+
+        // فقط مدیر و مالک
+        if (!await requireAdmin(ctx))
           return;
 
 
