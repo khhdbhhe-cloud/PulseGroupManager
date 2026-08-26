@@ -1,6 +1,6 @@
 // =====================================
 // PulseGroupManager
-// MAIN BOT - WEBHOOK VERSION
+// MAIN INDEX - ORDERED VERSION
 // =====================================
 
 const { Telegraf } =
@@ -53,11 +53,11 @@ const BOT_TOKEN =
 const PORT =
   process.env.PORT || 10000;
 
-const WEBHOOK_PATH =
-  "/telegram-webhook";
-
 const PUBLIC_URL =
   "https://pulsegroupmanager.onrender.com";
+
+const WEBHOOK_PATH =
+  "/telegram-webhook";
 
 
 if (!BOT_TOKEN) {
@@ -80,7 +80,189 @@ const bot =
 
 
 // =====================================
-// RENDER HTTP SERVER
+// DIRECT TEXT COMMANDS
+// =====================================
+//
+// این قسمت عمداً قبل از بقیه سیستم‌هاست.
+// مثل نگهبان ورودی است:
+// اول پیام را می‌بیند، بعد اجازه می‌دهد
+// سیستم‌های دیگر آن را پردازش کنند.
+//
+// =====================================
+
+bot.on(
+  "text",
+  async (ctx, next) => {
+
+    try {
+
+      if (!ctx.chat) {
+
+        return next();
+
+      }
+
+
+      const text =
+        String(
+          ctx.message.text || ""
+        ).trim();
+
+
+      console.log(
+        "TEXT RECEIVED:",
+        JSON.stringify(text)
+      );
+
+
+      const isGroup =
+        ctx.chat.type === "group" ||
+        ctx.chat.type === "supergroup";
+
+
+      if (!isGroup) {
+
+        return next();
+
+      }
+
+
+      // =================================
+      // ربات
+      // =================================
+
+      if (text === "ربات") {
+
+        console.log(
+          "DIRECT COMMAND: ربات"
+        );
+
+
+        await ctx.reply(
+`『𓆩 ★ PulseGroupManager ★ 𓆪』
+
+🤖 ربات فعاله و آماده‌ست ✅
+
+📌 گروه:
+${ctx.chat.title || "بدون نام"}
+
+👤 کاربر:
+${ctx.from.first_name || "کاربر"}`,
+          {
+
+            reply_parameters: {
+
+              message_id:
+                ctx.message.message_id
+
+            }
+
+          }
+        );
+
+
+        return;
+
+      }
+
+
+      // =================================
+      // تست
+      // =================================
+
+      if (text === "تست") {
+
+        console.log(
+          "DIRECT COMMAND: تست"
+        );
+
+
+        await ctx.reply(
+          "『𓆩 ★ تست ربات ★ 𓆪』\n\nپاسخ با موفقیت دریافت شد. ✅",
+          {
+
+            reply_parameters: {
+
+              message_id:
+                ctx.message.message_id
+
+            }
+
+          }
+        );
+
+
+        return;
+
+      }
+
+
+      // =================================
+      // وضعیت ربات
+      // =================================
+
+      if (text === "وضعیت ربات") {
+
+        console.log(
+          "DIRECT COMMAND: وضعیت ربات"
+        );
+
+
+        await ctx.reply(
+`『𓆩 ★ وضعیت ربات ★ 𓆪』
+
+🤖 وضعیت:
+فعال ✅
+
+📡 سیستم:
+آنلاین ✅
+
+👥 گروه:
+${ctx.chat.title || "بدون نام"}`,
+          {
+
+            reply_parameters: {
+
+              message_id:
+                ctx.message.message_id
+
+            }
+
+          }
+        );
+
+
+        return;
+
+      }
+
+
+      // =================================
+      // ادامه به سیستم‌های دیگر
+      // =================================
+
+      return next();
+
+    }
+
+    catch (error) {
+
+      console.log(
+        "DIRECT TEXT ERROR:",
+        error.message
+      );
+
+
+      return next();
+
+    }
+
+  }
+);
+
+
+// =====================================
+// HTTP SERVER
 // =====================================
 
 const server =
@@ -89,9 +271,9 @@ const server =
 
       try {
 
-        // -----------------------------
-        // Health check
-        // -----------------------------
+        // -------------------------------
+        // صفحه اصلی Render
+        // -------------------------------
 
         if (
           req.method === "GET" &&
@@ -113,9 +295,9 @@ const server =
         }
 
 
-        // -----------------------------
+        // -------------------------------
         // Telegram Webhook
-        // -----------------------------
+        // -------------------------------
 
         if (
           req.method === "POST" &&
@@ -164,27 +346,27 @@ const server =
                   }
                 );
 
-                res.end("OK");
+                res.end(
+                  "OK"
+                );
 
               }
 
               catch (error) {
 
                 console.log(
-                  "WEBHOOK UPDATE ERROR:",
+                  "WEBHOOK ERROR:",
                   error.message
                 );
 
 
                 res.writeHead(
-                  500,
-                  {
-                    "Content-Type":
-                      "text/plain"
-                  }
+                  500
                 );
 
-                res.end("ERROR");
+                res.end(
+                  "ERROR"
+                );
 
               }
 
@@ -197,19 +379,13 @@ const server =
         }
 
 
-        // -----------------------------
-        // Not found
-        // -----------------------------
-
         res.writeHead(
-          404,
-          {
-            "Content-Type":
-              "text/plain"
-          }
+          404
         );
 
-        res.end("Not Found");
+        res.end(
+          "Not Found"
+        );
 
       }
 
@@ -222,14 +398,12 @@ const server =
 
 
         res.writeHead(
-          500,
-          {
-            "Content-Type":
-              "text/plain"
-          }
+          500
         );
 
-        res.end("Server Error");
+        res.end(
+          "Server Error"
+        );
 
       }
 
@@ -254,37 +428,51 @@ console.log(
 );
 
 
-// خوشامد
+// -------------------------------------
+// Welcome
+// -------------------------------------
 
 registerWelcome(bot);
 
 
-// دستورات
+// -------------------------------------
+// Commands
+// -------------------------------------
 
 registerCommands(bot);
 
 
-// پنل
+// -------------------------------------
+// Panel
+// -------------------------------------
 
 registerPanelActions(bot);
 
 
-// راهنما
+// -------------------------------------
+// Help
+// -------------------------------------
 
 registerHelp(bot);
 
 
-// تنظیمات
+// -------------------------------------
+// Settings
+// -------------------------------------
 
 registerSettings(bot);
 
 
-// اخطارها
+// -------------------------------------
+// Warning Actions
+// -------------------------------------
 
 registerWarningActions(bot);
 
 
-// تنظیمات اخطار
+// -------------------------------------
+// Warning Settings
+// -------------------------------------
 
 registerWarningSettings(bot);
 
@@ -331,7 +519,7 @@ bot.start(
     catch (error) {
 
       console.log(
-        "START COMMAND ERROR:",
+        "START ERROR:",
         error.message
       );
 
@@ -415,9 +603,7 @@ server.listen(
 
     try {
 
-      // -----------------------------
       // حذف Webhook قبلی
-      // -----------------------------
 
       await bot.telegram.deleteWebhook(
         {
@@ -431,9 +617,7 @@ server.listen(
       );
 
 
-      // -----------------------------
-      // تنظیم Webhook جدید
-      // -----------------------------
+      // Webhook جدید
 
       const webhookUrl =
         PUBLIC_URL +
@@ -446,10 +630,6 @@ server.listen(
 
 
       console.log(
-        "================================="
-      );
-
-      console.log(
         "WEBHOOK SET SUCCESSFULLY"
       );
 
@@ -457,14 +637,6 @@ server.listen(
         webhookUrl
       );
 
-      console.log(
-        "================================="
-      );
-
-
-      // -----------------------------
-      // اطلاعات Webhook
-      // -----------------------------
 
       const info =
         await bot.telegram.getWebhookInfo();
@@ -473,6 +645,7 @@ server.listen(
       console.log(
         "WEBHOOK INFO:",
         {
+
           url:
             info.url,
 
@@ -482,6 +655,7 @@ server.listen(
           lastError:
             info.last_error_message ||
             "none"
+
         }
       );
 
@@ -496,10 +670,6 @@ server.listen(
 
       console.log(
         "NO POLLING"
-      );
-
-      console.log(
-        "NO GETUPDATES CONFLICT"
       );
 
       console.log(
@@ -522,7 +692,7 @@ server.listen(
 
 
 // =====================================
-// STOP HANDLERS
+// STOP
 // =====================================
 
 process.once(
@@ -538,7 +708,7 @@ process.once(
     catch (error) {
 
       console.log(
-        "SIGINT WEBHOOK ERROR:",
+        "STOP WEBHOOK ERROR:",
         error.message
       );
 
@@ -563,7 +733,7 @@ process.once(
     catch (error) {
 
       console.log(
-        "SIGTERM WEBHOOK ERROR:",
+        "STOP WEBHOOK ERROR:",
         error.message
       );
 
