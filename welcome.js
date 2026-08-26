@@ -18,7 +18,7 @@ const {
 
 
 // =====================================
-// تنظیمات موقت رسانه
+// تنظیمات موقت خوشامد
 // =====================================
 
 const welcomeSettings =
@@ -47,49 +47,90 @@ function getDefaultSettings() {
 
 
 // =====================================
-// گرفتن تنظیمات خوشامد
+// دریافت تنظیمات خوشامد
 // =====================================
 
 function getWelcomeSettings(chatId) {
 
+  const id =
+    String(chatId);
+
+
+  if (!welcomeSettings.has(id)) {
+
+    const group =
+      getGroup(id);
+
+
+    const saved =
+      group.welcome || {};
+
+
+    welcomeSettings.set(
+      id,
+      {
+
+        enabled:
+          saved.enabled !== undefined
+            ? saved.enabled
+            : true,
+
+        type:
+          saved.type || "text",
+
+        fileId:
+          saved.fileId || null,
+
+        text:
+          saved.text || null
+
+      }
+    );
+
+  }
+
+
+  return welcomeSettings.get(id);
+
+}
+
+
+// =====================================
+// ذخیره تنظیمات خوشامد
+// =====================================
+
+function saveWelcomeSettings(
+  chatId
+) {
+
+  const id =
+    String(chatId);
+
+  const settings =
+    getWelcomeSettings(id);
+
   const group =
-    getGroup(chatId);
+    getGroup(id);
 
 
-  // تنظیمات اصلی از دیتابیس
-  // استفاده می‌شود
+  group.welcome = {
 
-  if (!group.welcome) {
+    enabled:
+      settings.enabled,
 
-    group.welcome = {
+    type:
+      settings.type,
 
-      enabled: true,
+    fileId:
+      settings.fileId,
 
-      text: null,
+    text:
+      settings.text
 
-      type: "text",
-
-      fileId: null,
-
-      managers: {}
-
-    };
-
-    saveDB();
-
-  }
+  };
 
 
-  if (!group.welcome.managers) {
-
-    group.welcome.managers = {};
-
-    saveDB();
-
-  }
-
-
-  return group.welcome;
+  saveDB();
 
 }
 
@@ -112,54 +153,7 @@ function isGroup(ctx) {
 
 
 // =====================================
-// HTML امن
-// =====================================
-
-function escapeHtml(text) {
-
-  return String(text || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-
-}
-
-
-// =====================================
-// منشن قابل کلیک
-// حتی بدون Username
-// =====================================
-
-function getUserMention(user) {
-
-  if (
-    !user ||
-    !user.id
-  ) {
-
-    return "دوست عزیز";
-
-  }
-
-
-  const name =
-    escapeHtml(
-      user.first_name ||
-      user.last_name ||
-      "دوست عزیز"
-    );
-
-
-  return (
-    `<a href="tg://user?id=${user.id}">${name}</a>`
-  );
-
-}
-
-
-// =====================================
-// متن خوشامد
+// ساخت متن خوشامد
 // =====================================
 
 function getWelcomeText(
@@ -203,14 +197,15 @@ function replyToCommand(
     text,
     {
 
-      parse_mode: "HTML",
-
       reply_parameters: {
 
         message_id:
           ctx.message.message_id
 
-      }
+      },
+
+      parse_mode:
+        "HTML"
 
     }
   );
@@ -219,7 +214,7 @@ function replyToCommand(
 
 
 // =====================================
-// تنظیم رسانه خوشامد
+// تنظیم رسانه
 // =====================================
 
 function setWelcomeMedia(
@@ -228,45 +223,30 @@ function setWelcomeMedia(
   fileId
 ) {
 
-  const group =
-    getGroup(chatId);
+  const settings =
+    getWelcomeSettings(
+      chatId
+    );
 
 
-  if (!group.welcome) {
-
-    group.welcome = {
-
-      enabled: true,
-
-      text: null,
-
-      type: "text",
-
-      fileId: null,
-
-      managers: {}
-
-    };
-
-  }
-
-
-  group.welcome.type =
+  settings.type =
     type;
 
 
-  group.welcome.fileId =
+  settings.fileId =
     fileId;
 
 
-  group.welcome.enabled =
+  settings.enabled =
     true;
 
 
-  saveDB();
+  saveWelcomeSettings(
+    chatId
+  );
 
 
-  return group.welcome;
+  return settings;
 
 }
 
@@ -278,10 +258,6 @@ function setWelcomeMedia(
 function clearWelcomeMedia(
   chatId
 ) {
-
-  const group =
-    getGroup(chatId);
-
 
   const settings =
     getWelcomeSettings(
@@ -297,7 +273,9 @@ function clearWelcomeMedia(
     null;
 
 
-  saveDB();
+  saveWelcomeSettings(
+    chatId
+  );
 
 
   return settings;
@@ -323,7 +301,9 @@ function enableWelcome(
     true;
 
 
-  saveDB();
+  saveWelcomeSettings(
+    chatId
+  );
 
 
   return settings;
@@ -349,7 +329,9 @@ function disableWelcome(
     false;
 
 
-  saveDB();
+  saveWelcomeSettings(
+    chatId
+  );
 
 
   return settings;
@@ -375,16 +357,6 @@ async function sendWelcome(
     }
 
 
-    if (
-      !user ||
-      !user.id
-    ) {
-
-      return;
-
-    }
-
-
     const settings =
       getWelcomeSettings(
         ctx.chat.id
@@ -392,10 +364,6 @@ async function sendWelcome(
 
 
     if (!settings.enabled) {
-
-      console.log(
-        "WELCOME: disabled"
-      );
 
       return;
 
@@ -418,10 +386,11 @@ async function sendWelcome(
       !settings.fileId
     ) {
 
-      return await ctx.reply(
+      return ctx.reply(
         text,
         {
-          parse_mode: "HTML"
+          parse_mode:
+            "HTML"
         }
       );
 
@@ -436,13 +405,15 @@ async function sendWelcome(
       settings.type === "animation"
     ) {
 
-      return await ctx.replyWithAnimation(
+      return ctx.replyWithAnimation(
         settings.fileId,
         {
 
-          caption: text,
+          caption:
+            text,
 
-          parse_mode: "HTML"
+          parse_mode:
+            "HTML"
 
         }
       );
@@ -458,35 +429,15 @@ async function sendWelcome(
       settings.type === "video"
     ) {
 
-      return await ctx.replyWithVideo(
+      return ctx.replyWithVideo(
         settings.fileId,
         {
 
-          caption: text,
+          caption:
+            text,
 
-          parse_mode: "HTML"
-
-        }
-      );
-
-    }
-
-
-    // -------------------------------
-    // عکس
-    // -------------------------------
-
-    if (
-      settings.type === "photo"
-    ) {
-
-      return await ctx.replyWithPhoto(
-        settings.fileId,
-        {
-
-          caption: text,
-
-          parse_mode: "HTML"
+          parse_mode:
+            "HTML"
 
         }
       );
@@ -507,10 +458,11 @@ async function sendWelcome(
       );
 
 
-      return await ctx.reply(
+      return ctx.reply(
         text,
         {
-          parse_mode: "HTML"
+          parse_mode:
+            "HTML"
         }
       );
 
@@ -518,13 +470,34 @@ async function sendWelcome(
 
 
     // -------------------------------
-    // حالت ناشناخته
+    // عکس
     // -------------------------------
 
-    return await ctx.reply(
+    if (
+      settings.type === "photo"
+    ) {
+
+      return ctx.replyWithPhoto(
+        settings.fileId,
+        {
+
+          caption:
+            text,
+
+          parse_mode:
+            "HTML"
+
+        }
+      );
+
+    }
+
+
+    return ctx.reply(
       text,
       {
-        parse_mode: "HTML"
+        parse_mode:
+          "HTML"
       }
     );
 
@@ -543,7 +516,7 @@ async function sendWelcome(
 
 
 // =====================================
-// ثبت سیستم خوشامد
+// ثبت ورود اعضا
 // =====================================
 
 function registerWelcome(bot) {
@@ -573,7 +546,7 @@ function registerWelcome(bot) {
 
         const members =
           ctx.message
-            .new_chat_members || [];
+            .new_chat_members;
 
 
         if (
@@ -585,6 +558,27 @@ function registerWelcome(bot) {
 
         }
 
+
+        const group =
+          getGroup(
+            ctx.chat.id
+          );
+
+
+        // -------------------------------
+        // ثبت آمار ورود
+        // -------------------------------
+
+        group.stats.joins +=
+          members.length;
+
+
+        saveDB();
+
+
+        // -------------------------------
+        // خوشامد تک‌تک اعضا
+        // -------------------------------
 
         for (
           const user of members
@@ -620,71 +614,58 @@ function registerWelcome(bot) {
     /^تنظیم\s+گیف$/u,
     async ctx => {
 
-      try {
-
-        if (!isGroup(ctx))
-          return;
+      if (!isGroup(ctx))
+        return;
 
 
-        const access =
-          await checkAdmin(ctx);
+      const access =
+        await checkAdmin(ctx);
 
 
-        if (!access.ok) {
+      if (!access.ok) {
 
-          return replyToCommand(
-            ctx,
-            access.text
-          );
+        return replyToCommand(
+          ctx,
+          access.text
+        );
 
-        }
-
-
-        const reply =
-          ctx.message.reply_to_message;
+      }
 
 
-        if (
-          !reply ||
-          !reply.animation
-        ) {
+      const reply =
+        ctx.message.reply_to_message;
 
-          return replyToCommand(
-            ctx,
+
+      if (
+        !reply ||
+        !reply.animation
+      ) {
+
+        return replyToCommand(
+          ctx,
 `『𓆩 ★ تنظیم گیف ★ 𓆪』
 
 روی GIF ریپلای کنید و بنویسید:
 
 تنظیم گیف`
-          );
-
-        }
-
-
-        setWelcomeMedia(
-          ctx.chat.id,
-          "animation",
-          reply.animation.file_id
         );
 
+      }
 
-        return replyToCommand(
-          ctx,
+
+      setWelcomeMedia(
+        ctx.chat.id,
+        "animation",
+        reply.animation.file_id
+      );
+
+
+      return replyToCommand(
+        ctx,
 `『𓆩 ★ خوشامدگویی ★ 𓆪』
 
-GIF خوشامد با موفقیت تنظیم شد. ✅`
-        );
-
-      }
-
-      catch (error) {
-
-        console.log(
-          "SET GIF ERROR:",
-          error.message
-        );
-
-      }
+گیف خوشامد با موفقیت تنظیم شد. ✅`
+      );
 
     }
   );
@@ -698,71 +679,58 @@ GIF خوشامد با موفقیت تنظیم شد. ✅`
     /^تنظیم\s+ویدیو$/u,
     async ctx => {
 
-      try {
-
-        if (!isGroup(ctx))
-          return;
+      if (!isGroup(ctx))
+        return;
 
 
-        const access =
-          await checkAdmin(ctx);
+      const access =
+        await checkAdmin(ctx);
 
 
-        if (!access.ok) {
+      if (!access.ok) {
 
-          return replyToCommand(
-            ctx,
-            access.text
-          );
+        return replyToCommand(
+          ctx,
+          access.text
+        );
 
-        }
-
-
-        const reply =
-          ctx.message.reply_to_message;
+      }
 
 
-        if (
-          !reply ||
-          !reply.video
-        ) {
+      const reply =
+        ctx.message.reply_to_message;
 
-          return replyToCommand(
-            ctx,
+
+      if (
+        !reply ||
+        !reply.video
+      ) {
+
+        return replyToCommand(
+          ctx,
 `『𓆩 ★ تنظیم ویدیو ★ 𓆪』
 
 روی ویدیو ریپلای کنید و بنویسید:
 
 تنظیم ویدیو`
-          );
-
-        }
-
-
-        setWelcomeMedia(
-          ctx.chat.id,
-          "video",
-          reply.video.file_id
         );
 
+      }
 
-        return replyToCommand(
-          ctx,
+
+      setWelcomeMedia(
+        ctx.chat.id,
+        "video",
+        reply.video.file_id
+      );
+
+
+      return replyToCommand(
+        ctx,
 `『𓆩 ★ خوشامدگویی ★ 𓆪』
 
 ویدیوی خوشامد با موفقیت تنظیم شد. ✅`
-        );
-
-      }
-
-      catch (error) {
-
-        console.log(
-          "SET VIDEO ERROR:",
-          error.message
-        );
-
-      }
+      );
 
     }
   );
@@ -776,78 +744,65 @@ GIF خوشامد با موفقیت تنظیم شد. ✅`
     /^تنظیم\s+عکس$/u,
     async ctx => {
 
-      try {
-
-        if (!isGroup(ctx))
-          return;
+      if (!isGroup(ctx))
+        return;
 
 
-        const access =
-          await checkAdmin(ctx);
+      const access =
+        await checkAdmin(ctx);
 
 
-        if (!access.ok) {
+      if (!access.ok) {
 
-          return replyToCommand(
-            ctx,
-            access.text
-          );
+        return replyToCommand(
+          ctx,
+          access.text
+        );
 
-        }
-
-
-        const reply =
-          ctx.message.reply_to_message;
+      }
 
 
-        if (
-          !reply ||
-          !reply.photo ||
-          !reply.photo.length
-        ) {
+      const reply =
+        ctx.message.reply_to_message;
 
-          return replyToCommand(
-            ctx,
+
+      if (
+        !reply ||
+        !reply.photo ||
+        !reply.photo.length
+      ) {
+
+        return replyToCommand(
+          ctx,
 `『𓆩 ★ تنظیم عکس ★ 𓆪』
 
 روی عکس ریپلای کنید و بنویسید:
 
 تنظیم عکس`
-          );
-
-        }
-
-
-        const photo =
-          reply.photo[
-            reply.photo.length - 1
-          ];
-
-
-        setWelcomeMedia(
-          ctx.chat.id,
-          "photo",
-          photo.file_id
         );
 
+      }
 
-        return replyToCommand(
-          ctx,
+
+      const photo =
+        reply.photo[
+          reply.photo.length - 1
+        ];
+
+
+      setWelcomeMedia(
+        ctx.chat.id,
+        "photo",
+        photo.file_id
+      );
+
+
+      return replyToCommand(
+        ctx,
 `『𓆩 ★ خوشامدگویی ★ 𓆪』
 
 عکس خوشامد با موفقیت تنظیم شد. ✅`
-        );
-
-      }
-
-      catch (error) {
-
-        console.log(
-          "SET PHOTO ERROR:",
-          error.message
-        );
-
-      }
+      );
 
     }
   );
@@ -861,220 +816,168 @@ GIF خوشامد با موفقیت تنظیم شد. ✅`
     /^تنظیم\s+استیکر$/u,
     async ctx => {
 
-      try {
-
-        if (!isGroup(ctx))
-          return;
+      if (!isGroup(ctx))
+        return;
 
 
-        const access =
-          await checkAdmin(ctx);
+      const access =
+        await checkAdmin(ctx);
 
 
-        if (!access.ok) {
+      if (!access.ok) {
 
-          return replyToCommand(
-            ctx,
-            access.text
-          );
+        return replyToCommand(
+          ctx,
+          access.text
+        );
 
-        }
-
-
-        const reply =
-          ctx.message.reply_to_message;
+      }
 
 
-        if (
-          !reply ||
-          !reply.sticker
-        ) {
+      const reply =
+        ctx.message.reply_to_message;
 
-          return replyToCommand(
-            ctx,
+
+      if (
+        !reply ||
+        !reply.sticker
+      ) {
+
+        return replyToCommand(
+          ctx,
 `『𓆩 ★ تنظیم استیکر ★ 𓆪』
 
 روی استیکر ریپلای کنید و بنویسید:
 
 تنظیم استیکر`
-          );
-
-        }
-
-
-        setWelcomeMedia(
-          ctx.chat.id,
-          "sticker",
-          reply.sticker.file_id
         );
 
+      }
 
-        return replyToCommand(
-          ctx,
+
+      setWelcomeMedia(
+        ctx.chat.id,
+        "sticker",
+        reply.sticker.file_id
+      );
+
+
+      return replyToCommand(
+        ctx,
 `『𓆩 ★ خوشامدگویی ★ 𓆪』
 
 استیکر خوشامد با موفقیت تنظیم شد. ✅`
-        );
-
-      }
-
-      catch (error) {
-
-        console.log(
-          "SET STICKER ERROR:",
-          error.message
-        );
-
-      }
+      );
 
     }
   );
 
 
   // ===================================
-  // روشن
+  // خوشامد روشن
   // ===================================
 
   bot.hears(
     /^خوشامد\s+روشن$/u,
     async ctx => {
 
-      try {
-
-        if (!isGroup(ctx))
-          return;
+      if (!isGroup(ctx))
+        return;
 
 
-        const access =
-          await checkAdmin(ctx);
+      const access =
+        await checkAdmin(ctx);
 
 
-        if (!access.ok)
-          return;
+      if (!access.ok)
+        return;
 
 
-        enableWelcome(
-          ctx.chat.id
-        );
+      enableWelcome(
+        ctx.chat.id
+      );
 
 
-        return replyToCommand(
-          ctx,
+      return replyToCommand(
+        ctx,
 `『𓆩 ★ خوشامدگویی ★ 𓆪』
 
 سیستم خوشامدگویی فعال شد. ✅`
-        );
-
-      }
-
-      catch (error) {
-
-        console.log(
-          "WELCOME ENABLE ERROR:",
-          error.message
-        );
-
-      }
+      );
 
     }
   );
 
 
   // ===================================
-  // خاموش
+  // خوشامد خاموش
   // ===================================
 
   bot.hears(
     /^خوشامد\s+خاموش$/u,
     async ctx => {
 
-      try {
-
-        if (!isGroup(ctx))
-          return;
+      if (!isGroup(ctx))
+        return;
 
 
-        const access =
-          await checkAdmin(ctx);
+      const access =
+        await checkAdmin(ctx);
 
 
-        if (!access.ok)
-          return;
+      if (!access.ok)
+        return;
 
 
-        disableWelcome(
-          ctx.chat.id
-        );
+      disableWelcome(
+        ctx.chat.id
+      );
 
 
-        return replyToCommand(
-          ctx,
+      return replyToCommand(
+        ctx,
 `『𓆩 ★ خوشامدگویی ★ 𓆪』
 
 سیستم خوشامدگویی خاموش شد. ❌`
-        );
-
-      }
-
-      catch (error) {
-
-        console.log(
-          "WELCOME DISABLE ERROR:",
-          error.message
-        );
-
-      }
+      );
 
     }
   );
 
 
   // ===================================
-  // حذف خوشامد
+  // حذف رسانه
   // ===================================
 
   bot.hears(
     /^حذف\s+خوشامد$/u,
     async ctx => {
 
-      try {
-
-        if (!isGroup(ctx))
-          return;
+      if (!isGroup(ctx))
+        return;
 
 
-        const access =
-          await checkAdmin(ctx);
+      const access =
+        await checkAdmin(ctx);
 
 
-        if (!access.ok)
-          return;
+      if (!access.ok)
+        return;
 
 
-        clearWelcomeMedia(
-          ctx.chat.id
-        );
+      clearWelcomeMedia(
+        ctx.chat.id
+      );
 
 
-        return replyToCommand(
-          ctx,
+      return replyToCommand(
+        ctx,
 `『𓆩 ★ خوشامدگویی ★ 𓆪』
 
 رسانه خوشامد حذف شد. ✅
 
-از این به بعد فقط متن ارسال می‌شود.`
-        );
-
-      }
-
-      catch (error) {
-
-        console.log(
-          "WELCOME CLEAR ERROR:",
-          error.message
-        );
-
-      }
+از این به بعد خوشامد به صورت متنی ارسال می‌شود.`
+      );
 
     }
   );
@@ -1088,75 +991,62 @@ GIF خوشامد با موفقیت تنظیم شد. ✅`
     /^وضعیت\s+خوشامد$/u,
     async ctx => {
 
-      try {
-
-        if (!isGroup(ctx))
-          return;
+      if (!isGroup(ctx))
+        return;
 
 
-        const access =
-          await checkAdmin(ctx);
+      const access =
+        await checkAdmin(ctx);
 
 
-        if (!access.ok)
-          return;
+      if (!access.ok)
+        return;
 
 
-        const settings =
-          getWelcomeSettings(
-            ctx.chat.id
-          );
+      const settings =
+        getWelcomeSettings(
+          ctx.chat.id
+        );
 
 
-        let media =
-          "فقط متن";
+      let media =
+        "متن";
 
 
-        if (
-          settings.type === "animation"
-        )
-          media = "GIF";
+      if (
+        settings.type === "animation"
+      )
+        media = "GIF";
 
 
-        else if (
-          settings.type === "video"
-        )
-          media = "ویدیو";
+      if (
+        settings.type === "video"
+      )
+        media = "ویدیو";
 
 
-        else if (
-          settings.type === "photo"
-        )
-          media = "عکس";
+      if (
+        settings.type === "photo"
+      )
+        media = "عکس";
 
 
-        else if (
-          settings.type === "sticker"
-        )
-          media = "استیکر";
+      if (
+        settings.type === "sticker"
+      )
+        media = "استیکر";
 
 
-        return replyToCommand(
-          ctx,
-`『𓆩 ★ وضعیت خوشامدگویی ★ 𓆪』
+      return replyToCommand(
+        ctx,
+`『𓆩 ★ وضعیت خوشامد ★ 𓆪』
 
-★ وضعیت:
+وضعیت:
 ${settings.enabled ? "فعال ✅" : "خاموش ❌"}
 
-★ رسانه:
+رسانه:
 ${media}`
-        );
-
-      }
-
-      catch (error) {
-
-        console.log(
-          "WELCOME STATUS ERROR:",
-          error.message
-        );
-
-      }
+      );
 
     }
   );
@@ -1165,7 +1055,7 @@ ${media}`
 
 
 // =====================================
-// خروجی
+// EXPORT
 // =====================================
 
 module.exports = {
