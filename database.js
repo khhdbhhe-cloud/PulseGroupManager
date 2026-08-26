@@ -1,21 +1,13 @@
 // =====================================
 // PulseGroupManager
-// DATABASE SYSTEM
+// DATABASE
 // =====================================
 
 const fs = require("fs");
 const path = require("path");
 
-
-// =====================================
-// محل ذخیره دیتابیس
-// =====================================
-
 const DB_FILE =
-  path.join(
-    __dirname,
-    "group-data.json"
-  );
+  path.join(__dirname, "group-data.json");
 
 
 // =====================================
@@ -43,17 +35,10 @@ function defaultGroup() {
 
 
     // -------------------------------
-    // دسترسی اختصاصی کاربران
+    // دسترسی کاربران
     // -------------------------------
 
     userPermissions: {},
-
-
-    // -------------------------------
-    // مقام خوشامد
-    // -------------------------------
-
-    welcomeAdmins: {},
 
 
     // -------------------------------
@@ -67,19 +52,11 @@ function defaultGroup() {
     // آمار
     // -------------------------------
 
-    stats: {
-
-      messages: 0,
-
-      joins: 0,
-
-      leaves: 0
-
-    },
+    stats: {},
 
 
     // -------------------------------
-    // پنل‌های باز شده
+    // پنل‌ها
     // -------------------------------
 
     panels: {},
@@ -100,18 +77,21 @@ function defaultGroup() {
 
       enabled: true,
 
+      text:
+        "『𓆩 ★ خوش اومدی ★ 𓆪』\n\nسلام {mention} عزیز 🌹\n\nبه گروه «{group}» خوش اومدی ❤️",
+
       type: "text",
 
       fileId: null,
 
-      text:
-        "『𓆩 ★ خوش اومدی ★ 𓆪』\n\nسلام {mention} عزیز 🌹\n\nبه گروه «{group}» خوش اومدی ❤️"
+      // کسی که مقام خوشامد دارد
+      managers: {}
 
     },
 
 
     // -------------------------------
-    // خروج
+    // پیام خروج
     // -------------------------------
 
     goodbye: {
@@ -119,13 +99,17 @@ function defaultGroup() {
       enabled: false,
 
       text:
-        "{mention} از گروه خارج شد."
+        "{mention} از گروه خارج شد.",
+
+      type: "text",
+
+      fileId: null
 
     },
 
 
     // -------------------------------
-    // قفل‌های گروه
+    // قفل‌ها
     // -------------------------------
 
     locks: {
@@ -167,7 +151,9 @@ function defaultGroup() {
 
       deleteServiceMessages: false,
 
-      deleteWelcome: false
+      welcomeEnabled: true,
+
+      goodbyeEnabled: false
 
     }
 
@@ -199,20 +185,8 @@ function loadDB() {
         data.trim()
       ) {
 
-        const parsed =
+        db =
           JSON.parse(data);
-
-
-        if (
-          parsed &&
-          typeof parsed === "object" &&
-          parsed.groups &&
-          typeof parsed.groups === "object"
-        ) {
-
-          db = parsed;
-
-        }
 
       }
 
@@ -274,159 +248,10 @@ function saveDB() {
 
 
 // =====================================
-// تکمیل اطلاعات گروه‌های قدیمی
+// گرفتن اطلاعات گروه
 // =====================================
 
-function mergeDefaults(
-  group
-) {
-
-  const defaults =
-    defaultGroup();
-
-
-  // -------------------------------
-  // بخش‌های اصلی
-  // -------------------------------
-
-  for (
-    const key of Object.keys(defaults)
-  ) {
-
-    if (
-      group[key] === undefined ||
-      group[key] === null
-    ) {
-
-      group[key] =
-        defaults[key];
-
-    }
-
-  }
-
-
-  // -------------------------------
-  // خوشامد
-  // -------------------------------
-
-  group.welcome =
-    {
-      ...defaults.welcome,
-      ...(group.welcome || {})
-    };
-
-
-  // -------------------------------
-  // خروج
-  // -------------------------------
-
-  group.goodbye =
-    {
-      ...defaults.goodbye,
-      ...(group.goodbye || {})
-    };
-
-
-  // -------------------------------
-  // قفل‌ها
-  // -------------------------------
-
-  group.locks =
-    {
-      ...defaults.locks,
-      ...(group.locks || {})
-    };
-
-
-  // -------------------------------
-  // تنظیمات
-  // -------------------------------
-
-  group.settings =
-    {
-      ...defaults.settings,
-      ...(group.settings || {})
-    };
-
-
-  // -------------------------------
-  // آمار
-  // -------------------------------
-
-  group.stats =
-    {
-      ...defaults.stats,
-      ...(group.stats || {})
-    };
-
-
-  // -------------------------------
-  // آبجکت‌ها
-  // -------------------------------
-
-  if (
-    !group.admins ||
-    typeof group.admins !== "object"
-  ) {
-
-    group.admins = {};
-
-  }
-
-
-  if (
-    !group.userPermissions ||
-    typeof group.userPermissions !== "object"
-  ) {
-
-    group.userPermissions = {};
-
-  }
-
-
-  if (
-    !group.welcomeAdmins ||
-    typeof group.welcomeAdmins !== "object"
-  ) {
-
-    group.welcomeAdmins = {};
-
-  }
-
-
-  if (
-    !group.warns ||
-    typeof group.warns !== "object"
-  ) {
-
-    group.warns = {};
-
-  }
-
-
-  if (
-    !group.panels ||
-    typeof group.panels !== "object"
-  ) {
-
-    group.panels = {};
-
-  }
-
-
-  return group;
-
-}
-
-
-// =====================================
-// دریافت اطلاعات گروه
-// =====================================
-
-function getGroup(
-  chatId
-) {
+function getGroup(chatId) {
 
   const id =
     String(chatId);
@@ -439,39 +264,7 @@ function getGroup(
     db.groups[id] =
       defaultGroup();
 
-
     saveDB();
-
-  }
-
-
-  else {
-
-    const before =
-      JSON.stringify(
-        db.groups[id]
-      );
-
-
-    db.groups[id] =
-      mergeDefaults(
-        db.groups[id]
-      );
-
-
-    const after =
-      JSON.stringify(
-        db.groups[id]
-      );
-
-
-    if (
-      before !== after
-    ) {
-
-      saveDB();
-
-    }
 
   }
 
@@ -482,7 +275,98 @@ function getGroup(
 
 
 // =====================================
-// دریافت کل دیتابیس
+// اطمینان از وجود ساختارهای قدیمی
+// =====================================
+
+function repairGroup(group) {
+
+  const defaults =
+    defaultGroup();
+
+
+  // اگر دیتابیس قدیمی باشد
+  // قسمت‌های جدید اضافه می‌شوند
+
+  if (!group.admins)
+    group.admins = {};
+
+
+  if (!group.userPermissions)
+    group.userPermissions = {};
+
+
+  if (!group.warns)
+    group.warns = {};
+
+
+  if (!group.stats)
+    group.stats = {};
+
+
+  if (!group.panels)
+    group.panels = {};
+
+
+  if (!group.rules)
+    group.rules = "";
+
+
+  if (!group.welcome)
+    group.welcome =
+      defaults.welcome;
+
+
+  if (!group.goodbye)
+    group.goodbye =
+      defaults.goodbye;
+
+
+  if (!group.locks)
+    group.locks =
+      defaults.locks;
+
+
+  if (!group.settings)
+    group.settings =
+      defaults.settings;
+
+
+  // ساخت managers خوشامد
+
+  if (
+    !group.welcome.managers
+  ) {
+
+    group.welcome.managers = {};
+
+  }
+
+
+  return group;
+
+}
+
+
+// =====================================
+// گرفتن گروه + تعمیر خودکار
+// =====================================
+
+function getGroupSafe(chatId) {
+
+  const group =
+    getGroup(chatId);
+
+
+  repairGroup(group);
+
+
+  return group;
+
+}
+
+
+// =====================================
+// گرفتن کل دیتابیس
 // =====================================
 
 function getDB() {
@@ -493,50 +377,34 @@ function getDB() {
 
 
 // =====================================
-// حذف گروه از دیتابیس
+// ذخیره هنگام خروج
 // =====================================
 
-function deleteGroup(
-  chatId
-) {
-
-  const id =
-    String(chatId);
-
-
-  if (
-    db.groups[id]
-  ) {
-
-    delete db.groups[id];
+process.once(
+  "SIGINT",
+  () => {
 
     saveDB();
 
-    return true;
+  }
+);
+
+
+process.once(
+  "SIGTERM",
+  () => {
+
+    saveDB();
 
   }
-
-
-  return false;
-
-}
+);
 
 
 // =====================================
-// بررسی وجود گروه
+// شروع دیتابیس
 // =====================================
 
-function hasGroup(
-  chatId
-) {
-
-  const id =
-    String(chatId);
-
-
-  return !!db.groups[id];
-
-}
+loadDB();
 
 
 // =====================================
@@ -547,24 +415,14 @@ module.exports = {
 
   getGroup,
 
+  getGroupSafe,
+
   saveDB,
 
   getDB,
 
-  deleteGroup,
+  defaultGroup,
 
-  hasGroup
+  repairGroup
 
 };
-
-
-// =====================================
-// شروع
-// =====================================
-
-loadDB();
-
-
-console.log(
-  "DATABASE SYSTEM LOADED"
-);
