@@ -30,13 +30,8 @@ const defaultPermissions = {
   locks: false,
   settings: false,
 
-  welcome: false,
-  goodbye: false,
-
-  messages: false,
-  flood: false,
-
-  rules: false
+  // مقام خوشامد
+  welcome: false
 
 };
 
@@ -53,14 +48,12 @@ function getUserPermissions(
   const group =
     getGroup(chatId);
 
-
   const id =
     String(userId);
 
 
   if (
-    !group.userPermissions ||
-    typeof group.userPermissions !== "object"
+    !group.userPermissions
   ) {
 
     group.userPermissions = {};
@@ -76,18 +69,16 @@ function getUserPermissions(
       ...defaultPermissions
     };
 
-
     saveDB();
 
   }
 
 
-  // اگر در نسخه قبلی بعضی دسترسی‌ها
-  // وجود نداشتند، اضافه شوند.
+  // اگر دسترسی جدیدی به سیستم
+  // اضافه شده باشد، آن را اضافه کن
 
   for (
-    const permission
-    of Object.keys(defaultPermissions)
+    const permission in defaultPermissions
   ) {
 
     if (
@@ -109,31 +100,7 @@ function getUserPermissions(
 
 
 // =====================================
-// بررسی داشتن یک دسترسی
-// =====================================
-
-function hasPermission(
-  chatId,
-  userId,
-  permission
-) {
-
-  const permissions =
-    getUserPermissions(
-      chatId,
-      userId
-    );
-
-
-  return (
-    permissions[permission] === true
-  );
-
-}
-
-
-// =====================================
-// تغییر یک دسترسی
+// تنظیم یک دسترسی
 // =====================================
 
 function setPermission(
@@ -151,22 +118,16 @@ function setPermission(
 
 
   if (
-    !Object.prototype.hasOwnProperty.call(
-      defaultPermissions,
-      permission
-    )
+    defaultPermissions[permission]
+    !== undefined
   ) {
 
-    return permissions;
+    permissions[permission] =
+      Boolean(value);
+
+    saveDB();
 
   }
-
-
-  permissions[permission] =
-    Boolean(value);
-
-
-  saveDB();
 
 
   return permissions;
@@ -175,47 +136,277 @@ function setPermission(
 
 
 // =====================================
-// فعال کردن دسترسی
+// بررسی یک دسترسی
 // =====================================
 
-function enablePermission(
+function hasPermission(
   chatId,
   userId,
   permission
 ) {
 
-  return setPermission(
-    chatId,
-    userId,
-    permission,
-    true
+  const permissions =
+    getUserPermissions(
+      chatId,
+      userId
+    );
+
+
+  return Boolean(
+    permissions[permission]
   );
 
 }
 
 
 // =====================================
-// غیرفعال کردن دسترسی
+// تشخیص مالک گروه
 // =====================================
 
-function disablePermission(
+async function isOwner(
+  bot,
   chatId,
-  userId,
-  permission
+  userId
 ) {
 
-  return setPermission(
-    chatId,
-    userId,
-    permission,
-    false
+  try {
+
+    const member =
+      await bot.telegram.getChatMember(
+        chatId,
+        userId
+      );
+
+
+    return (
+      member.status === "creator"
+    );
+
+  }
+
+  catch (error) {
+
+    console.log(
+      "OWNER CHECK ERROR:",
+      error.message
+    );
+
+    return false;
+
+  }
+
+}
+
+
+// =====================================
+// تشخیص مدیر
+// =====================================
+
+async function isAdmin(
+  bot,
+  chatId,
+  userId
+) {
+
+  try {
+
+    const member =
+      await bot.telegram.getChatMember(
+        chatId,
+        userId
+      );
+
+
+    return (
+      member.status === "administrator" ||
+      member.status === "creator"
+    );
+
+  }
+
+  catch (error) {
+
+    console.log(
+      "ADMIN CHECK ERROR:",
+      error.message
+    );
+
+    return false;
+
+  }
+
+}
+
+
+// =====================================
+// بررسی مقام خوشامد
+// =====================================
+
+function hasWelcomeRole(
+  chatId,
+  userId
+) {
+
+  const group =
+    getGroup(chatId);
+
+
+  if (
+    !group.welcome
+  ) {
+
+    return false;
+
+  }
+
+
+  if (
+    !group.welcome.managers
+  ) {
+
+    group.welcome.managers = {};
+
+  }
+
+
+  return Boolean(
+    group.welcome.managers[
+      String(userId)
+    ]
   );
 
 }
 
 
 // =====================================
-// ★ / ☆
+// دادن مقام خوشامد
+// فقط مالک باید این کار را انجام دهد
+// =====================================
+
+function setWelcomeRole(
+  chatId,
+  userId,
+  value
+) {
+
+  const group =
+    getGroup(chatId);
+
+
+  if (
+    !group.welcome
+  ) {
+
+    group.welcome = {
+
+      enabled: true,
+
+      text: null,
+
+      type: "text",
+
+      fileId: null,
+
+      managers: {}
+
+    };
+
+  }
+
+
+  if (
+    !group.welcome.managers
+  ) {
+
+    group.welcome.managers = {};
+
+  }
+
+
+  const id =
+    String(userId);
+
+
+  if (value) {
+
+    group.welcome.managers[id] =
+      true;
+
+    // همزمان دسترسی عمومی خوشامد
+    // هم فعال می‌شود
+
+    getUserPermissions(
+      chatId,
+      userId
+    ).welcome = true;
+
+  }
+
+  else {
+
+    delete group.welcome.managers[id];
+
+    getUserPermissions(
+      chatId,
+      userId
+    ).welcome = false;
+
+  }
+
+
+  saveDB();
+
+
+  return hasWelcomeRole(
+    chatId,
+    userId
+  );
+
+}
+
+
+// =====================================
+// حذف تمام دسترسی‌های یک کاربر
+// =====================================
+
+function resetPermissions(
+  chatId,
+  userId
+) {
+
+  const group =
+    getGroup(chatId);
+
+
+  const id =
+    String(userId);
+
+
+  group.userPermissions[id] = {
+    ...defaultPermissions
+  };
+
+
+  if (
+    group.welcome &&
+    group.welcome.managers
+  ) {
+
+    delete group.welcome.managers[id];
+
+  }
+
+
+  saveDB();
+
+
+  return group.userPermissions[id];
+
+}
+
+
+// =====================================
+// تبدیل دسترسی به ستاره
 // =====================================
 
 function star(
@@ -230,7 +421,7 @@ function star(
 
 
 // =====================================
-// متن دسترسی‌ها
+// نمایش دسترسی‌ها
 // =====================================
 
 function permissionText(
@@ -263,16 +454,29 @@ function permissionText(
 قفل‌های گروه: ${star(p.locks)}
 تنظیمات: ${star(p.settings)}
 
-خوشامدگویی: ${star(p.welcome)}
-پیام خروج: ${star(p.goodbye)}
+مقام خوشامد: ${star(
+  hasWelcomeRole(
+    chatId,
+    userId
+  )
+)}`
+  );
 
-مدیریت پیام‌ها: ${star(p.messages)}
-ضدفلود: ${star(p.flood)}
+}
 
-قوانین: ${star(p.rules)}
 
-★ = دسترسی فعال
-☆ = دسترسی غیرفعال`
+// =====================================
+// گرفتن همه دسترسی‌ها
+// =====================================
+
+function getAllPermissions(
+  chatId,
+  userId
+) {
+
+  return getUserPermissions(
+    chatId,
+    userId
   );
 
 }
@@ -288,15 +492,23 @@ module.exports = {
 
   getUserPermissions,
 
-  hasPermission,
-
   setPermission,
 
-  enablePermission,
+  hasPermission,
 
-  disablePermission,
+  isOwner,
+
+  isAdmin,
+
+  hasWelcomeRole,
+
+  setWelcomeRole,
+
+  resetPermissions,
 
   permissionText,
+
+  getAllPermissions,
 
   star
 
