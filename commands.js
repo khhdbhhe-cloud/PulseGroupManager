@@ -1,5 +1,33 @@
-const { mainPanel, panelText } = require("./panel");
-const { checkAdmin } = require("./security");
+// =====================================
+// PulseGroupManager
+// COMMANDS SYSTEM - FULL VERSION
+// =====================================
+
+const {
+  mainPanel,
+  panelText
+} = require("./panel");
+
+const {
+  checkAdmin
+} = require("./security");
+
+
+// =====================================
+// بررسی گروه
+// =====================================
+
+function isGroup(ctx) {
+
+  return !!(
+    ctx.chat &&
+    (
+      ctx.chat.type === "group" ||
+      ctx.chat.type === "supergroup"
+    )
+  );
+
+}
 
 
 // =====================================
@@ -19,6 +47,36 @@ function getReplyUser(ctx) {
   }
 
   return null;
+
+}
+
+
+// =====================================
+// ریپلای به پیام
+// =====================================
+
+function replyToCommand(
+  ctx,
+  text
+) {
+
+  return ctx.reply(
+    text,
+    {
+
+      reply_parameters: {
+
+        message_id:
+          ctx.message.message_id
+
+      },
+
+      parse_mode:
+        "HTML"
+
+    }
+  );
+
 }
 
 
@@ -27,6 +85,22 @@ function getReplyUser(ctx) {
 // =====================================
 
 function registerCommands(bot) {
+
+  console.log(
+    "================================="
+  );
+
+  console.log(
+    "COMMAND SYSTEM REGISTERED"
+  );
+
+  console.log(
+    "Listening for commands..."
+  );
+
+  console.log(
+    "================================="
+  );
 
 
   // ===================================
@@ -37,30 +111,37 @@ function registerCommands(bot) {
     /^پنل$/u,
     async ctx => {
 
-      const access =
-        await checkAdmin(ctx);
+      try {
 
-      if (!access.ok) {
-
-        return ctx.reply(
-          access.text
-        );
-
-      }
+        if (!isGroup(ctx))
+          return;
 
 
-      const target =
-        getReplyUser(ctx);
+        const access =
+          await checkAdmin(ctx);
 
 
-      let text =
-        panelText();
+        if (!access.ok) {
+
+          return replyToCommand(
+            ctx,
+            access.text
+          );
+
+        }
 
 
-      // اگر روی پیام کاربر ریپلای شده باشد
-      if (target) {
+        const target =
+          getReplyUser(ctx);
 
-        text +=
+
+        let text =
+          panelText();
+
+
+        if (target) {
+
+          text +=
 `\n\n『𓆩 کاربر انتخاب شده 𓆪』
 
 نام:
@@ -69,44 +150,202 @@ ${target.first_name || "ندارد"}
 آیدی:
 ${target.id}`;
 
+        }
+
+
+        return await ctx.reply(
+          text,
+          {
+
+            ...mainPanel(
+              ctx.from.id
+            ),
+
+            reply_parameters: {
+
+              message_id:
+                ctx.message.message_id
+
+            },
+
+            parse_mode:
+              "HTML"
+
+          }
+        );
+
       }
 
+      catch (error) {
 
-      // =================================
-      // پنل روی همان پیام مدیر ریپلای شود
-      // =================================
+        console.log(
+          "PANEL COMMAND ERROR:",
+          error.message
+        );
 
-      await ctx.reply(
-        text,
-        {
-          ...mainPanel(
-            ctx.from.id
-          ),
-
-          reply_parameters: {
-            message_id:
-              ctx.message.message_id
-          }
-        }
-      );
+      }
 
     }
   );
 
 
   // ===================================
-  // دستور تست ربات
+  // دستور «ربات»
+  // ===================================
+  //
+  // عمداً با bot.on("text") نوشته شده
+  // تا پیام فارسی «ربات» حتماً بررسی شود.
+  //
+  // ===================================
+
+  bot.on(
+    "text",
+    async ctx => {
+
+      try {
+
+        if (!isGroup(ctx))
+          return;
+
+
+        const text =
+          String(
+            ctx.message.text || ""
+          ).trim();
+
+
+        console.log(
+          "COMMAND TEXT CHECK:",
+          JSON.stringify(text)
+        );
+
+
+        if (text !== "ربات")
+          return;
+
+
+        console.log(
+          "BOT COMMAND MATCHED"
+        );
+
+
+        return await ctx.reply(
+`『𓆩 ★ PulseGroupManager ★ 𓆪』
+
+🤖 ربات فعاله و آماده‌ست ✅
+
+📌 گروه:
+${ctx.chat.title || "بدون نام"}
+
+👤 درخواست توسط:
+${ctx.from.first_name || "کاربر"}
+
+🆔 آیدی:
+${ctx.from.id}`,
+          {
+
+            reply_parameters: {
+
+              message_id:
+                ctx.message.message_id
+
+            },
+
+            parse_mode:
+              "HTML"
+
+          }
+        );
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "BOT TEXT HANDLER ERROR:",
+          error.message
+        );
+
+      }
+
+    }
+  );
+
+
+  // ===================================
+  // وضعیت ربات
   // ===================================
 
   bot.hears(
-    /^ربات$/u,
+    /^وضعیت\s+ربات$/u,
     async ctx => {
 
-      await ctx.reply(
-`『𓆩 PulseGroupManager 𓆪』
+      try {
 
-ربات فعال است ✅`
-      );
+        if (!isGroup(ctx))
+          return;
+
+
+        return await replyToCommand(
+          ctx,
+`『𓆩 ★ وضعیت ربات ★ 𓆪』
+
+🤖 وضعیت:
+فعال ✅
+
+📡 سیستم:
+آنلاین ✅
+
+👥 گروه:
+${ctx.chat.title || "بدون نام"}`
+        );
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "BOT STATUS ERROR:",
+          error.message
+        );
+
+      }
+
+    }
+  );
+
+
+  // ===================================
+  // تست ربات
+  // ===================================
+
+  bot.hears(
+    /^تست$/u,
+    async ctx => {
+
+      try {
+
+        if (!isGroup(ctx))
+          return;
+
+
+        return await replyToCommand(
+          ctx,
+`『𓆩 ★ تست ربات ★ 𓆪』
+
+پاسخ با موفقیت دریافت شد. ✅`
+        );
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "TEST COMMAND ERROR:",
+          error.message
+        );
+
+      }
 
     }
   );
