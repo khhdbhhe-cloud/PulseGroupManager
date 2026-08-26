@@ -87,15 +87,69 @@ server.listen(
 
 
 // =====================================
+// DEBUG MESSAGE RECEIVER
+// =====================================
+
+// این قسمت فقط برای اطمینان از دریافت
+// پیام‌های گروه است.
+// جواب دستورات توسط سیستم‌های
+// اصلی پایین‌تر انجام می‌شود.
+
+bot.on(
+  "message",
+  async ctx => {
+
+    try {
+
+      if (!ctx.chat)
+        return;
+
+
+      console.log(
+        "MESSAGE RECEIVED:",
+        {
+          chatId:
+            ctx.chat.id,
+
+          chatType:
+            ctx.chat.type,
+
+          text:
+            ctx.message &&
+            ctx.message.text
+              ? ctx.message.text
+              : "[non-text message]"
+        }
+      );
+
+    }
+
+    catch (error) {
+
+      console.log(
+        "MESSAGE LOGGER ERROR:",
+        error.message
+      );
+
+    }
+
+  }
+);
+
+
+// =====================================
 // WELCOME SYSTEM
 // =====================================
 
-// خوشامد را قبل از سایر سیستم‌های پیام ثبت می‌کنیم
+// سیستم خوشامد قبل از سایر سیستم‌ها
+// ثبت می‌شود تا رویداد عضو جدید
+// دریافت شود.
+
 registerWelcome(bot);
 
 
 // =====================================
-// REGISTER OTHER SYSTEMS
+// OTHER SYSTEMS
 // =====================================
 
 registerCommands(bot);
@@ -112,7 +166,7 @@ registerWarningSettings(bot);
 
 
 // =====================================
-// START COMMAND
+// START
 // =====================================
 
 bot.start(
@@ -151,7 +205,7 @@ bot.start(
 
 
 // =====================================
-// GLOBAL ERROR HANDLER
+// ERROR HANDLER
 // =====================================
 
 bot.catch(
@@ -161,6 +215,17 @@ bot.catch(
       "BOT ERROR:",
       err.message
     );
+
+    if (ctx) {
+
+      console.log(
+        "ERROR CHAT:",
+        ctx.chat
+          ? ctx.chat.id
+          : "unknown"
+      );
+
+    }
 
   }
 );
@@ -175,7 +240,19 @@ bot.launch()
   () => {
 
     console.log(
-      "Bot started successfully"
+      "================================="
+    );
+
+    console.log(
+      "PulseGroupManager STARTED"
+    );
+
+    console.log(
+      "Bot is listening for updates..."
+    );
+
+    console.log(
+      "================================="
     );
 
   }
