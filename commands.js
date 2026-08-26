@@ -31,59 +31,28 @@ function isGroup(ctx) {
 
 
 // =====================================
-// گرفتن کاربر ریپلای‌شده
-// =====================================
-
-function getReplyUser(ctx) {
-
-  if (
-    ctx.message &&
-    ctx.message.reply_to_message &&
-    ctx.message.reply_to_message.from
-  ) {
-
-    return ctx.message.reply_to_message.from;
-
-  }
-
-  return null;
-
-}
-
-
-// =====================================
-// ریپلای به پیام
+// ریپلای به پیام کاربر
 // =====================================
 
 async function replyToCommand(
   ctx,
-  text
+  text,
+  extra = {}
 ) {
 
-  try {
+  return ctx.reply(
+    text,
+    {
+      parse_mode: "HTML",
 
-    return await ctx.reply(
-      text,
-      {
-        parse_mode: "HTML",
+      reply_parameters: {
+        message_id:
+          ctx.message.message_id
+      },
 
-        reply_parameters: {
-          message_id:
-            ctx.message.message_id
-        }
-      }
-    );
-
-  }
-
-  catch (error) {
-
-    console.log(
-      "REPLY ERROR:",
-      error.message
-    );
-
-  }
+      ...extra
+    }
+  );
 
 }
 
@@ -95,91 +64,19 @@ async function replyToCommand(
 function registerCommands(bot) {
 
   console.log(
+    "================================="
+  );
+
+  console.log(
     "COMMAND SYSTEM REGISTERED"
   );
 
+  console.log(
+    "COMMANDS: ربات / تست / وضعیت ربات / پنل"
+  );
 
-  // ===================================
-  // پنل
-  // ===================================
-
-  bot.hears(
-    /^پنل$/u,
-    async ctx => {
-
-      try {
-
-        if (!isGroup(ctx))
-          return;
-
-
-        const access =
-          await checkAdmin(ctx);
-
-
-        if (!access.ok) {
-
-          return replyToCommand(
-            ctx,
-            access.text
-          );
-
-        }
-
-
-        const target =
-          getReplyUser(ctx);
-
-
-        let text =
-          panelText();
-
-
-        if (target) {
-
-          text +=
-`\n\n『𓆩 کاربر انتخاب شده 𓆪』
-
-نام:
-${target.first_name || "ندارد"}
-
-آیدی:
-${target.id}`;
-
-        }
-
-
-        return await ctx.reply(
-          text,
-          {
-
-            ...mainPanel(
-              ctx.from.id
-            ),
-
-            reply_parameters: {
-              message_id:
-                ctx.message.message_id
-            },
-
-            parse_mode:
-              "HTML"
-
-          }
-        );
-
-      }
-
-      catch (error) {
-
-        console.log(
-          "PANEL COMMAND ERROR:",
-          error.message
-        );
-
-      }
-
-    }
+  console.log(
+    "================================="
   );
 
 
@@ -188,29 +85,23 @@ ${target.id}`;
   // ===================================
 
   bot.hears(
-    /^ربات$/u,
+    "ربات",
     async ctx => {
-
-      console.log(
-        "BOT COMMAND DETECTED"
-      );
-
 
       try {
 
-        if (!isGroup(ctx)) {
-
-          console.log(
-            "BOT COMMAND: NOT GROUP"
-          );
-
+        if (!isGroup(ctx))
           return;
 
-        }
+
+        console.log(
+          "COMMAND MATCHED: ربات"
+        );
 
 
         return await replyToCommand(
           ctx,
+
 `『𓆩 ★ PulseGroupManager ★ 𓆪』
 
 🤖 ربات فعاله و آماده‌ست ✅
@@ -230,7 +121,51 @@ ${ctx.from.id}`
       catch (error) {
 
         console.log(
-          "BOT COMMAND ERROR:",
+          "COMMAND ربات ERROR:",
+          error.message
+        );
+
+      }
+
+    }
+  );
+
+
+  // ===================================
+  // تست
+  // ===================================
+
+  bot.hears(
+    "تست",
+    async ctx => {
+
+      try {
+
+        if (!isGroup(ctx))
+          return;
+
+
+        console.log(
+          "COMMAND MATCHED: تست"
+        );
+
+
+        return await replyToCommand(
+          ctx,
+
+`『𓆩 ★ تست ربات ★ 𓆪』
+
+پاسخ با موفقیت دریافت شد. ✅
+
+🤖 PulseGroupManager فعال است.`
+        );
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "COMMAND تست ERROR:",
           error.message
         );
 
@@ -245,7 +180,7 @@ ${ctx.from.id}`
   // ===================================
 
   bot.hears(
-    /^وضعیت\s+ربات$/u,
+    "وضعیت ربات",
     async ctx => {
 
       try {
@@ -254,8 +189,14 @@ ${ctx.from.id}`
           return;
 
 
+        console.log(
+          "COMMAND MATCHED: وضعیت ربات"
+        );
+
+
         return await replyToCommand(
           ctx,
+
 `『𓆩 ★ وضعیت ربات ★ 𓆪』
 
 🤖 وضعیت:
@@ -273,7 +214,7 @@ ${ctx.chat.title || "بدون نام"}`
       catch (error) {
 
         console.log(
-          "BOT STATUS ERROR:",
+          "COMMAND وضعیت ربات ERROR:",
           error.message
         );
 
@@ -284,11 +225,67 @@ ${ctx.chat.title || "بدون نام"}`
 
 
   // ===================================
-  // تست
+  // پنل
   // ===================================
 
   bot.hears(
-    /^تست$/u,
+    "پنل",
+    async ctx => {
+
+      try {
+
+        if (!isGroup(ctx))
+          return;
+
+
+        console.log(
+          "COMMAND MATCHED: پنل"
+        );
+
+
+        const access =
+          await checkAdmin(ctx);
+
+
+        if (!access.ok) {
+
+          return replyToCommand(
+            ctx,
+            access.text
+          );
+
+        }
+
+
+        return await replyToCommand(
+          ctx,
+          panelText(),
+          mainPanel(
+            ctx.from.id
+          )
+        );
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "PANEL COMMAND ERROR:",
+          error.message
+        );
+
+      }
+
+    }
+  );
+
+
+  // ===================================
+  // دستور تست انگلیسی
+  // ===================================
+
+  bot.hears(
+    "bot",
     async ctx => {
 
       try {
@@ -299,9 +296,10 @@ ${ctx.chat.title || "بدون نام"}`
 
         return await replyToCommand(
           ctx,
-`『𓆩 ★ تست ربات ★ 𓆪』
 
-پاسخ با موفقیت دریافت شد. ✅`
+`『𓆩 ★ PulseGroupManager ★ 𓆪』
+
+🤖 ربات فعاله ✅`
         );
 
       }
@@ -309,7 +307,44 @@ ${ctx.chat.title || "بدون نام"}`
       catch (error) {
 
         console.log(
-          "TEST ERROR:",
+          "COMMAND bot ERROR:",
+          error.message
+        );
+
+      }
+
+    }
+  );
+
+
+  // ===================================
+  // تست فارسی جایگزین
+  // ===================================
+
+  bot.hears(
+    "آنلاین",
+    async ctx => {
+
+      try {
+
+        if (!isGroup(ctx))
+          return;
+
+
+        return await replyToCommand(
+          ctx,
+
+`『𓆩 ★ PulseGroupManager ★ 𓆪』
+
+ربات آنلاین است. ✅`
+        );
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "COMMAND آنلاین ERROR:",
           error.message
         );
 
