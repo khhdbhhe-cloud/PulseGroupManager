@@ -1,6 +1,6 @@
 // =====================================
 // PulseGroupManager
-// MAIN FILE
+// MAIN BOT FILE - FIXED VERSION
 // =====================================
 
 const { Telegraf } =
@@ -18,25 +18,31 @@ const {
   registerCommands
 } = require("./commands");
 
+
 const {
   registerPanelActions
 } = require("./panel-actions");
+
 
 const {
   registerHelp
 } = require("./help");
 
+
 const {
   registerSettings
 } = require("./settings");
+
 
 const {
   registerWarningActions
 } = require("./warning-actions");
 
+
 const {
   registerWarningSettings
 } = require("./warning-settings");
+
 
 const {
   registerWelcome
@@ -66,13 +72,11 @@ if (!BOT_TOKEN) {
 
 
 // =====================================
-// CREATE BOT
+// BOT
 // =====================================
 
 const bot =
-  new Telegraf(
-    BOT_TOKEN
-  );
+  new Telegraf(BOT_TOKEN);
 
 
 // =====================================
@@ -105,8 +109,7 @@ server.listen(
   () => {
 
     console.log(
-      "Server running on port " +
-      PORT
+      "Server running on port " + PORT
     );
 
   }
@@ -114,22 +117,28 @@ server.listen(
 
 
 // =====================================
-// MESSAGE LOGGER
+// GLOBAL MESSAGE LOGGER
 // =====================================
 //
 // مهم:
-// حتماً next() اجرا می‌شود.
-// اگر next نباشد، پیام در همین
-// middleware متوقف می‌شود.
+// اینجا از bot.use استفاده شده.
+// next() باعث می‌شود پیام بعد از لاگ
+// به تمام سیستم‌های دیگر هم برسد.
 //
+// قبلاً bot.on("message") باعث می‌شد
+// زنجیره پردازش متوقف شود.
+//
+// =====================================
 
-bot.on(
-  "message",
+bot.use(
   async (ctx, next) => {
 
     try {
 
-      if (ctx.chat) {
+      if (
+        ctx.chat &&
+        ctx.message
+      ) {
 
         console.log(
           "MESSAGE RECEIVED:",
@@ -141,10 +150,8 @@ bot.on(
               ctx.chat.type,
 
             text:
-              ctx.message &&
-              ctx.message.text
-                ? ctx.message.text
-                : "[non-text message]"
+              ctx.message.text ||
+              "[non-text message]"
           }
         );
 
@@ -162,11 +169,8 @@ bot.on(
     }
 
 
-    // =================================
     // بسیار مهم
-    // اجازه بده سایر Handlerها
-    // پیام را دریافت کنند.
-    // =================================
+    // اجازه ادامه پردازش پیام
 
     return next();
 
@@ -175,70 +179,56 @@ bot.on(
 
 
 // =====================================
-// WELCOME
+// WELCOME SYSTEM
 // =====================================
 
-registerWelcome(
-  bot
-);
+registerWelcome(bot);
 
 
 // =====================================
-// COMMANDS
+// COMMAND SYSTEM
 // =====================================
 
-registerCommands(
-  bot
-);
+registerCommands(bot);
 
 
 // =====================================
-// PANEL ACTIONS
+// PANEL
 // =====================================
 
-registerPanelActions(
-  bot
-);
+registerPanelActions(bot);
 
 
 // =====================================
 // HELP
 // =====================================
 
-registerHelp(
-  bot
-);
+registerHelp(bot);
 
 
 // =====================================
 // SETTINGS
 // =====================================
 
-registerSettings(
-  bot
-);
+registerSettings(bot);
 
 
 // =====================================
 // WARNING ACTIONS
 // =====================================
 
-registerWarningActions(
-  bot
-);
+registerWarningActions(bot);
 
 
 // =====================================
 // WARNING SETTINGS
 // =====================================
 
-registerWarningSettings(
-  bot
-);
+registerWarningSettings(bot);
 
 
 // =====================================
-// START COMMAND
+// START
 // =====================================
 
 bot.start(
@@ -249,15 +239,15 @@ bot.start(
       await ctx.reply(
 `『𓆩 PulseGroupManager 𓆪』
 
-🤖 ربات مدیریت گروه فعال شد. ✅
+ربات مدیریت گروه فعال شد ✅
 
-برای باز کردن پنل:
+پنل:
 پنل
 
-برای تنظیمات:
+تنظیمات:
 تنظیمات
 
-برای راهنما:
+راهنما:
 راهنما`
       );
 
@@ -277,11 +267,11 @@ bot.start(
 
 
 // =====================================
-// GLOBAL ERROR HANDLER
+// ERROR HANDLER
 // =====================================
 
 bot.catch(
-  (error, ctx) => {
+  (err, ctx) => {
 
     console.log(
       "================================="
@@ -289,17 +279,23 @@ bot.catch(
 
     console.log(
       "BOT ERROR:",
-      error.message
+      err.message
     );
 
-    if (ctx && ctx.chat) {
+    console.log(
+      "CHAT:",
+      ctx && ctx.chat
+        ? ctx.chat.id
+        : "unknown"
+    );
 
-      console.log(
-        "ERROR CHAT:",
-        ctx.chat.id
-      );
-
-    }
+    console.log(
+      "MESSAGE:",
+      ctx && ctx.message
+        ? ctx.message.text ||
+          "[non-text]"
+        : "unknown"
+    );
 
     console.log(
       "================================="
@@ -326,7 +322,31 @@ bot.launch()
     );
 
     console.log(
-      "Bot is listening for updates..."
+      "BOT IS LISTENING"
+    );
+
+    console.log(
+      "WELCOME: ACTIVE"
+    );
+
+    console.log(
+      "COMMANDS: ACTIVE"
+    );
+
+    console.log(
+      "PANEL: ACTIVE"
+    );
+
+    console.log(
+      "SETTINGS: ACTIVE"
+    );
+
+    console.log(
+      "HELP: ACTIVE"
+    );
+
+    console.log(
+      "WARNINGS: ACTIVE"
     );
 
     console.log(
@@ -348,16 +368,14 @@ bot.launch()
 
 
 // =====================================
-// STOP HANDLERS
+// STOP
 // =====================================
 
 process.once(
   "SIGINT",
   () => {
 
-    bot.stop(
-      "SIGINT"
-    );
+    bot.stop("SIGINT");
 
   }
 );
@@ -367,9 +385,7 @@ process.once(
   "SIGTERM",
   () => {
 
-    bot.stop(
-      "SIGTERM"
-    );
+    bot.stop("SIGTERM");
 
   }
 );
