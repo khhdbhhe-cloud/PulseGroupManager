@@ -1,6 +1,6 @@
 // =====================================
 // PulseGroupManager
-// COMMANDS SYSTEM - FULL VERSION
+// COMMANDS SYSTEM
 // =====================================
 
 const {
@@ -55,27 +55,35 @@ function getReplyUser(ctx) {
 // ریپلای به پیام
 // =====================================
 
-function replyToCommand(
+async function replyToCommand(
   ctx,
   text
 ) {
 
-  return ctx.reply(
-    text,
-    {
+  try {
 
-      reply_parameters: {
+    return await ctx.reply(
+      text,
+      {
+        parse_mode: "HTML",
 
-        message_id:
-          ctx.message.message_id
+        reply_parameters: {
+          message_id:
+            ctx.message.message_id
+        }
+      }
+    );
 
-      },
+  }
 
-      parse_mode:
-        "HTML"
+  catch (error) {
 
-    }
-  );
+    console.log(
+      "REPLY ERROR:",
+      error.message
+    );
+
+  }
 
 }
 
@@ -87,24 +95,12 @@ function replyToCommand(
 function registerCommands(bot) {
 
   console.log(
-    "================================="
-  );
-
-  console.log(
     "COMMAND SYSTEM REGISTERED"
-  );
-
-  console.log(
-    "Listening for commands..."
-  );
-
-  console.log(
-    "================================="
   );
 
 
   // ===================================
-  // پنل مدیریت
+  // پنل
   // ===================================
 
   bot.hears(
@@ -162,10 +158,8 @@ ${target.id}`;
             ),
 
             reply_parameters: {
-
               message_id:
                 ctx.message.message_id
-
             },
 
             parse_mode:
@@ -190,46 +184,33 @@ ${target.id}`;
 
 
   // ===================================
-  // دستور «ربات»
-  // ===================================
-  //
-  // عمداً با bot.on("text") نوشته شده
-  // تا پیام فارسی «ربات» حتماً بررسی شود.
-  //
+  // ربات
   // ===================================
 
-  bot.on(
-    "text",
+  bot.hears(
+    /^ربات$/u,
     async ctx => {
+
+      console.log(
+        "BOT COMMAND DETECTED"
+      );
+
 
       try {
 
-        if (!isGroup(ctx))
+        if (!isGroup(ctx)) {
+
+          console.log(
+            "BOT COMMAND: NOT GROUP"
+          );
+
           return;
 
-
-        const text =
-          String(
-            ctx.message.text || ""
-          ).trim();
+        }
 
 
-        console.log(
-          "COMMAND TEXT CHECK:",
-          JSON.stringify(text)
-        );
-
-
-        if (text !== "ربات")
-          return;
-
-
-        console.log(
-          "BOT COMMAND MATCHED"
-        );
-
-
-        return await ctx.reply(
+        return await replyToCommand(
+          ctx,
 `『𓆩 ★ PulseGroupManager ★ 𓆪』
 
 🤖 ربات فعاله و آماده‌ست ✅
@@ -241,20 +222,7 @@ ${ctx.chat.title || "بدون نام"}
 ${ctx.from.first_name || "کاربر"}
 
 🆔 آیدی:
-${ctx.from.id}`,
-          {
-
-            reply_parameters: {
-
-              message_id:
-                ctx.message.message_id
-
-            },
-
-            parse_mode:
-              "HTML"
-
-          }
+${ctx.from.id}`
         );
 
       }
@@ -262,7 +230,7 @@ ${ctx.from.id}`,
       catch (error) {
 
         console.log(
-          "BOT TEXT HANDLER ERROR:",
+          "BOT COMMAND ERROR:",
           error.message
         );
 
@@ -316,7 +284,7 @@ ${ctx.chat.title || "بدون نام"}`
 
 
   // ===================================
-  // تست ربات
+  // تست
   // ===================================
 
   bot.hears(
@@ -341,7 +309,7 @@ ${ctx.chat.title || "بدون نام"}`
       catch (error) {
 
         console.log(
-          "TEST COMMAND ERROR:",
+          "TEST ERROR:",
           error.message
         );
 
