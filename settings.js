@@ -1,135 +1,1062 @@
-  // ===================================
-  // قوانین
-  // ===================================
+// =====================================
+// PulseGroupManager
+// SETTINGS SYSTEM - FINAL
+// =====================================
 
-  bot.action(
-    /^set_rules:(\d+)$/,
-    async ctx => {
+const { Markup } = require("telegraf");
+
+const {
+  checkAdmin,
+  checkOwner
+} = require("./security");
+
+const {
+  getWarningSettings,
+  setMaxWarnings,
+  setWarningPunishment,
+  setWarningDuration
+} = require("./warning-settings");
+
+const {
+  getGroup,
+  saveDB
+} = require("./database");
+
+
+// =====================================
+// دکمه تنظیمات
+// =====================================
+
+function settingButton(
+  text,
+  action,
+  ownerId
+) {
+
+  return Markup.button.callback(
+    `『𓆩 ${text} 𓆪』`,
+    `${action}:${ownerId}`
+  );
+
+}
+
+
+// =====================================
+// آماده‌سازی سیستم لقب
+// =====================================
+
+function ensureNicknameSettings(group) {
+
+  if (!group.botNicknames) {
+
+    group.botNicknames = {};
+
+  }
+
+
+  if (
+    group.nicknameLocked === undefined
+  ) {
+
+    group.nicknameLocked = false;
+
+  }
+
+
+  /*
+   * اگر نسخه قدیمی اطلاعات لقب را
+   * داخل botReply.nicknames داشته باشد،
+   * اطلاعات را به سیستم جدید منتقل می‌کنیم.
+   */
+
+  if (
+    group.botReply &&
+    group.botReply.nicknames &&
+    typeof group.botReply.nicknames === "object"
+  ) {
+
+    const oldNicknames =
+      group.botReply.nicknames;
+
+
+    for (
+      const userId of Object.keys(oldNicknames)
+    ) {
 
       if (
-        !(await protectSettings(ctx))
-      ) return;
+        !group.botNicknames[userId] &&
+        oldNicknames[userId]
+      ) {
 
-      await ctx.answerCbQuery();
+        group.botNicknames[userId] =
+          oldNicknames[userId];
 
-      await ctx.editMessageText(
+      }
 
-`『𓆩 تنظیمات قوانین 𓆪』
+    }
 
-مدیریت قوانین گروه
 
-★ تنظیم قوانین گروه
-★ نمایش قوانین
-★ ویرایش قوانین
-★ حذف قوانین
+    delete group.botReply.nicknames;
 
-قوانین گروه از این بخش قابل مدیریت است.`,
+    saveDB();
 
-        backToSettings(
-          ctx.from.id
-        )
+  }
 
+
+  return group.botNicknames;
+
+}
+
+
+// =====================================
+// وضعیت قفل لقب
+// =====================================
+
+function isNicknameLocked(
+  chatId
+) {
+
+  const group =
+    getGroup(chatId);
+
+
+  ensureNicknameSettings(group);
+
+
+  return Boolean(
+    group.nicknameLocked
+  );
+
+}
+
+
+// =====================================
+// قفل / باز کردن لقب
+// =====================================
+
+function setNicknameLocked(
+  chatId,
+  value
+) {
+
+  const group =
+    getGroup(chatId);
+
+
+  ensureNicknameSettings(group);
+
+
+  group.nicknameLocked =
+    Boolean(value);
+
+
+  saveDB();
+
+
+  return group.nicknameLocked;
+
+}
+
+
+// =====================================
+// دریافت لقب کاربر
+// =====================================
+
+function getUserNickname(
+  chatId,
+  userId
+) {
+
+  const group =
+    getGroup(chatId);
+
+
+  const nicknames =
+    ensureNicknameSettings(group);
+
+
+  return (
+    nicknames[String(userId)] ||
+    null
+  );
+
+}
+
+
+// =====================================
+// تعیین لقب کاربر
+// =====================================
+
+function setUserNickname(
+  chatId,
+  userId,
+  nickname
+) {
+
+  const group =
+    getGroup(chatId);
+
+
+  const nicknames =
+    ensureNicknameSettings(group);
+
+
+  const text =
+    String(nickname)
+      .trim();
+
+
+  if (!text) {
+
+    return false;
+
+  }
+
+
+  nicknames[String(userId)] =
+    text;
+
+
+  saveDB();
+
+
+  return text;
+
+}
+
+
+// =====================================
+// حذف لقب کاربر
+// =====================================
+
+function removeUserNickname(
+  chatId,
+  userId
+) {
+
+  const group =
+    getGroup(chatId);
+
+
+  const nicknames =
+    ensureNicknameSettings(group);
+
+
+  const id =
+    String(userId);
+
+
+  if (!nicknames[id]) {
+
+    return false;
+
+  }
+
+
+  delete nicknames[id];
+
+  saveDB();
+
+
+  return true;
+
+}
+
+
+// =====================================
+// تعداد لقب‌های ثبت‌شده
+// =====================================
+
+function getNicknameCount(
+  chatId
+) {
+
+  const group =
+    getGroup(chatId);
+
+
+  const nicknames =
+    ensureNicknameSettings(group);
+
+
+  return Object.keys(
+    nicknames
+  ).length;
+
+}
+
+
+// =====================================
+// دکمه لقب در صفحه اصلی تنظیمات
+// =====================================
+
+function nicknameSettingButton(
+  ownerId,
+  chatId
+) {
+
+  const locked =
+    chatId
+      ? isNicknameLocked(chatId)
+      : false;
+
+
+  return settingButton(
+    locked
+      ? "☆ لقب"
+      : "★ لقب",
+    "set_nickname",
+    ownerId
+  );
+
+}
+
+
+// =====================================
+// صفحه اصلی تنظیمات
+// =====================================
+
+function settingsPanel(
+  ownerId,
+  chatId = null
+) {
+
+  return Markup.inlineKeyboard([
+
+    [
+      settingButton(
+        "خوشامدگویی",
+        "set_welcome",
+        ownerId
+      )
+    ],
+
+    [
+      settingButton(
+        "مدیریت",
+        "set_management",
+        ownerId
+      )
+    ],
+
+    [
+      settingButton(
+        "اختیار",
+        "set_warn",
+        ownerId
+      )
+    ],
+
+    [
+      settingButton(
+        "سکوت",
+        "set_mute",
+        ownerId
+      )
+    ],
+
+    [
+      settingButton(
+        "محدودیت",
+        "set_restrict",
+        ownerId
+      )
+    ],
+
+    [
+      settingButton(
+        "بن",
+        "set_ban",
+        ownerId
+      )
+    ],
+
+    [
+      settingButton(
+        "فوروارد",
+        "set_forward",
+        ownerId
+      )
+    ],
+
+    [
+      settingButton(
+        "ضدفلود",
+        "set_flood",
+        ownerId
+      )
+    ],
+
+    [
+      settingButton(
+        "ورود و خروج",
+        "set_joinleave",
+        ownerId
+      )
+    ],
+
+    [
+      settingButton(
+        "پیام‌ها",
+        "set_messages",
+        ownerId
+      )
+    ],
+
+    [
+      settingButton(
+        "قوانین",
+        "set_rules",
+        ownerId
+      )
+    ],
+
+    // -------------------------------
+    // لقب
+    // -------------------------------
+
+    [
+      nicknameSettingButton(
+        ownerId,
+        chatId
+      )
+    ],
+
+    // -------------------------------
+    // لقب و پاسخ ربات
+    // -------------------------------
+
+    [
+      settingButton(
+        "لقب و پاسخ ربات",
+        "set_bot_reply",
+        ownerId
+      )
+    ],
+
+    [
+      settingButton(
+        "بستن",
+        "settings_close",
+        ownerId
+      )
+    ]
+
+  ]);
+
+}
+
+
+// =====================================
+// متن تنظیمات
+// =====================================
+
+function settingsText() {
+
+  return `『𓆩 تنظیمات PulseGroupManager 𓆪』
+
+بخش تنظیمات گروه
+
+گزینه موردنظر را انتخاب کنید.
+
+★ فقط مدیران و مالک گروه دسترسی دارند.
+
+★ تنظیمات هر پنل فقط برای شخصی است
+که آن را باز کرده است.`;
+
+}
+
+
+// =====================================
+// بررسی دسترسی + صاحب پنل
+// =====================================
+
+async function protectSettings(ctx) {
+
+  const access =
+    await checkAdmin(ctx);
+
+
+  if (!access.ok) {
+
+    try {
+
+      await ctx.answerCbQuery(
+        access.text ||
+        "⛔ فقط مدیران و مالک گروه دسترسی دارند.",
+        {
+          show_alert: true
+        }
       );
+
+    }
+
+    catch {}
+
+    return false;
+
+  }
+
+
+  if (
+    ctx.callbackQuery &&
+    ctx.match &&
+    ctx.match[1]
+  ) {
+
+    const ownerId =
+      String(ctx.match[1]);
+
+
+    const currentUserId =
+      String(ctx.from.id);
+
+
+    if (
+      ownerId !== currentUserId
+    ) {
+
+      try {
+
+        await ctx.answerCbQuery(
+          "『𓆩 ★ این بخش برای شما نیست ★ 𓆪』",
+          {
+            show_alert: true
+          }
+        );
+
+      }
+
+      catch {}
+
+      return false;
+
+    }
+
+  }
+
+
+  return true;
+
+}
+
+
+// =====================================
+// بررسی فقط مالک
+// =====================================
+
+async function protectOwner(ctx) {
+
+  const access =
+    await checkOwner(ctx);
+
+
+  if (!access.ok) {
+
+    try {
+
+      await ctx.answerCbQuery(
+        access.text ||
+        "⛔ فقط مالک گروه اجازه این کار را دارد.",
+        {
+          show_alert: true
+        }
+      );
+
+    }
+
+    catch {}
+
+    return false;
+
+  }
+
+
+  return true;
+
+}
+
+
+// =====================================
+// دکمه‌های برگشت
+// =====================================
+
+function backToSettings(
+  ownerId,
+  chatId = null
+) {
+
+  return Markup.inlineKeyboard([
+
+    [
+      settingButton(
+        "بازگشت",
+        "settings_home",
+        ownerId
+      )
+    ],
+
+    [
+      settingButton(
+        "بستن",
+        "settings_close",
+        ownerId
+      )
+    ]
+
+  ]);
+
+}
+
+
+// =====================================
+// ساخت تنظیمات پاسخ ربات
+// =====================================
+
+function ensureBotReplySettings(group) {
+
+  if (!group.botReply) {
+
+    group.botReply = {
+
+      enabled: true,
+
+      random: true,
+
+      replies: [
+
+        "جانم، هستم 🌹",
+
+        "جانم؟ من همیشه فعالم 😎",
+
+        "بله؟ ربات اینجاست ❤️",
+
+        "هستم، بگو ببینم چی شده 😄",
+
+        "جانم، گوشم با توئه 🌹",
+
+        "حاضرم، زیبای گپ 😎"
+
+      ]
+
+    };
+
+
+    saveDB();
+
+  }
+
+
+  if (
+    !Array.isArray(
+      group.botReply.replies
+    )
+  ) {
+
+    group.botReply.replies = [];
+
+    saveDB();
+
+  }
+
+
+  if (
+    group.botReply.enabled === undefined
+  ) {
+
+    group.botReply.enabled = true;
+
+    saveDB();
+
+  }
+
+
+  if (
+    group.botReply.random === undefined
+  ) {
+
+    group.botReply.random = true;
+
+    saveDB();
+
+  }
+
+
+  // مهاجرت اطلاعات لقب قدیمی
+  ensureNicknameSettings(group);
+
+
+  return group.botReply;
+
+}
+
+
+// =====================================
+// دریافت پاسخ‌های ربات
+// =====================================
+
+function getBotReplies(
+  chatId
+) {
+
+  const group =
+    getGroup(chatId);
+
+
+  const botReply =
+    ensureBotReplySettings(group);
+
+
+  return botReply.replies;
+
+}
+
+
+// =====================================
+// اضافه کردن پاسخ ربات
+// =====================================
+
+function addBotReply(
+  chatId,
+  reply
+) {
+
+  const group =
+    getGroup(chatId);
+
+
+  const botReply =
+    ensureBotReplySettings(group);
+
+
+  const text =
+    String(reply).trim();
+
+
+  if (!text)
+    return false;
+
+
+  if (
+    !botReply.replies.includes(text)
+  ) {
+
+    botReply.replies.push(text);
+
+    saveDB();
+
+  }
+
+
+  return true;
+
+}
+
+
+// =====================================
+// حذف پاسخ ربات
+// =====================================
+
+function removeBotReply(
+  chatId,
+  reply
+) {
+
+  const group =
+    getGroup(chatId);
+
+
+  const botReply =
+    ensureBotReplySettings(group);
+
+
+  botReply.replies =
+    botReply.replies.filter(
+      item => item !== reply
+    );
+
+
+  saveDB();
+
+
+  return true;
+
+}
+
+
+// =====================================
+// فعال / غیرفعال کردن پاسخ ربات
+// =====================================
+
+function setBotReplyEnabled(
+  chatId,
+  value
+) {
+
+  const group =
+    getGroup(chatId);
+
+
+  const botReply =
+    ensureBotReplySettings(group);
+
+
+  botReply.enabled =
+    Boolean(value);
+
+
+  saveDB();
+
+
+  return botReply.enabled;
+
+}
+
+
+// =====================================
+// انتخاب پاسخ ربات
+// =====================================
+
+function getRandomBotReply(
+  chatId
+) {
+
+  const group =
+    getGroup(chatId);
+
+
+  const botReply =
+    ensureBotReplySettings(group);
+
+
+  if (
+    !botReply.enabled ||
+    !botReply.replies.length
+  ) {
+
+    return null;
+
+  }
+
+
+  const index =
+    Math.floor(
+      Math.random() *
+      botReply.replies.length
+    );
+
+
+  return botReply.replies[index];
+
+}
+
+
+// =====================================
+// جایگذاری لقب داخل پاسخ
+// =====================================
+
+function formatBotReply(
+  text,
+  nickname
+) {
+
+  let result =
+    String(text);
+
+
+  if (nickname) {
+
+    result =
+      result
+        .replace(
+          /\{nickname\}/gi,
+          nickname
+        )
+        .replace(
+          /\{لقب\}/gu,
+          nickname
+        );
+
+  }
+
+
+  return result;
+
+}
+
+
+// =====================================
+// ثبت تنظیمات
+// =====================================
+
+function registerSettings(bot) {
+
+
+  // ===================================
+  // دستور تنظیمات
+  // ===================================
+
+  bot.hears(
+    /^تنظیمات$/u,
+    async ctx => {
+
+      try {
+
+        if (
+          !ctx.chat ||
+          (
+            ctx.chat.type !== "group" &&
+            ctx.chat.type !== "supergroup"
+          )
+        ) {
+
+          return;
+
+        }
+
+
+        const access =
+          await checkAdmin(ctx);
+
+
+        if (!access.ok) {
+
+          return;
+
+        }
+
+
+        await ctx.reply(
+          settingsText(),
+          {
+
+            ...settingsPanel(
+              ctx.from.id,
+              ctx.chat.id
+            ),
+
+            reply_parameters: {
+
+              message_id:
+                ctx.message.message_id
+
+            }
+
+          }
+        );
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "SETTINGS OPEN ERROR:",
+          error.message
+        );
+
+      }
 
     }
   );
 
 
   // ===================================
-  // لقب و پاسخ ربات
+  // بازگشت
   // ===================================
 
   bot.action(
-    /^set_bot_reply:(\d+)$/,
+    /^settings_home:(\d+)$/,
     async ctx => {
 
       if (
         !(await protectSettings(ctx))
       ) return;
 
+
       await ctx.answerCbQuery();
 
-      const group =
-        getGroup(ctx.chat.id);
 
-      const config =
-        ensureBotReplySettings(group);
+      try {
 
-      const status =
-        config.enabled
-          ? "★ فعال"
-          : "☆ غیرفعال";
+        await ctx.editMessageText(
+          settingsText(),
 
-      const mode =
-        config.random
-          ? "★ تصادفی"
-          : "☆ ثابت";
+          settingsPanel(
+            ctx.from.id,
+            ctx.chat.id
+          )
+
+        );
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "SETTINGS HOME ERROR:",
+          error.message
+        );
+
+      }
+
+    }
+  );
+
+
+  // ===================================
+  // لقب
+  // ===================================
+
+  bot.action(
+    /^set_nickname:(\d+)$/,
+    async ctx => {
+
+      if (
+        !(await protectSettings(ctx))
+      ) return;
+
+
+      await ctx.answerCbQuery();
+
+
+      const locked =
+        isNicknameLocked(
+          ctx.chat.id
+        );
+
+
+      const count =
+        getNicknameCount(
+          ctx.chat.id
+        );
+
 
       await ctx.editMessageText(
 
-`『𓆩 لقب و پاسخ ربات 𓆪』
+`『𓆩 لقب 𓆪』
 
-وضعیت پاسخ ربات:
+وضعیت:
 
-${status}
-
-حالت پاسخ:
-
-${mode}
-
-تعداد پاسخ‌های ثبت‌شده:
-
-★ ${config.replies.length}
+${locked ? "☆ لقب" : "★ لقب"}
 
 تعداد لقب‌های ثبت‌شده:
 
-★ ${Object.keys(config.nicknames).length}
+★ ${count}
 
-ربات می‌تواند هنگام دریافت «ربات»
-با پاسخ‌های مختلف جواب بدهد.
+تنظیم یا حذف لقب فقط توسط مدیران و مالک انجام می‌شود.
 
-همچنین برای کاربران می‌توان لقب اختصاصی تعیین کرد.
+لقب مالک فقط توسط خود مالک قابل تغییر است.
 
-مثال پاسخ:
-
-جانم، هستم {nickname} 🌹
-
-یا:
-
-جانم، زیبای گپ اینجاست 😎`,
+کاربران عادی فقط می‌توانند لقب خودشان یا لقب کاربر ریپلای‌شده را مشاهده کنند.`,
 
         Markup.inlineKeyboard([
 
           [
             settingButton(
-              config.enabled
-                ? "☆ خاموش کردن پاسخ"
-                : "★ روشن کردن پاسخ",
-              "bot_reply_toggle",
-              ctx.from.id
-            )
-          ],
-
-          [
-            settingButton(
-              "مدیریت پاسخ‌ها",
-              "bot_reply_list",
-              ctx.from.id
-            )
-          ],
-
-          [
-            settingButton(
-              "مدیریت لقب‌ها",
-              "bot_reply_nicknames",
-              ctx.from.id
-            )
-          ],
-
-          [
-            settingButton(
-              "حالت پاسخ",
-              "bot_reply_mode",
+              locked
+                ? "★ لقب"
+                : "☆ لقب",
+              "nickname_toggle",
               ctx.from.id
             )
           ],
@@ -159,54 +1086,77 @@ ${mode}
 
 
   // ===================================
-  // روشن / خاموش کردن پاسخ ربات
+  // قفل / بازکردن لقب
   // ===================================
 
   bot.action(
-    /^bot_reply_toggle:(\d+)$/,
+    /^nickname_toggle:(\d+)$/,
     async ctx => {
 
       if (
         !(await protectSettings(ctx))
       ) return;
 
-      const group =
-        getGroup(ctx.chat.id);
 
-      const config =
-        ensureBotReplySettings(group);
+      const locked =
+        isNicknameLocked(
+          ctx.chat.id
+        );
 
-      config.enabled =
-        !config.enabled;
 
-      saveDB();
+      const newValue =
+        !locked;
+
+
+      setNicknameLocked(
+        ctx.chat.id,
+        newValue
+      );
+
 
       await ctx.answerCbQuery(
-        config.enabled
-          ? "★ پاسخ ربات فعال شد."
-          : "☆ پاسخ ربات غیرفعال شد."
+        newValue
+          ? "☆ لقب قفل شد."
+          : "★ لقب باز شد."
       );
+
+
+      const count =
+        getNicknameCount(
+          ctx.chat.id
+        );
+
 
       await ctx.editMessageText(
 
-`『𓆩 پاسخ ربات 𓆪』
+`『𓆩 لقب 𓆪』
 
 وضعیت:
 
-${config.enabled
-  ? "★ فعال"
-  : "☆ غیرفعال"}
+${newValue
+  ? "☆ لقب"
+  : "★ لقب"}
 
-${config.enabled
-  ? "ربات به دستور «ربات» پاسخ می‌دهد."
-  : "پاسخ‌گویی ربات به دستور «ربات» خاموش است."}`,
+تعداد لقب‌های ثبت‌شده:
+
+★ ${count}`,
 
         Markup.inlineKeyboard([
 
           [
             settingButton(
+              newValue
+                ? "★ لقب"
+                : "☆ لقب",
+              "nickname_toggle",
+              ctx.from.id
+            )
+          ],
+
+          [
+            settingButton(
               "بازگشت",
-              "set_bot_reply",
+              "settings_home",
               ctx.from.id
             )
           ],
@@ -228,65 +1178,66 @@ ${config.enabled
 
 
   // ===================================
-  // حالت پاسخ
+  // خوشامدگویی
   // ===================================
 
   bot.action(
-    /^bot_reply_mode:(\d+)$/,
+    /^set_welcome:(\d+)$/,
     async ctx => {
 
       if (
         !(await protectSettings(ctx))
       ) return;
+
 
       await ctx.answerCbQuery();
 
-      const group =
-        getGroup(ctx.chat.id);
-
-      const config =
-        ensureBotReplySettings(group);
 
       await ctx.editMessageText(
 
-`『𓆩 حالت پاسخ ربات 𓆪』
+`『𓆩 تنظیمات خوشامدگویی 𓆪』
 
-حالت فعلی:
+از این قسمت می‌توانید سیستم خوشامدگویی اعضای جدید را مدیریت کنید.
 
-${config.random
-  ? "★ تصادفی"
-  : "★ ثابت"}
+★ وضعیت خوشامدگویی
 
-در حالت تصادفی، ربات از بین پاسخ‌های ثبت‌شده
-یک پاسخ را انتخاب می‌کند.`,
+خوشامد روشن
+خوشامد خاموش
 
-        Markup.inlineKeyboard([
+★ تنظیم رسانه خوشامد
 
-          [
-            settingButton(
-              "★ تصادفی",
-              "bot_reply_random",
-              ctx.from.id
-            )
-          ],
+تنظیم گیف
+تنظیم ویدیو
+تنظیم عکس
+تنظیم استیکر
 
-          [
-            settingButton(
-              "☆ ثابت",
-              "bot_reply_fixed",
-              ctx.from.id
-            )
-          ],
+برای تنظیم رسانه:
+روی رسانه موردنظر ریپلای کنید و دستور مربوطه را ارسال کنید.
 
-          [
-            settingButton(
-              "بازگشت",
-              "set_bot_reply",
-              ctx.from.id
-            )
-          ]
+مثال:
 
-        ])
+روی GIF ریپلای کنید
+تنظیم گیف
+
+★ حذف رسانه
+
+حذف خوشامد
+
+با این دستور رسانه خوشامد حذف می‌شود.
+
+★ مقام خوشامد
+
+مقام خوشامد تنظیم
+
+فقط مالک گروه می‌تواند این مقام را به یک مدیر بدهد.
+
+حذف مقام خوشامد
+
+مقام خوشامد مدیر را حذف می‌کند.`,
+
+        backToSettings(
+          ctx.from.id
+        )
 
       );
 
@@ -295,179 +1246,37 @@ ${config.random
 
 
   // ===================================
-  // حالت تصادفی
+  // مدیریت
   // ===================================
 
   bot.action(
-    /^bot_reply_random:(\d+)$/,
+    /^set_management:(\d+)$/,
     async ctx => {
 
       if (
         !(await protectSettings(ctx))
       ) return;
 
-      const group =
-        getGroup(ctx.chat.id);
-
-      const config =
-        ensureBotReplySettings(group);
-
-      config.random = true;
-
-      saveDB();
-
-      await ctx.answerCbQuery(
-        "★ حالت تصادفی فعال شد."
-      );
-
-      await ctx.editMessageText(
-
-`『𓆩 حالت پاسخ 𓆪』
-
-★ حالت تصادفی فعال است.
-
-ربات از بین پاسخ‌های موجود،
-به‌صورت تصادفی پاسخ انتخاب می‌کند.`,
-
-        Markup.inlineKeyboard([
-
-          [
-            settingButton(
-              "بازگشت",
-              "set_bot_reply",
-              ctx.from.id
-            )
-          ]
-
-        ])
-
-      );
-
-    }
-  );
-
-
-  // ===================================
-  // حالت ثابت
-  // ===================================
-
-  bot.action(
-    /^bot_reply_fixed:(\d+)$/,
-    async ctx => {
-
-      if (
-        !(await protectSettings(ctx))
-      ) return;
-
-      const group =
-        getGroup(ctx.chat.id);
-
-      const config =
-        ensureBotReplySettings(group);
-
-      config.random = false;
-
-      saveDB();
-
-      await ctx.answerCbQuery(
-        "★ حالت ثابت فعال شد."
-      );
-
-      await ctx.editMessageText(
-
-`『𓆩 حالت پاسخ 𓆪』
-
-★ حالت ثابت فعال است.
-
-پاسخ‌ها در حالت ثابت
-به ترتیب ثبت‌شده استفاده می‌شوند.`,
-
-        Markup.inlineKeyboard([
-
-          [
-            settingButton(
-              "بازگشت",
-              "set_bot_reply",
-              ctx.from.id
-            )
-          ]
-
-        ])
-
-      );
-
-    }
-  );
-
-
-  // ===================================
-  // لیست پاسخ‌های ربات
-  // ===================================
-
-  bot.action(
-    /^bot_reply_list:(\d+)$/,
-    async ctx => {
-
-      if (
-        !(await protectSettings(ctx))
-      ) return;
 
       await ctx.answerCbQuery();
 
-      const replies =
-        getBotReplies(ctx.chat.id);
-
-      let text =
-`『𓆩 پاسخ‌های ربات 𓆪』
-
-تعداد پاسخ‌ها:
-
-★ ${replies.length}
-
-`;
-
-      if (!replies.length) {
-
-        text +=
-          "☆ هنوز پاسخی ثبت نشده است.";
-
-      } else {
-
-        replies
-          .slice(0, 30)
-          .forEach(
-            (reply, index) => {
-
-              text +=
-                `${index + 1}. ${reply}\n`;
-
-            }
-          );
-
-        if (replies.length > 30) {
-
-          text +=
-            `\n... و ${replies.length - 30} پاسخ دیگر`;
-
-        }
-
-      }
 
       await ctx.editMessageText(
 
-        text,
+`『𓆩 تنظیمات مدیریت 𓆪』
 
-        Markup.inlineKeyboard([
+تنظیمات مربوط به دسترسی مدیران.
 
-          [
-            settingButton(
-              "بازگشت",
-              "set_bot_reply",
-              ctx.from.id
-            )
-          ]
+★ استفاده از پنل
+★ اجرای دستورات
+★ مدیریت کاربران
+★ مدیریت تنظیمات
 
-        ])
+فقط مدیر و مالک اجازه تغییر دارند.`,
+
+        backToSettings(
+          ctx.from.id
+        )
 
       );
 
@@ -476,147 +1285,184 @@ ${config.random
 
 
   // ===================================
-  // لیست لقب‌ها
+  // اختیار / اخطار
   // ===================================
 
   bot.action(
-    /^bot_reply_nicknames:(\d+)$/,
+    /^set_warn:(\d+)$/,
     async ctx => {
 
       if (
         !(await protectSettings(ctx))
       ) return;
 
+
       await ctx.answerCbQuery();
 
-      const group =
-        getGroup(ctx.chat.id);
 
       const config =
-        ensureBotReplySettings(group);
-
-      const nicknames =
-        config.nicknames;
-
-      const ids =
-        Object.keys(nicknames);
-
-      let text =
-`『𓆩 لقب‌های ربات 𓆪』
-
-تعداد لقب‌های ثبت‌شده:
-
-★ ${ids.length}
-
-`;
-
-      if (!ids.length) {
-
-        text +=
-          "☆ هنوز لقبی ثبت نشده است.";
-
-      } else {
-
-        ids
-          .slice(0, 30)
-          .forEach(
-            (id, index) => {
-
-              text +=
-                `${index + 1}. ${nicknames[id]}\n`;
-
-            }
-          );
-
-      }
-
-      text +=
-        `\nبرای تعیین لقب اختصاصی، می‌توان از قابلیت مدیریت کاربر استفاده کرد.`;
-
-      await ctx.editMessageText(
-
-        text,
-
-        Markup.inlineKeyboard([
-
-          [
-            settingButton(
-              "بازگشت",
-              "set_bot_reply",
-              ctx.from.id
-            )
-          ]
-
-        ])
-
-      );
-
-    }
-  );
-
-
-  // ===================================
-  // بستن تنظیمات
-  // ===================================
-
-  bot.action(
-    /^settings_close:(\d+)$/,
-    async ctx => {
-
-      if (
-        !(await protectSettings(ctx))
-      ) return;
-
-      await ctx.answerCbQuery();
-
-      try {
-
-        await ctx.deleteMessage();
-
-      }
-
-      catch (error) {
-
-        console.log(
-          "SETTINGS CLOSE ERROR:",
-          error.message
+        getWarningSettings(
+          ctx.chat.id
         );
 
-      }
+
+      const punishmentText =
+        config.punishment === "mute"
+          ? "سکوت"
+          : config.punishment === "restrict"
+            ? "محدودیت"
+            : "بن";
+
+
+      await ctx.editMessageText(
+
+`『𓆩 تنظیمات اختیار 𓆪』
+
+تعداد اخطار فعلی:
+★ ${config.maxWarnings}
+
+مجازات فعلی:
+★ ${punishmentText}
+
+مدت مجازات:
+★ ${config.duration} دقیقه
+
+تعداد اخطار را انتخاب کنید:`,
+
+        Markup.inlineKeyboard([
+
+          [
+            settingButton(
+              "۱ اخطار",
+              "warn_count_1",
+              ctx.from.id
+            ),
+
+            settingButton(
+              "۲ اخطار",
+              "warn_count_2",
+              ctx.from.id
+            )
+          ],
+
+          [
+            settingButton(
+              "۳ اخطار",
+              "warn_count_3",
+              ctx.from.id
+            ),
+
+            settingButton(
+              "۵ اخطار",
+              "warn_count_5",
+              ctx.from.id
+            )
+          ],
+
+          [
+            settingButton(
+              "۱۰ اخطار",
+              "warn_count_10",
+              ctx.from.id
+            )
+          ],
+
+          [
+            settingButton(
+              "مجازات: سکوت",
+              "warn_punish_mute",
+              ctx.from.id
+            )
+          ],
+
+          [
+            settingButton(
+              "مجازات: محدودیت",
+              "warn_punish_restrict",
+              ctx.from.id
+            )
+          ],
+
+          [
+            settingButton(
+              "مجازات: بن",
+              "warn_punish_ban",
+              ctx.from.id
+            )
+          ],
+
+          [
+            settingButton(
+              "مدت ۱ ساعت",
+              "warn_duration_60",
+              ctx.from.id
+            ),
+
+            settingButton(
+              "مدت ۲ ساعت",
+              "warn_duration_120",
+              ctx.from.id
+            )
+          ],
+
+          [
+            settingButton(
+              "مدت ۳ ساعت",
+              "warn_duration_180",
+              ctx.from.id
+            ),
+
+            settingButton(
+              "مدت ۶ ساعت",
+              "warn_duration_360",
+              ctx.from.id
+            )
+          ],
+
+          [
+            settingButton(
+              "بازگشت",
+              "settings_home",
+              ctx.from.id
+            )
+          ]
+
+        ])
+
+      );
 
     }
   );
 
-}
+
+  // ===================================
+  // تعداد اخطار
+  // ===================================
+
+  bot.action(
+    /^warn_count_(1|2|3|5|10):(\d+)$/,
+    async ctx => {
+
+      if (
+        !(await protectSettings(ctx))
+      ) return;
 
 
-// =====================================
-// خروجی‌های فایل
-// =====================================
+      const count =
+        Number(ctx.match[1]);
 
-module.exports = {
 
-  registerSettings,
+      setMaxWarnings(
+        ctx.chat.id,
+        count
+      );
 
-  settingsPanel,
-  settingsText,
 
-  protectSettings,
-  protectOwner,
+      await ctx.answerCbQuery(
+        `تعداد اخطار روی ${count} تنظیم شد.`
+      );
 
-  ensureBotReplySettings,
 
-  getUserNickname,
-  setUserNickname,
-  removeUserNickname,
+      await ctx.editMessageText(
 
-  getBotReplies,
-  addBotReply,
-  removeBotReply,
-
-  setBotReplyEnabled,
-  getRandomBotReply,
-
-  formatBotReply
-
-};
+`『𓆩 ت
