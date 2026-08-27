@@ -9,13 +9,16 @@ const {
 } = require("./panel");
 
 const {
-  checkAdmin
+  checkAdmin,
+  checkOwner
 } = require("./security");
 
 const {
-  getGroup,
-  saveDB
-} = require("./database");
+  getUserNickname,
+  setUserNickname,
+  removeUserNickname,
+  isNicknameLocked
+} = require("./settings");
 
 
 // =====================================
@@ -37,7 +40,7 @@ function isGroup(ctx) {
 
 
 // =====================================
-// ریپلای به پیام کاربر
+// ریپلای به پیام فعلی
 // =====================================
 
 async function replyToCommand(
@@ -72,13 +75,131 @@ async function requireAdmin(ctx) {
   const access =
     await checkAdmin(ctx);
 
-
   if (!access.ok) {
 
     await replyToCommand(
       ctx,
       access.text ||
       "⛔ فقط مدیران و مالک گروه دسترسی دارند."
+    );
+
+    return false;
+
+  }
+
+  return true;
+
+}
+
+
+// =====================================
+// نام کاربر
+// =====================================
+
+function getDisplayName(user) {
+
+  if (!user)
+    return "کاربر";
+
+
+  if (user.username) {
+
+    return `@${user.username}`;
+
+  }
+
+
+  const name = [
+
+    user.first_name,
+    user.last_name
+
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+
+  return name || "کاربر";
+
+}
+
+
+// =====================================
+// بررسی مالک بودن کاربر هدف
+// =====================================
+
+async function isTargetOwner(
+  ctx,
+  userId
+) {
+
+  try {
+
+    const member =
+      await ctx.telegram.getChatMember(
+        ctx.chat.id,
+        userId
+      );
+
+
+    return (
+      member &&
+      member.status === "creator"
+    );
+
+  }
+
+  catch (error) {
+
+    console.log(
+      "TARGET OWNER CHECK ERROR:",
+      error.message
+    );
+
+    return false;
+
+  }
+
+}
+
+
+// =====================================
+// بررسی اجازه تغییر لقب کاربر هدف
+// =====================================
+//
+// مدیر و مالک می‌توانند لقب ممبرها را تنظیم کنند.
+// اما لقب مالک فقط توسط خود مالک قابل تغییر است.
+// =====================================
+
+async function canChangeTargetNickname(
+  ctx,
+  targetUserId
+) {
+
+  const owner =
+    await isTargetOwner(
+      ctx,
+      targetUserId
+    );
+
+
+  if (!owner) {
+
+    return true;
+
+  }
+
+
+  const access =
+    await checkOwner(ctx);
+
+
+  if (!access.ok) {
+
+    await replyToCommand(
+      ctx,
+      "⛔ لقب مالک فقط توسط خود مالک قابل تنظیم یا حذف است."
     );
 
     return false;
@@ -92,105 +213,73 @@ async function requireAdmin(ctx) {
 
 
 // =====================================
-// ایجاد بخش لقب‌ها
+// پاسخ مشخصات لقب
 // =====================================
 
-function getNicknames(chatId) {
-
-  const group =
-    getGroup(chatId);
-
-
-  if (!group.botNicknames) {
-
-    group.botNicknames = {};
-
-    saveDB();
-
-  }
-
-
-  return group.botNicknames;
-
-}
-
-
-// =====================================
-// دریافت لقب کاربر
-// =====================================
-
-function getUserNickname(
-  chatId,
-  userId
+async function replyNicknameInfo(
+  ctx,
+  targetUser,
+  nickname
 ) {
 
-  const nicknames =
-    getNicknames(chatId);
+  const displayName =
+    getDisplayName(targetUser);
 
 
-  return (
-    nicknames[String(userId)] ||
-    null
+  const text =
+    nickname
+
+      ? `『𓆩 ★ لقب کاربر ★ 𓆪』
+
+👤 ${displayName}
+
+🏷 ${nickname}`
+
+      : `『𓆩 ☆ لقب کاربر ☆ 𓆪』
+
+👤 ${displayName}
+
+☆ برای این کاربر لقبی ثبت نشده است.`;
+
+
+  return ctx.reply(
+    text,
+    {
+      parse_mode: "HTML",
+
+      reply_parameters: {
+        message_id:
+          ctx.message.message_id
+      }
+
+    }
   );
 
 }
 
 
 // =====================================
-// تنظیم لقب کاربر
+// پاسخ لقب روی پیام هدف
 // =====================================
 
-function setUserNickname(
-  chatId,
-  userId,
-  nickname
+async function replyToTargetMessage(
+  ctx,
+  targetMessage,
+  text
 ) {
 
-  const nicknames =
-    getNicknames(chatId);
+  return ctx.reply(
+    text,
+    {
+      parse_mode: "HTML",
 
+      reply_parameters: {
+        message_id:
+          targetMessage.message_id
+      }
 
-  nicknames[String(userId)] =
-    nickname.trim();
-
-
-  saveDB();
-
-
-  return true;
-
-}
-
-
-// =====================================
-// حذف لقب کاربر
-// =====================================
-
-function removeUserNickname(
-  chatId,
-  userId
-) {
-
-  const nicknames =
-    getNicknames(chatId);
-
-
-  const id =
-    String(userId);
-
-
-  if (nicknames[id]) {
-
-    delete nicknames[id];
-
-    saveDB();
-
-    return true;
-
-  }
-
-
-  return false;
+    }
+  );
 
 }
 
@@ -202,50 +291,31 @@ function removeUserNickname(
 const botReplies = [
 
   "جانم {nickname}؟ 🌹",
-
   "هستم {nickname} 😌",
-
   "جانم، صدایم کردی {nickname}؟ ❤️",
-
   "همیشه فعالم {nickname} 😎",
-
   "بله {nickname}، اینجام 👀",
-
   "جانم زیبای گپ؟ 🌹",
-
   "هستم، مگه میشه نباشم؟ 😏",
-
   "بله بله، ربات حاضر است 😎",
-
   "جانم؟ چیزی کارم داشتی {nickname}؟",
-
   "هستم {nickname}، بگو ببینم چی شده؟",
-
   "صدایم کردی؟ اینجام 😌",
-
-  "من همیشه فعالم ❤️",
-
+  "من همیشه اینجام ❤️",
   "جانم خوشگل گپ؟ 😄",
-
   "بله، گوشم با توئه {nickname} 👀",
-
   "هستم هَستم 😎",
-
   "جانم؟ بگو {nickname} 🌹",
-
   "ربات حاضر و آماده‌ست ✅",
-
   "بله عزیز گپ، اینجام 😌",
-
   "من که همیشه اینجام 😏",
-
   "جانم؟ صدای ربات رو شنیدی؟ 😂"
 
 ];
 
 
 // =====================================
-// انتخاب پاسخ تصادفی
+// انتخاب پاسخ ربات
 // =====================================
 
 function randomBotReply(
@@ -299,11 +369,15 @@ function registerCommands(bot) {
   );
 
   console.log(
-    "ADMIN: پنل و تنظیمات فقط مدیر + مالک"
+    "ADMIN: پنل و تنظیم لقب فقط مدیر + مالک"
   );
 
   console.log(
-    "BOT REPLY: همه اعضای گروه"
+    "NICKNAME VIEW: همه اعضا"
+  );
+
+  console.log(
+    "BOT REPLY: فقط مدیر + مالک"
   );
 
   console.log(
@@ -314,13 +388,6 @@ function registerCommands(bot) {
   // ===================================
   // ربات
   // ===================================
-  //
-  // این دستور مدیریتی نیست.
-  // همه اعضای گروه می‌توانند ربات را صدا بزنند.
-  //
-  // اگر برای کاربر لقب ثبت شده باشد،
-  // همان لقب در پاسخ استفاده می‌شود.
-  // ===================================
 
   bot.hears(
     /^ربات$/u,
@@ -329,6 +396,11 @@ function registerCommands(bot) {
       try {
 
         if (!isGroup(ctx))
+          return;
+
+
+        // فقط مدیر و مالک
+        if (!await requireAdmin(ctx))
           return;
 
 
@@ -365,20 +437,212 @@ function registerCommands(bot) {
 
 
   // ===================================
-  // لقب
-  // ===================================
-  //
-  // استفاده:
-  //
-  // روی پیام کاربر ریپلای کن و بنویس:
-  //
-  // لقب زیبای گپ
-  //
-  // فقط مدیر و مالک
+  // bot
   // ===================================
 
   bot.hears(
-    /^لقب\s+(.+)$/u,
+    /^bot$/i,
+    async ctx => {
+
+      try {
+
+        if (!isGroup(ctx))
+          return;
+
+
+        // فقط مدیر و مالک
+        if (!await requireAdmin(ctx))
+          return;
+
+
+        const nickname =
+          getUserNickname(
+            ctx.chat.id,
+            ctx.from.id
+          );
+
+
+        return await replyToCommand(
+          ctx,
+          randomBotReply(nickname)
+        );
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "COMMAND bot ERROR:",
+          error.message
+        );
+
+      }
+
+    }
+  );
+
+
+  // ===================================
+  // لقب من
+  // ===================================
+
+  bot.hears(
+    /^لقب\s+من$/u,
+    async ctx => {
+
+      try {
+
+        if (!isGroup(ctx))
+          return;
+
+
+        if (isNicknameLocked(ctx.chat.id)) {
+
+          return await replyToCommand(
+            ctx,
+            "☆ سیستم لقب در این گروه قفل است."
+          );
+
+        }
+
+
+        const nickname =
+          getUserNickname(
+            ctx.chat.id,
+            ctx.from.id
+          );
+
+
+        return await replyToCommand(
+          ctx,
+
+          nickname
+
+            ? `『𓆩 ★ لقب من ★ 𓆪』
+
+👤 ${getDisplayName(ctx.from)}
+
+🏷 ${nickname}`
+
+            : `『𓆩 ☆ لقب من ☆ 𓆪』
+
+👤 ${getDisplayName(ctx.from)}
+
+☆ برای شما لقبی ثبت نشده است.`
+        );
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "COMMAND لقب من ERROR:",
+          error.message
+        );
+
+      }
+
+    }
+  );
+
+
+  // ===================================
+  // لقب روی ریپلای
+  // ===================================
+
+  bot.hears(
+    /^لقب$/u,
+    async ctx => {
+
+      try {
+
+        if (!isGroup(ctx))
+          return;
+
+
+        if (isNicknameLocked(ctx.chat.id)) {
+
+          return await replyToCommand(
+            ctx,
+            "☆ سیستم لقب در این گروه قفل است."
+          );
+
+        }
+
+
+        const replyMessage =
+          ctx.message.reply_to_message;
+
+
+        if (
+          !replyMessage ||
+          !replyMessage.from
+        ) {
+
+          return await replyToCommand(
+            ctx,
+            "⛔ برای دیدن لقب، روی پیام کاربر ریپلای کنید و «لقب» بنویسید."
+          );
+
+        }
+
+
+        const targetUser =
+          replyMessage.from;
+
+
+        const nickname =
+          getUserNickname(
+            ctx.chat.id,
+            targetUser.id
+          );
+
+
+        return await replyToTargetMessage(
+          ctx,
+          replyMessage,
+
+          nickname
+
+            ? `『𓆩 ★ لقب کاربر ★ 𓆪』
+
+👤 ${getDisplayName(targetUser)}
+
+🏷 ${nickname}`
+
+            : `『𓆩 ☆ لقب کاربر ☆ 𓆪』
+
+👤 ${getDisplayName(targetUser)}
+
+☆ برای این کاربر لقبی ثبت نشده است.`
+        );
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "COMMAND لقب ERROR:",
+          error.message
+        );
+
+      }
+
+    }
+  );
+
+
+  // ===================================
+  // تنظیم لقب
+  // ===================================
+  //
+  // روی پیام کاربر ریپلای:
+  //
+  // تنظیم لقب زیبای گپ
+  // ===================================
+
+  bot.hears(
+    /^تنظیم\s+لقب\s+(.+)$/u,
     async ctx => {
 
       try {
@@ -391,15 +655,36 @@ function registerCommands(bot) {
           return;
 
 
+        const replyMessage =
+          ctx.message.reply_to_message;
+
+
         if (
-          !ctx.message.reply_to_message ||
-          !ctx.message.reply_to_message.from
+          !replyMessage ||
+          !replyMessage.from
         ) {
 
           return await replyToCommand(
             ctx,
-            "⛔ برای تعیین لقب، باید روی پیام همان کاربر ریپلای کنید."
+            "⛔ برای تنظیم لقب، باید روی پیام همان کاربر ریپلای کنید."
           );
+
+        }
+
+
+        const targetUser =
+          replyMessage.from;
+
+
+        // مالک فقط توسط خودش
+        if (
+          !await canChangeTargetNickname(
+            ctx,
+            targetUser.id
+          )
+        ) {
+
+          return;
 
         }
 
@@ -418,10 +703,6 @@ function registerCommands(bot) {
         }
 
 
-        const targetUser =
-          ctx.message.reply_to_message.from;
-
-
         setUserNickname(
           ctx.chat.id,
           targetUser.id,
@@ -434,14 +715,9 @@ function registerCommands(bot) {
 
 `『𓆩 ★ لقب تنظیم شد ★ 𓆪』
 
-👤 کاربر:
-${targetUser.first_name || "کاربر"}
+👤 ${getDisplayName(targetUser)}
 
-🏷 لقب:
-${nickname}
-
-از این به بعد وقتی این کاربر بنویسد «ربات»،
-ربات با همین لقب پاسخ می‌دهد.`
+🏷 ${nickname}`
         );
 
       }
@@ -449,7 +725,7 @@ ${nickname}
       catch (error) {
 
         console.log(
-          "COMMAND لقب ERROR:",
+          "COMMAND تنظیم لقب ERROR:",
           error.message
         );
 
@@ -477,21 +753,38 @@ ${nickname}
           return;
 
 
+        const replyMessage =
+          ctx.message.reply_to_message;
+
+
         if (
-          !ctx.message.reply_to_message ||
-          !ctx.message.reply_to_message.from
+          !replyMessage ||
+          !replyMessage.from
         ) {
 
           return await replyToCommand(
             ctx,
-            "⛔ روی پیام کاربری که می‌خواهید لقبش حذف شود ریپلای کنید."
+            "⛔ برای حذف لقب، روی پیام همان کاربر ریپلای کنید."
           );
 
         }
 
 
         const targetUser =
-          ctx.message.reply_to_message.from;
+          replyMessage.from;
+
+
+        // مالک فقط توسط خودش
+        if (
+          !await canChangeTargetNickname(
+            ctx,
+            targetUser.id
+          )
+        ) {
+
+          return;
+
+        }
 
 
         const removed =
@@ -516,10 +809,9 @@ ${nickname}
 
 `『𓆩 ★ لقب حذف شد ★ 𓆪』
 
-لقب کاربر حذف شد.
+👤 ${getDisplayName(targetUser)}
 
-از این به بعد پاسخ «ربات»
-با لقب پیش‌فرض انجام می‌شود.`
+☆ لقب این کاربر حذف شد.`
         );
 
       }
@@ -553,11 +845,6 @@ ${nickname}
 
         if (!await requireAdmin(ctx))
           return;
-
-
-        console.log(
-          "COMMAND MATCHED: تست"
-        );
 
 
         return await replyToCommand(
@@ -601,11 +888,6 @@ ${nickname}
 
         if (!await requireAdmin(ctx))
           return;
-
-
-        console.log(
-          "COMMAND MATCHED: وضعیت ربات"
-        );
 
 
         return await replyToCommand(
@@ -652,11 +934,6 @@ ${ctx.chat.title || "بدون نام"}`
           return;
 
 
-        console.log(
-          "COMMAND MATCHED: پنل"
-        );
-
-
         if (!await requireAdmin(ctx))
           return;
 
@@ -687,47 +964,6 @@ ${ctx.chat.title || "بدون نام"}`
 
         console.log(
           "PANEL COMMAND ERROR:",
-          error.message
-        );
-
-      }
-
-    }
-  );
-
-
-  // ===================================
-  // دستور انگلیسی BOT
-  // ===================================
-
-  bot.hears(
-    /^bot$/i,
-    async ctx => {
-
-      try {
-
-        if (!isGroup(ctx))
-          return;
-
-
-        const nickname =
-          getUserNickname(
-            ctx.chat.id,
-            ctx.from.id
-          );
-
-
-        return await replyToCommand(
-          ctx,
-          randomBotReply(nickname)
-        );
-
-      }
-
-      catch (error) {
-
-        console.log(
-          "COMMAND bot ERROR:",
           error.message
         );
 
@@ -789,9 +1025,7 @@ module.exports = {
   registerCommands,
 
   getUserNickname,
-
   setUserNickname,
-
   removeUserNickname,
 
   randomBotReply
