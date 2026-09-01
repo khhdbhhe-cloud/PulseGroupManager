@@ -6,11 +6,25 @@
 const { Telegraf } = require("telegraf");
 const http = require("http");
 
+
+// =====================================
+// اتصال پنل
+// =====================================
+
 const {
   registerPanelActions,
   mainPanel,
   panelText
 } = require("./panel");
+
+
+// =====================================
+// اتصال مدیریت کاربران
+// =====================================
+
+const {
+  registerModeration
+} = require("./moderation");
 
 
 // =====================================
@@ -56,6 +70,7 @@ async function getGroupRole(
         userId
       );
 
+
     if (
       member.status === "creator"
     ) {
@@ -64,6 +79,7 @@ async function getGroupRole(
 
     }
 
+
     if (
       member.status === "administrator"
     ) {
@@ -71,6 +87,7 @@ async function getGroupRole(
       return "admin";
 
     }
+
 
     return "member";
 
@@ -99,6 +116,7 @@ bot.hears(
   async ctx => {
 
     // فقط گروه و سوپرگروه
+
     if (
       !ctx.chat ||
       (
@@ -155,10 +173,14 @@ bot.hears(
           panelText(),
           {
             ...mainPanel(userId),
+
             reply_parameters: {
               message_id:
-                ctx.message.reply_to_message.message_id
+                ctx.message
+                  .reply_to_message
+                  .message_id
             }
+
           }
         );
 
@@ -166,17 +188,16 @@ bot.hears(
 
       else {
 
-        // اگر روی پیام کسی ریپلای نشده بود،
-        // پنل روی همان پیام دستور باز می‌شود.
-
         await ctx.reply(
           panelText(),
           {
             ...mainPanel(userId),
+
             reply_parameters: {
               message_id:
                 ctx.message.message_id
             }
+
           }
         );
 
@@ -202,6 +223,13 @@ bot.hears(
 // =====================================
 
 registerPanelActions(bot);
+
+
+// =====================================
+// ثبت دستورات مدیریت کاربران
+// =====================================
+
+registerModeration(bot);
 
 
 // =====================================
@@ -252,6 +280,7 @@ const server =
         }
       );
 
+
       res.end(
         "PulseGroupManager is running."
       );
@@ -259,6 +288,10 @@ const server =
     }
   );
 
+
+// =====================================
+// اجرای سرور
+// =====================================
 
 server.listen(
   PORT,
@@ -277,21 +310,25 @@ server.listen(
 // =====================================
 
 bot.launch()
-  .then(() => {
+  .then(
+    () => {
 
-    console.log(
-      "BOT: PulseGroupManager started successfully."
-    );
+      console.log(
+        "BOT: PulseGroupManager started successfully."
+      );
 
-  })
-  .catch(error => {
+    }
+  )
+  .catch(
+    error => {
 
-    console.error(
-      "BOT START ERROR:",
-      error.message
-    );
+      console.error(
+        "BOT START ERROR:",
+        error.message
+      );
 
-  });
+    }
+  );
 
 
 // =====================================
@@ -302,6 +339,7 @@ process.once(
   "SIGINT",
   () => bot.stop("SIGINT")
 );
+
 
 process.once(
   "SIGTERM",
