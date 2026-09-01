@@ -6,10 +6,6 @@
 const { Telegraf } = require("telegraf");
 const http = require("http");
 
-// =====================================
-// اتصال پنل
-// =====================================
-
 const {
   registerPanelActions,
   mainPanel,
@@ -18,12 +14,11 @@ const {
 
 
 // =====================================
-// دریافت توکن ربات
+// توکن
 // =====================================
 
 const BOT_TOKEN =
   process.env.BOT_TOKEN;
-
 
 if (!BOT_TOKEN) {
 
@@ -45,194 +40,196 @@ const bot =
 
 
 // =====================================
-// تابع تشخیص مالک / مدیر
+// تشخیص مالک / مدیر / عضو
 // =====================================
 
-async function isAdminOrOwner(ctx) {
+async function getGroupRole(
+  ctx,
+  userId
+) {
 
   try {
-
-    if (
-      !ctx.chat ||
-      !ctx.from
-    ) {
-
-      return false;
-
-    }
-
-
-    // فقط گروه
-    if (
-      ctx.chat.type !== "group" &&
-      ctx.chat.type !== "supergroup"
-    ) {
-
-      return false;
-
-    }
-
 
     const member =
       await ctx.telegram.getChatMember(
         ctx.chat.id,
-        ctx.from.id
+        userId
       );
 
-
-    if (!member) {
-
-      return false;
-
-    }
-
-
-    // مالک اصلی
     if (
       member.status === "creator"
     ) {
 
-      return true;
+      return "owner";
 
     }
 
-
-    // مدیر
     if (
       member.status === "administrator"
     ) {
 
-      return true;
+      return "admin";
+
+    }
+
+    return "member";
+
+  }
+
+  catch (error) {
+
+    console.log(
+      "GET ROLE ERROR:",
+      error.message
+    );
+
+    return "member";
+
+  }
+
+}
+
+
+// =====================================
+// دستور پنل
+// =====================================
+
+bot.hears(
+  /^پنل$/i,
+  async ctx => {
+
+    // فقط گروه و سوپرگروه
+    if (
+      !ctx.chat ||
+      (
+        ctx.chat.type !== "group" &&
+        ctx.chat.type !== "supergroup"
+      )
+    ) {
+
+      return;
 
     }
 
 
-    // عضو عادی
-    return false;
-
-  }
-
-  catch (error) {
-
-    console.log(
-      "ADMIN CHECK ERROR:",
-      error.message
-    );
-
-    return false;
-
-  }
-
-}
+    const userId =
+      ctx.from.id;
 
 
-// =====================================
-// باز کردن پنل
-// =====================================
+    // ---------------------------------
+    // تشخیص سطح کاربر
+    // ---------------------------------
 
-async function openPanel(ctx) {
-
-  // فقط گروه
-  if (
-    !ctx.chat ||
-    (
-      ctx.chat.type !== "group" &&
-      ctx.chat.type !== "supergroup"
-    )
-  ) {
-
-    return;
-
-  }
+    const role =
+      await getGroupRole(
+        ctx,
+        userId
+      );
 
 
-  // فقط مالک و مدیر
-  const allowed =
-    await isAdminOrOwner(ctx);
+    // ---------------------------------
+    // عضو عادی = هیچ پاسخ
+    // ---------------------------------
+
+    if (
+      role !== "owner" &&
+      role !== "admin"
+    ) {
+
+      return;
+
+    }
 
 
-  if (!allowed) {
+    // ---------------------------------
+    // پنل با ریپلای
+    // ---------------------------------
 
-    // عضو عادی هیچ پاسخی نمی‌گیرد
-    return;
+    try {
 
-  }
+      if (
+        ctx.message.reply_to_message
+      ) {
 
+        await ctx.reply(
+          panelText(),
+          {
+            ...mainPanel(userId),
+            reply_parameters: {
+              message_id:
+                ctx.message.reply_to_message.message_id
+            }
+          }
+        );
 
-  try {
+      }
 
-    await ctx.reply(
+      else {
 
-      panelText(),
+        // اگر روی پیام کسی ریپلای نشده بود،
+        // پنل روی همان پیام دستور باز می‌شود.
 
-      mainPanel(
-        ctx.from.id
-      )
+        await ctx.reply(
+          panelText(),
+          {
+            ...mainPanel(userId),
+            reply_parameters: {
+              message_id:
+                ctx.message.message_id
+            }
+          }
+        );
 
-    );
+      }
 
-  }
+    }
 
-  catch (error) {
+    catch (error) {
 
-    console.log(
-      "PANEL OPEN ERROR:",
-      error.message
-    );
+      console.log(
+        "PANEL OPEN ERROR:",
+        error.message
+      );
 
-  }
-
-}
-
-
-// =====================================
-// دستور /panel
-// =====================================
-
-bot.command(
-  "panel",
-  async ctx => {
-
-    await openPanel(ctx);
+    }
 
   }
 );
 
 
 // =====================================
-// دستور فارسی «پنل»
+// ثبت دکمه‌های پنل
 // =====================================
 
-bot.hears(
-  /^پنل$/,
-  async ctx => {
-
-    await openPanel(ctx);
-
-  }
-);
+registerPanelActions(bot);
 
 
 // =====================================
-// دستور /start
+// دستور تست خصوصی
 // =====================================
 
 bot.start(
   async ctx => {
 
-    await ctx.reply(
-      "『𓆩 ★ PulseGroupManager ★ 𓆪』\n\nربات فعال است."
-    );
+    try {
+
+      await ctx.reply(
+        "『𓆩 ★ PulseGroupManager ★ 𓆪』\n\nربات فعال است."
+      );
+
+    }
+
+    catch (error) {
+
+      console.log(
+        "START ERROR:",
+        error.message
+      );
+
+    }
 
   }
 );
-
-
-// =====================================
-// ثبت تمام دکمه‌های پنل
-// =====================================
-
-registerPanelActions(bot);
 
 
 // =====================================
@@ -255,7 +252,6 @@ const server =
         }
       );
 
-
       res.end(
         "PulseGroupManager is running."
       );
@@ -263,10 +259,6 @@ const server =
     }
   );
 
-
-// =====================================
-// اجرای سرور
-// =====================================
 
 server.listen(
   PORT,
@@ -308,19 +300,10 @@ bot.launch()
 
 process.once(
   "SIGINT",
-  () => {
-
-    bot.stop("SIGINT");
-
-  }
+  () => bot.stop("SIGINT")
 );
-
 
 process.once(
   "SIGTERM",
-  () => {
-
-    bot.stop("SIGTERM");
-
-  }
+  () => bot.stop("SIGTERM")
 );
