@@ -12,7 +12,6 @@ const {
 
 // =====================================
 // حافظه کاربران دیده‌شده
-// برای پیدا کردن @username و اسم
 // =====================================
 
 const knownUsers = {};
@@ -33,24 +32,17 @@ function rememberUser(user) {
 
 
 // =====================================
-// نام کاربر
+// ایمن‌سازی HTML
 // =====================================
 
-function getUserName(user) {
+function escapeHtml(text) {
 
-  if (!user) {
-    return "کاربر";
-  }
-
-  if (user.username) {
-    return `@${user.username}`;
-  }
-
-  if (user.first_name) {
-    return user.first_name;
-  }
-
-  return "کاربر";
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 
@@ -74,21 +66,7 @@ function mentionUser(user) {
 
 
 // =====================================
-// ایمن‌سازی HTML
-// =====================================
-
-function escapeHtml(text) {
-
-  return String(text)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-
-// =====================================
-// ریپلای صحیح به پیام هدف
+// ریپلای به پیام هدف
 // =====================================
 
 function getTargetReplyId(ctx) {
@@ -109,25 +87,27 @@ function getTargetReplyId(ctx) {
 }
 
 
-// =====================================
-// پاسخ روی پیام هدف
-// =====================================
-
 async function replyToTarget(
   ctx,
   text,
   options = {}
 ) {
 
+  const replyId =
+    getTargetReplyId(ctx);
+
   return ctx.reply(
     text,
     {
       ...options,
 
-      reply_parameters: {
-        message_id:
-          getTargetReplyId(ctx)
-      }
+      ...(replyId
+        ? {
+            reply_parameters: {
+              message_id: replyId
+            }
+          }
+        : {})
     }
   );
 }
@@ -153,28 +133,19 @@ async function getMemberRole(
     if (
       member.status === "creator"
     ) {
-
       return "owner";
     }
 
     if (
       member.status === "administrator"
     ) {
-
       return "admin";
     }
 
     if (
-      member.status === "member"
-    ) {
-
-      return "member";
-    }
-
-    if (
+      member.status === "member" ||
       member.status === "restricted"
     ) {
-
       return "member";
     }
 
@@ -195,7 +166,7 @@ async function getMemberRole(
 
 
 // =====================================
-// بررسی مالک
+// مالک
 // =====================================
 
 async function isOwner(ctx) {
@@ -204,22 +175,20 @@ async function isOwner(ctx) {
     !ctx.from ||
     !ctx.chat
   ) {
-
     return false;
   }
 
-  const role =
+  return (
     await getMemberRole(
       ctx,
       ctx.from.id
-    );
-
-  return role === "owner";
+    )
+  ) === "owner";
 }
 
 
 // =====================================
-// بررسی مالک یا مدیر
+// مالک یا مدیر
 // =====================================
 
 async function isAdmin(ctx) {
@@ -228,7 +197,6 @@ async function isAdmin(ctx) {
     !ctx.from ||
     !ctx.chat
   ) {
-
     return false;
   }
 
@@ -246,7 +214,23 @@ async function isAdmin(ctx) {
 
 
 // =====================================
-// پیدا کردن کاربر با یوزرنیم
+// بررسی گروه
+// =====================================
+
+function isGroupChat(ctx) {
+
+  return (
+    ctx.chat &&
+    (
+      ctx.chat.type === "group" ||
+      ctx.chat.type === "supergroup"
+    )
+  );
+}
+
+
+// =====================================
+// پیدا کردن با یوزرنیم
 // =====================================
 
 function findKnownUserByUsername(
@@ -280,7 +264,7 @@ function findKnownUserByUsername(
 
 
 // =====================================
-// پیدا کردن کاربر با اسم
+// پیدا کردن با اسم
 // =====================================
 
 function findKnownUserByName(
@@ -331,7 +315,7 @@ function findKnownUserByName(
 
 
 // =====================================
-// هدف دستور
+// پیدا کردن هدف
 // ریپلای | آیدی | یوزرنیم | اسم
 // =====================================
 
@@ -340,9 +324,9 @@ async function resolveTarget(
   args = []
 ) {
 
-  // -----------------------------------
+  // -------------------------------
   // ریپلای
-  // -----------------------------------
+  // -------------------------------
 
   if (
     ctx.message &&
@@ -361,10 +345,6 @@ async function resolveTarget(
   }
 
 
-  // -----------------------------------
-  // بدون هدف
-  // -----------------------------------
-
   if (
     !args ||
     args.length === 0
@@ -378,9 +358,9 @@ async function resolveTarget(
     args.join(" ").trim();
 
 
-  // -----------------------------------
+  // -------------------------------
   // آیدی
-  // -----------------------------------
+  // -------------------------------
 
   if (
     /^\d+$/.test(input)
@@ -414,38 +394,23 @@ async function resolveTarget(
   }
 
 
-  // -----------------------------------
+  // -------------------------------
   // یوزرنیم
-  // -----------------------------------
+  // -------------------------------
 
   if (
     input.startsWith("@")
   ) {
 
-    const user =
-      findKnownUserByUsername(input);
-
-    if (user) {
-      return user;
-    }
-
-    return null;
+    return findKnownUserByUsername(input);
   }
 
 
-  // -----------------------------------
+  // -------------------------------
   // اسم
-  // -----------------------------------
+  // -------------------------------
 
-  const user =
-    findKnownUserByName(input);
-
-  if (user) {
-    return user;
-  }
-
-
-  return null;
+  return findKnownUserByName(input);
 }
 
 
@@ -476,45 +441,21 @@ async function checkTarget(
     );
 
 
-  // -----------------------------------
   // مالک
-  // -----------------------------------
-
   if (
     role === "owner"
   ) {
 
-    if (
-      await isOwner(ctx)
-    ) {
-
-      // مالک گروه را خود تلگرام
-      // اجازه نمی‌دهد ربات بن کند.
-      await replyToTarget(
-        ctx,
-        "『𓆩 ★ مالک گروه قابل بن شدن نیست ★ 𓆪』"
-      );
-
-    }
-    else {
-
-      await replyToTarget(
-        ctx,
-        `『𓆩 ★ ${mentionUser(target)} مالک گروه هست ★ 𓆪』`,
-        {
-          parse_mode: "HTML"
-        }
-      );
-    }
+    await replyToTarget(
+      ctx,
+      "『𓆩 ★ مالک گروه قابل بن شدن نیست ★ 𓆪』"
+    );
 
     return false;
   }
 
 
-  // -----------------------------------
   // مدیر
-  // -----------------------------------
-
   if (
     role === "admin"
   ) {
@@ -536,23 +477,7 @@ async function checkTarget(
 
 
 // =====================================
-// بررسی گروه
-// =====================================
-
-function isGroupChat(ctx) {
-
-  return (
-    ctx.chat &&
-    (
-      ctx.chat.type === "group" ||
-      ctx.chat.type === "supergroup"
-    )
-  );
-}
-
-
-// =====================================
-// دریافت مدت
+// مدت
 // عدد ساده = ساعت
 // =====================================
 
@@ -569,17 +494,15 @@ function getDuration(value) {
     isNaN(number) ||
     number <= 0
   ) {
-
     return null;
   }
 
-  // عدد ساده یعنی ساعت
   return number * 60;
 }
 
 
 // =====================================
-// متن زمان
+// متن مدت
 // =====================================
 
 function durationText(minutes) {
@@ -611,7 +534,7 @@ function durationText(minutes) {
 
 
 // =====================================
-// گرفتن تنظیمات اخطار
+// تنظیمات اخطار
 // =====================================
 
 function getWarningSettings(
@@ -620,7 +543,6 @@ function getWarningSettings(
 
   const group =
     getGroup(chatId);
-
 
   if (
     !group.warningSettings
@@ -633,12 +555,10 @@ function getWarningSettings(
       punishment: "mute",
 
       duration: 60
-
     };
 
     saveDB();
   }
-
 
   return group.warningSettings;
 }
@@ -656,33 +576,27 @@ function addWarning(
   const group =
     getGroup(chatId);
 
-
   if (!group.warns) {
     group.warns = {};
   }
 
-
   const id =
     String(userId);
-
 
   if (!group.warns[id]) {
     group.warns[id] = 0;
   }
 
-
   group.warns[id]++;
 
-
   saveDB();
-
 
   return group.warns[id];
 }
 
 
 // =====================================
-// تعداد اخطار
+// گرفتن تعداد اخطار
 // =====================================
 
 function getWarnings(
@@ -693,11 +607,9 @@ function getWarnings(
   const group =
     getGroup(chatId);
 
-
   if (!group.warns) {
     return 0;
   }
-
 
   return (
     group.warns[String(userId)] ||
@@ -718,13 +630,10 @@ function setMaxWarnings(
   const settings =
     getWarningSettings(chatId);
 
-
   settings.maxWarnings =
     number;
 
-
   saveDB();
-
 
   return number;
 }
@@ -742,13 +651,10 @@ function setWarningPunishment(
   const settings =
     getWarningSettings(chatId);
 
-
   settings.punishment =
     punishment;
 
-
   saveDB();
-
 
   return punishment;
 }
@@ -768,13 +674,11 @@ async function executeWarningPunishment(
       ctx.chat.id
     );
 
-
   const count =
     getWarnings(
       ctx.chat.id,
       target.id
     );
-
 
   if (
     count < settings.maxWarnings
@@ -801,7 +705,7 @@ async function executeWarningPunishment(
 
       await replyToTarget(
         ctx,
-        `『𓆩 ★ ${mentionUser(target)} به دلیل رسیدن اخطارها به ${settings.maxWarnings} بن شد ★ 𓆪』`,
+        `『𓆩 ★ ${mentionUser(target)} به ${settings.maxWarnings} اخطار رسید و بن شد ★ 𓆪』`,
         {
           parse_mode: "HTML"
         }
@@ -854,7 +758,7 @@ async function executeWarningPunishment(
 
       await replyToTarget(
         ctx,
-        `『𓆩 ★ ${mentionUser(target)} به دلیل رسیدن اخطارها به ${settings.maxWarnings} ساکت شد ★ 𓆪』`,
+        `『𓆩 ★ ${mentionUser(target)} به ${settings.maxWarnings} اخطار رسید و سکوت شد ★ 𓆪』`,
         {
           parse_mode: "HTML"
         }
@@ -875,7 +779,6 @@ async function executeWarningPunishment(
     }
   }
 
-
   return false;
 }
 
@@ -888,12 +791,12 @@ function registerModeration(bot) {
 
 
   // ===================================
-  // ذخیره کاربران دیده‌شده
+  // بسیار مهم:
+  // ذخیره کاربران بدون متوقف کردن hears
   // ===================================
 
-  bot.on(
-    "message",
-    async ctx => {
+  bot.use(
+    async (ctx, next) => {
 
       try {
 
@@ -929,6 +832,8 @@ function registerModeration(bot) {
         );
       }
 
+
+      return next();
     }
   );
 
@@ -949,19 +854,16 @@ function registerModeration(bot) {
         return;
       }
 
-
       const args =
         ctx.match[1]
           ? ctx.match[1].split(/\s+/)
           : [];
-
 
       const target =
         await resolveTarget(
           ctx,
           args
         );
-
 
       if (
         !(await checkTarget(
@@ -972,14 +874,12 @@ function registerModeration(bot) {
         return;
       }
 
-
       try {
 
         await ctx.telegram.banChatMember(
           ctx.chat.id,
           target.id
         );
-
 
         await replyToTarget(
           ctx,
@@ -1003,7 +903,6 @@ function registerModeration(bot) {
           "『𓆩 ★ انجام بن امکان‌پذیر نیست ★ 𓆪』"
         );
       }
-
     }
   );
 
@@ -1024,19 +923,16 @@ function registerModeration(bot) {
         return;
       }
 
-
       const args =
         ctx.match[1]
           ? ctx.match[1].split(/\s+/)
           : [];
-
 
       const target =
         await resolveTarget(
           ctx,
           args
         );
-
 
       if (
         !(await checkTarget(
@@ -1047,14 +943,12 @@ function registerModeration(bot) {
         return;
       }
 
-
       try {
 
         await ctx.telegram.banChatMember(
           ctx.chat.id,
           target.id
         );
-
 
         await replyToTarget(
           ctx,
@@ -1078,7 +972,6 @@ function registerModeration(bot) {
           "『𓆩 ★ انجام سیک امکان‌پذیر نیست ★ 𓆪』"
         );
       }
-
     }
   );
 
@@ -1100,19 +993,16 @@ function registerModeration(bot) {
         return;
       }
 
-
       const args =
         ctx.match[1]
           ? ctx.match[1].split(/\s+/)
           : [];
-
 
       const target =
         await resolveTarget(
           ctx,
           args
         );
-
 
       if (
         !(await checkTarget(
@@ -1123,14 +1013,12 @@ function registerModeration(bot) {
         return;
       }
 
-
       try {
 
         await ctx.telegram.banChatMember(
           ctx.chat.id,
           target.id
         );
-
 
         await replyToTarget(
           ctx,
@@ -1151,10 +1039,9 @@ function registerModeration(bot) {
 
         await replyToTarget(
           ctx,
-          "『𓆩 ★ انجام عملیات امکان‌پذیر نیست ★ 𓆪』"
+          "『𓆩 ★ انجام عملیات امکان‌پذیر نیست ★ 𓆪"
         );
       }
-
     }
   );
 
@@ -1175,19 +1062,16 @@ function registerModeration(bot) {
         return;
       }
 
-
       const args =
         ctx.match[1]
           ? ctx.match[1].split(/\s+/)
           : [];
-
 
       const target =
         await resolveTarget(
           ctx,
           args
         );
-
 
       if (
         !(await checkTarget(
@@ -1198,7 +1082,6 @@ function registerModeration(bot) {
         return;
       }
 
-
       try {
 
         await ctx.telegram.banChatMember(
@@ -1206,12 +1089,10 @@ function registerModeration(bot) {
           target.id
         );
 
-
         await ctx.telegram.unbanChatMember(
           ctx.chat.id,
           target.id
         );
-
 
         await replyToTarget(
           ctx,
@@ -1232,17 +1113,16 @@ function registerModeration(bot) {
 
         await replyToTarget(
           ctx,
-          "『𓆩 ★ اخراج کاربر انجام نشد ★ 𓆪』"
+          "『𓆩 ★ اخراج کاربر انجام نشد ★ 𓆪"
         );
       }
-
     }
   );
 
 
   // ===================================
   // سکوت
-  // عدد ساده = ساعت
+  // عدد = ساعت
   // ===================================
 
   bot.hears(
@@ -1257,25 +1137,21 @@ function registerModeration(bot) {
         return;
       }
 
-
       const duration =
         getDuration(
           ctx.match[1]
         );
-
 
       const args =
         ctx.match[2]
           ? ctx.match[2].split(/\s+/)
           : [];
 
-
       const target =
         await resolveTarget(
           ctx,
           args
         );
-
 
       if (
         !(await checkTarget(
@@ -1286,14 +1162,12 @@ function registerModeration(bot) {
         return;
       }
 
-
       try {
 
         const until =
           duration
             ? Math.floor(Date.now() / 1000) + duration
             : undefined;
-
 
         await ctx.telegram.restrictChatMember(
           ctx.chat.id,
@@ -1319,7 +1193,6 @@ function registerModeration(bot) {
               : {})
           }
         );
-
 
         await replyToTarget(
           ctx,
@@ -1340,10 +1213,9 @@ function registerModeration(bot) {
 
         await replyToTarget(
           ctx,
-          "『𓆩 ★ سکوت کاربر انجام نشد ★ 𓆪』"
+          "『𓆩 ★ سکوت کاربر انجام نشد ★ 𓆪"
         );
       }
-
     }
   );
 
@@ -1363,133 +1235,22 @@ function registerModeration(bot) {
       if (!(await isAdmin(ctx))) {
         return;
       }
-
-
-      const duration =
-        getDuration(
-               ctx.match[1]
-        );
-
-
-      const args =
-        ctx.match[2]
-          ? ctx.match[2].split(/\s+/)
-          : [];
-
-
-      const target =
-        await resolveTarget(
-          ctx,
-          args
-        );
-
-
-      if (
-        !(await checkTarget(
-          ctx,
-          target
-        ))
-      ) {
-        return;
-      }
-
-
-      try {
-
-        const until =
-          duration
-            ? Math.floor(Date.now() / 1000) + duration
-            : undefined;
-
-
-        await ctx.telegram.restrictChatMember(
-          ctx.chat.id,
-          target.id,
-          {
-            permissions: {
-              can_send_messages: false,
-              can_send_audios: false,
-              can_send_documents: false,
-              can_send_photos: false,
-              can_send_videos: false,
-              can_send_video_notes: false,
-              can_send_voice_notes: false,
-              can_send_polls: false,
-              can_send_other_messages: false,
-              can_add_web_page_previews: false
-            },
-
-            ...(until
-              ? {
-                  until_date: until
-                }
-              : {})
-          }
-        );
-
-
-        await replyToTarget(
-          ctx,
-          `『𓆩 ★ ${mentionUser(target)} سکوت ${durationText(duration)} شد ★ 𓆪』`,
-          {
-            parse_mode: "HTML"
-          }
-        );
-
-      }
-
-      catch (error) {
-
-        console.log(
-          "MUTE ERROR:",
-          error.message
-        );
-
-        await replyToTarget(
-          ctx,
-          "『𓆩 ★ سکوت کاربر انجام نشد ★ 𓆪』"
-        );
-      }
-
-    }
-  );
-
-
-  // ===================================
-  // خفه
-  // ===================================
-
-  bot.hears(
-    /^خفه(?:\s+(\d+))?(?:\s+(.+))?$/i,
-    async ctx => {
-
-      if (!isGroupChat(ctx)) {
-        return;
-      }
-
-      if (!(await isAdmin(ctx))) {
-        return;
-      }
-
 
       const duration =
         getDuration(
           ctx.match[1]
         );
 
-
       const args =
         ctx.match[2]
           ? ctx.match[2].split(/\s+/)
           : [];
-
 
       const target =
         await resolveTarget(
           ctx,
           args
         );
-
 
       if (
         !(await checkTarget(
@@ -1500,14 +1261,12 @@ function registerModeration(bot) {
         return;
       }
 
-
       try {
 
         const until =
           duration
             ? Math.floor(Date.now() / 1000) + duration
             : undefined;
-
 
         await ctx.telegram.restrictChatMember(
           ctx.chat.id,
@@ -1534,113 +1293,20 @@ function registerModeration(bot) {
           }
         );
 
-
         await replyToTarget(
           ctx,
-          `『𓆩 ★ ${mentionUser(target)} خفه ${durationText(duration)} شد ★ 𓆪』`,
-          {
-            parse_mode: "HTML"
-          }
-        );
-
-      }
-
-      catch (error) {
-
-        console.log(
-          "KHAFE ERROR:",
-          error.message
-        );
-
-        await replyToTarget(
-          ctx,
-          "『𓆩 ★ خفه کردن کاربر انجام نشد ★ 𓆪』"
-        );
-      }
-
-    }
-  );
-
-
-  // ===================================
-  // اخطار
-  // ===================================
-
-  bot.hears(
-    /^اخطار(?:\s+(\d+))?(?:\s+(.+))?$/i,
-    async ctx => {
-
-      if (!isGroupChat(ctx)) {
-        return;
-      }
-
-      if (!(await isAdmin(ctx))) {
-        return;
-      }
-
-
-      const amount =
-        parseInt(
-          ctx.match[1] || "1"
-        );
-
-
-      if (
-        amount <= 0
-      ) {
-        return;
-      }
-
-
-      const args =
-        ctx.match[2]
-          ? ctx.match[2].split(/\s+/)
-          : [];
-
-
-      const target =
-        await resolveTarget(
-          ctx,
-          args
-        );
-
-
-      if (
-        !(await checkTarget(
-          ctx,
-          target
-        ))
-      ) {
-        return;
-      }
-
-
-      let count = 0;
-
-
-      for (
-        let i = 0;
-        i < amount;
-        i++
-      ) {
-
-        count =
-          addWarning(
-            ctx.chat.id,
-            target.id
-          );
-      }
-
-
-      await replyToTarget(
+          await replyToTarget(
         ctx,
-        `『𓆩 ★ ${mentionUser(target)} ${amount} اخطار گرفت ★ 𓆪』\n\nتعداد اخطار: ${count}`,
+        `『𓆩 ★ ${mentionUser(target)} ${amount} اخطار گرفت ★ 𓆪』
+
+تعداد اخطار: ${count}`,
         {
           parse_mode: "HTML"
         }
       );
 
 
+      // اجرای مجازات خودکار
       await executeWarningPunishment(
         ctx,
         target
@@ -1675,9 +1341,7 @@ function registerModeration(bot) {
         );
 
 
-      if (
-        number <= 0
-      ) {
+      if (number <= 0) {
         return;
       }
 
@@ -1688,14 +1352,9 @@ function registerModeration(bot) {
       );
 
 
-      await ctx.reply(
-        `『𓆩 ★ تعداد اخطار روی ${number} تنظیم شد ★ 𓆪』`,
-        {
-          reply_parameters: {
-            message_id:
-              ctx.message.message_id
-          }
-        }
+      await replyToTarget(
+        ctx,
+        `『𓆩 ★ تعداد اخطار روی ${number} تنظیم شد ★ 𓆪』`
       );
 
     }
@@ -1725,14 +1384,9 @@ function registerModeration(bot) {
       );
 
 
-      await ctx.reply(
-        "『𓆩 ★ مجازات اخطار روی بن تنظیم شد ★ 𓆪』",
-        {
-          reply_parameters: {
-            message_id:
-              ctx.message.message_id
-          }
-        }
+      await replyToTarget(
+        ctx,
+        "『𓆩 ★ مجازات اخطار روی بن تنظیم شد ★ 𓆪』"
       );
 
     }
@@ -1762,14 +1416,9 @@ function registerModeration(bot) {
       );
 
 
-      await ctx.reply(
-        "『𓆩 ★ مجازات اخطار روی سکوت تنظیم شد ★ 𓆪』",
-        {
-          reply_parameters: {
-            message_id:
-              ctx.message.message_id
-          }
-        }
+      await replyToTarget(
+        ctx,
+        "『𓆩 ★ مجازات اخطار روی سکوت تنظیم شد ★ 𓆪』"
       );
 
     }
@@ -1778,7 +1427,7 @@ function registerModeration(bot) {
 
   // ===================================
   // نمایش اخطارهای کاربر
-  // روی پیام کاربر:
+  // روی پیام کاربر ریپلای کن و بنویس:
   // اخطارها
   // ===================================
 
@@ -1796,9 +1445,7 @@ function registerModeration(bot) {
 
 
       const target =
-        await resolveTarget(
-          ctx
-        );
+        await resolveTarget(ctx);
 
 
       if (!target) {
@@ -1827,7 +1474,10 @@ function registerModeration(bot) {
 
       await replyToTarget(
         ctx,
-        `『𓆩 ★ وضعیت اخطار ${mentionUser(target)} ★ 𓆪』\n\nتعداد اخطار: ${count}\nحداکثر اخطار: ${settings.maxWarnings}`,
+        `『𓆩 ★ وضعیت اخطار ${mentionUser(target)} ★ 𓆪』
+
+تعداد اخطار: ${count}
+حداکثر اخطار: ${settings.maxWarnings}`,
         {
           parse_mode: "HTML"
         }
@@ -1840,7 +1490,7 @@ function registerModeration(bot) {
 
 
 // =====================================
-// خروجی
+// خروجی فایل
 // =====================================
 
 module.exports = {
@@ -1865,4 +1515,4 @@ module.exports = {
 
   executeWarningPunishment
 
-};  
+};
