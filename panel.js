@@ -5,6 +5,7 @@
 
 const { Markup } = require("telegraf");
 
+
 // =====================================
 // متن پنل
 // =====================================
@@ -16,7 +17,8 @@ function panelText() {
 بخش مدیریت و عملیات گروه را انتخاب کنید.
 
 ★ فقط مالک و مدیران
-★ هر پنل مخصوص شخصی است که آن را باز کرده است.`;
+★ هر پنل مخصوص شخصی است که آن را باز کرده است.
+★ مالک اصلی بالاترین دسترسی را دارد.`;
 
 }
 
@@ -102,14 +104,6 @@ function mainPanel(ownerId) {
 
     [
       panelButton(
-        "قفل‌های گروه",
-        "locks",
-        ownerId
-      )
-    ],
-
-    [
-      panelButton(
         "سیستم اخطار",
         "warnings",
         ownerId
@@ -170,10 +164,118 @@ function mainPanel(ownerId) {
 
 
 // =====================================
-// بررسی صاحب پنل
+// تشخیص مالک و مدیر واقعی گروه
 // =====================================
 
-function protectPanel(ctx) {
+async function getGroupRole(ctx) {
+
+  try {
+
+    if (
+      !ctx.chat ||
+      !ctx.from
+    ) {
+
+      return {
+        ok: false,
+        role: "unknown"
+      };
+
+    }
+
+
+    const chatType =
+      ctx.chat.type;
+
+
+    // فقط گروه و سوپرگروه
+    if (
+      chatType !== "group" &&
+      chatType !== "supergroup"
+    ) {
+
+      return {
+        ok: false,
+        role: "not_group"
+      };
+
+    }
+
+
+    const member =
+      await ctx.telegram.getChatMember(
+        ctx.chat.id,
+        ctx.from.id
+      );
+
+
+    if (!member) {
+
+      return {
+        ok: false,
+        role: "unknown"
+      };
+
+    }
+
+
+    // مالک اصلی گروه
+    if (
+      member.status === "creator"
+    ) {
+
+      return {
+        ok: true,
+        role: "owner"
+      };
+
+    }
+
+
+    // مدیر گروه
+    if (
+      member.status === "administrator"
+    ) {
+
+      return {
+        ok: true,
+        role: "admin"
+      };
+
+    }
+
+
+    // عضو عادی
+    return {
+      ok: false,
+      role: "member"
+    };
+
+  }
+
+  catch (error) {
+
+    console.log(
+      "PANEL ROLE CHECK ERROR:",
+      error.message
+    );
+
+
+    return {
+      ok: false,
+      role: "unknown"
+    };
+
+  }
+
+}
+
+
+// =====================================
+// بررسی دسترسی به پنل
+// =====================================
+
+async function protectPanel(ctx) {
 
   if (
     !ctx.callbackQuery ||
@@ -186,34 +288,103 @@ function protectPanel(ctx) {
   }
 
 
-  const ownerId =
+  const panelOwnerId =
     String(ctx.match[1]);
+
 
   const currentUserId =
     String(ctx.from.id);
 
 
-  if (
-    ownerId !== currentUserId
-  ) {
+  // ===================================
+  // تشخیص نقش واقعی کاربر
+  // ===================================
+
+  const role =
+    await getGroupRole(ctx);
+
+
+  // ===================================
+  // عضو عادی یا فرد بدون دسترسی
+  // ===================================
+
+  if (!role.ok) {
 
     try {
 
-      ctx.answerCbQuery(
-        "『𓆩 ★ این پنل برای شما نیست ★ 𓆪』",
+      await ctx.answerCbQuery(
+        "『𓆩 ★ شما اجازه استفاده از پنل مدیریت را ندارید ★ 𓆪』",
         {
           show_alert: true
         }
       );
 
-    } catch {}
+    }
+
+    catch {}
 
     return false;
 
   }
 
 
-  return true;
+  // ===================================
+  // مالک اصلی
+  // ===================================
+  //
+  // مالک می‌تواند پنل خودش را باز کند
+  // و همچنین می‌تواند پنل مدیران را مشاهده کند.
+  //
+
+  if (
+    role.role === "owner"
+  ) {
+
+    return true;
+
+  }
+
+
+  // ===================================
+  // مدیر
+  // ===================================
+  //
+  // مدیر فقط پنلی را می‌تواند کنترل کند
+  // که خودش آن را باز کرده است.
+  //
+
+  if (
+    role.role === "admin"
+  ) {
+
+    if (
+      panelOwnerId !== currentUserId
+    ) {
+
+      try {
+
+        await ctx.answerCbQuery(
+          "『𓆩 ★ این پنل برای شما نیست ★ 𓆪』",
+          {
+            show_alert: true
+          }
+        );
+
+      }
+
+      catch {}
+
+      return false;
+
+    }
+
+
+    return true;
+
+  }
+
+
+  return false;
 
 }
 
@@ -401,7 +572,7 @@ function optionPanel(
 
 
 // =====================================
-// ثبت اکشن‌ها
+// ثبت اکشن‌های پنل
 // =====================================
 
 function registerPanelActions(bot) {
@@ -415,15 +586,24 @@ function registerPanelActions(bot) {
     /^panel_next:(\d+)$/,
     async ctx => {
 
-      if (!protectPanel(ctx)) return;
+      if (
+        !(await protectPanel(ctx))
+      ) return;
+
 
       await ctx.answerCbQuery();
 
+
       await ctx.editMessageText(
+
         `『𓆩 صفحه بعد 𓆪』
 
 قابلیت‌های بیشتر مدیریت گروه:`,
-        nextPanel(ctx.from.id)
+
+        nextPanel(
+          ctx.match[1]
+        )
+
       );
 
     }
@@ -438,13 +618,22 @@ function registerPanelActions(bot) {
     /^panel_home:(\d+)$/,
     async ctx => {
 
-      if (!protectPanel(ctx)) return;
+      if (
+        !(await protectPanel(ctx))
+      ) return;
+
 
       await ctx.answerCbQuery();
 
+
       await ctx.editMessageText(
+
         panelText(),
-        mainPanel(ctx.from.id)
+
+        mainPanel(
+          ctx.match[1]
+        )
+
       );
 
     }
@@ -459,21 +648,27 @@ function registerPanelActions(bot) {
     /^group_locks:(\d+)$/,
     async ctx => {
 
-      if (!protectPanel(ctx)) return;
+      if (
+        !(await protectPanel(ctx))
+      ) return;
+
 
       await ctx.answerCbQuery();
 
+
       await ctx.editMessageText(
+
         `『𓆩 قفل گروه 𓆪』
 
-قفل‌های مربوط به مدیریت گروه در این بخش قرار می‌گیرند.`,
+قفل‌های مربوط به مدیریت گروه:`,
+
         Markup.inlineKeyboard([
 
           [
             panelButton(
               "قفل لینک",
               "lock_link",
-              ctx.from.id
+              ctx.match[1]
             )
           ],
 
@@ -481,7 +676,7 @@ function registerPanelActions(bot) {
             panelButton(
               "قفل فوروارد",
               "lock_forward",
-              ctx.from.id
+              ctx.match[1]
             )
           ],
 
@@ -489,7 +684,7 @@ function registerPanelActions(bot) {
             panelButton(
               "قفل هشتگ",
               "lock_hashtag",
-              ctx.from.id
+              ctx.match[1]
             )
           ],
 
@@ -497,7 +692,7 @@ function registerPanelActions(bot) {
             panelButton(
               "قفل منشن",
               "lock_mention",
-              ctx.from.id
+              ctx.match[1]
             )
           ],
 
@@ -505,7 +700,7 @@ function registerPanelActions(bot) {
             panelButton(
               "قفل پیام بلند",
               "lock_long_message",
-              ctx.from.id
+              ctx.match[1]
             )
           ],
 
@@ -513,7 +708,7 @@ function registerPanelActions(bot) {
             panelButton(
               "قفل یوزرنیم",
               "lock_username",
-              ctx.from.id
+              ctx.match[1]
             )
           ],
 
@@ -521,7 +716,7 @@ function registerPanelActions(bot) {
             panelButton(
               "قفل رسانه",
               "lock_media",
-              ctx.from.id
+              ctx.match[1]
             )
           ],
 
@@ -529,7 +724,7 @@ function registerPanelActions(bot) {
             panelButton(
               "قفل آیدی",
               "lock_id",
-              ctx.from.id
+              ctx.match[1]
             )
           ],
 
@@ -537,7 +732,7 @@ function registerPanelActions(bot) {
             panelButton(
               "قفل ممبر دزد",
               "lock_member_thief",
-              ctx.from.id
+              ctx.match[1]
             )
           ],
 
@@ -545,7 +740,7 @@ function registerPanelActions(bot) {
             panelButton(
               "قفل خیانت",
               "lock_treason",
-              ctx.from.id
+              ctx.match[1]
             )
           ],
 
@@ -553,7 +748,7 @@ function registerPanelActions(bot) {
             panelButton(
               "قفل ضد خیانت",
               "lock_anti_treason",
-              ctx.from.id
+              ctx.match[1]
             )
           ],
 
@@ -561,7 +756,7 @@ function registerPanelActions(bot) {
             panelButton(
               "قفل دشمن",
               "lock_enemy",
-              ctx.from.id
+              ctx.match[1]
             )
           ],
 
@@ -569,7 +764,7 @@ function registerPanelActions(bot) {
             panelButton(
               "بازگشت",
               "panel_home",
-              ctx.from.id
+              ctx.match[1]
             )
           ],
 
@@ -577,11 +772,12 @@ function registerPanelActions(bot) {
             panelButton(
               "بستن پنل",
               "panel_close",
-              ctx.from.id
+              ctx.match[1]
             )
           ]
 
         ])
+
       );
 
     }
@@ -596,21 +792,27 @@ function registerPanelActions(bot) {
     /^users:(\d+)$/,
     async ctx => {
 
-      if (!protectPanel(ctx)) return;
+      if (
+        !(await protectPanel(ctx))
+      ) return;
+
 
       await ctx.answerCbQuery();
 
+
       await ctx.editMessageText(
+
         `『𓆩 مدیریت کاربران 𓆪』
 
 بخش مدیریت کاربران گروه.`,
+
         Markup.inlineKeyboard([
 
           [
             panelButton(
               "بازگشت",
               "panel_home",
-              ctx.from.id
+              ctx.match[1]
             )
           ],
 
@@ -618,11 +820,12 @@ function registerPanelActions(bot) {
             panelButton(
               "بستن پنل",
               "panel_close",
-              ctx.from.id
+              ctx.match[1]
             )
           ]
 
         ])
+
       );
 
     }
@@ -637,21 +840,27 @@ function registerPanelActions(bot) {
     /^messages:(\d+)$/,
     async ctx => {
 
-      if (!protectPanel(ctx)) return;
+      if (
+        !(await protectPanel(ctx))
+      ) return;
+
 
       await ctx.answerCbQuery();
 
+
       await ctx.editMessageText(
+
         `『𓆩 مدیریت پیام‌ها 𓆪』
 
 بخش مدیریت پیام‌های گروه.`,
+
         Markup.inlineKeyboard([
 
           [
             panelButton(
               "بازگشت",
               "panel_home",
-              ctx.from.id
+              ctx.match[1]
             )
           ],
 
@@ -659,52 +868,12 @@ function registerPanelActions(bot) {
             panelButton(
               "بستن پنل",
               "panel_close",
-              ctx.from.id
+              ctx.match[1]
             )
           ]
 
         ])
-      );
 
-    }
-  );
-
-
-  // ===================================
-  // قفل‌های گروه
-  // ===================================
-
-  bot.action(
-    /^locks:(\d+)$/,
-    async ctx => {
-
-      if (!protectPanel(ctx)) return;
-
-      await ctx.answerCbQuery();
-
-      await ctx.editMessageText(
-        `『𓆩 قفل‌های گروه 𓆪』
-
-قفل‌های گروه از این بخش مدیریت خواهند شد.`,
-        Markup.inlineKeyboard([
-
-          [
-            panelButton(
-              "بازگشت",
-              "panel_home",
-              ctx.from.id
-            )
-          ],
-
-          [
-            panelButton(
-              "بستن پنل",
-              "panel_close",
-              ctx.from.id
-            )
-          ]
-
-        ])
       );
 
     }
@@ -719,21 +888,27 @@ function registerPanelActions(bot) {
     /^warnings:(\d+)$/,
     async ctx => {
 
-      if (!protectPanel(ctx)) return;
+      if (
+        !(await protectPanel(ctx))
+      ) return;
+
 
       await ctx.answerCbQuery();
 
+
       await ctx.editMessageText(
+
         `『𓆩 سیستم اخطار 𓆪』
 
 مدیریت سیستم اخطار گروه.`,
+
         Markup.inlineKeyboard([
 
           [
             panelButton(
               "بازگشت",
               "panel_home",
-              ctx.from.id
+              ctx.match[1]
             )
           ],
 
@@ -741,11 +916,12 @@ function registerPanelActions(bot) {
             panelButton(
               "بستن پنل",
               "panel_close",
-              ctx.from.id
+              ctx.match[1]
             )
           ]
 
         ])
+
       );
 
     }
@@ -760,21 +936,27 @@ function registerPanelActions(bot) {
     /^joinleave:(\d+)$/,
     async ctx => {
 
-      if (!protectPanel(ctx)) return;
+      if (
+        !(await protectPanel(ctx))
+      ) return;
+
 
       await ctx.answerCbQuery();
 
+
       await ctx.editMessageText(
+
         `『𓆩 ورود و خروج 𓆪』
 
 مدیریت ورود و خروج اعضای گروه.`,
+
         Markup.inlineKeyboard([
 
           [
             panelButton(
               "بازگشت",
               "panel_home",
-              ctx.from.id
+              ctx.match[1]
             )
           ],
 
@@ -782,11 +964,12 @@ function registerPanelActions(bot) {
             panelButton(
               "بستن پنل",
               "panel_close",
-              ctx.from.id
+              ctx.match[1]
             )
           ]
 
         ])
+
       );
 
     }
@@ -801,21 +984,27 @@ function registerPanelActions(bot) {
     /^rules:(\d+)$/,
     async ctx => {
 
-      if (!protectPanel(ctx)) return;
+      if (
+        !(await protectPanel(ctx))
+      ) return;
+
 
       await ctx.answerCbQuery();
 
+
       await ctx.editMessageText(
+
         `『𓆩 قوانین 𓆪』
 
 مدیریت قوانین گروه.`,
+
         Markup.inlineKeyboard([
 
           [
             panelButton(
               "بازگشت",
               "panel_home",
-              ctx.from.id
+              ctx.match[1]
             )
           ],
 
@@ -823,11 +1012,12 @@ function registerPanelActions(bot) {
             panelButton(
               "بستن پنل",
               "panel_close",
-              ctx.from.id
+              ctx.match[1]
             )
           ]
 
         ])
+
       );
 
     }
@@ -842,21 +1032,27 @@ function registerPanelActions(bot) {
     /^stats:(\d+)$/,
     async ctx => {
 
-      if (!protectPanel(ctx)) return;
+      if (
+        !(await protectPanel(ctx))
+      ) return;
+
 
       await ctx.answerCbQuery();
 
+
       await ctx.editMessageText(
+
         `『𓆩 آمار گروه 𓆪』
 
 آمار گروه در این بخش نمایش داده خواهد شد.`,
+
         Markup.inlineKeyboard([
 
           [
             panelButton(
               "بازگشت",
               "panel_home",
-              ctx.from.id
+              ctx.match[1]
             )
           ],
 
@@ -864,11 +1060,12 @@ function registerPanelActions(bot) {
             panelButton(
               "بستن پنل",
               "panel_close",
-              ctx.from.id
+              ctx.match[1]
             )
           ]
 
         ])
+
       );
 
     }
@@ -883,21 +1080,27 @@ function registerPanelActions(bot) {
     /^permissions:(\d+)$/,
     async ctx => {
 
-      if (!protectPanel(ctx)) return;
+      if (
+        !(await protectPanel(ctx))
+      ) return;
+
 
       await ctx.answerCbQuery();
 
+
       await ctx.editMessageText(
+
         `『𓆩 دسترسی‌ها 𓆪』
 
 مدیریت دسترسی مدیران گروه.`,
+
         Markup.inlineKeyboard([
 
           [
             panelButton(
               "بازگشت",
               "panel_home",
-              ctx.from.id
+              ctx.match[1]
             )
           ],
 
@@ -905,11 +1108,12 @@ function registerPanelActions(bot) {
             panelButton(
               "بستن پنل",
               "panel_close",
-              ctx.from.id
+              ctx.match[1]
             )
           ]
 
         ])
+
       );
 
     }
@@ -922,44 +1126,116 @@ function registerPanelActions(bot) {
 
   const options = [
 
-    ["manager_authority", "اختیار مدیر"],
-    ["post_limit", "محدودیت ارسال پست سرهم"],
-    ["anti_spam", "ضد اسپم"],
-    ["anti_flood", "ضد فلود"],
-    ["bad_media", "قفل رسانه‌های نامناسب"],
-    ["sales_lock", "قفل فروش"],
-    ["ads_messages", "قفل پیام‌های تبلیغاتی"],
-    ["poll_lock", "قفل نظرسنجی"],
-    ["voice_lock", "قفل ویس"],
-    ["file_lock", "قفل فایل"],
-    ["sticker_lock", "قفل استیکر"],
-    ["gif_lock", "قفل گیف"],
-    ["video_lock", "قفل فیلم"],
-    ["long_message", "قفل پیام بلند"]
+    [
+      "manager_authority",
+      "اختیار مدیر"
+    ],
+
+    [
+      "post_limit",
+      "محدودیت ارسال پست سرهم"
+    ],
+
+    [
+      "anti_spam",
+      "ضد اسپم"
+    ],
+
+    [
+      "anti_flood",
+      "ضد فلود"
+    ],
+
+    [
+      "bad_media",
+      "قفل رسانه‌های نامناسب"
+    ],
+
+    [
+      "sales_lock",
+      "قفل فروش"
+    ],
+
+    [
+      "ads_messages",
+      "قفل پیام‌های تبلیغاتی"
+    ],
+
+    [
+      "poll_lock",
+      "قفل نظرسنجی"
+    ],
+
+    [
+      "voice_lock",
+      "قفل ویس"
+    ],
+
+    [
+      "file_lock",
+      "قفل فایل"
+    ],
+
+    [
+      "sticker_lock",
+      "قفل استیکر"
+    ],
+
+    [
+      "gif_lock",
+      "قفل گیف"
+    ],
+
+    [
+      "video_lock",
+      "قفل فیلم"
+    ],
+
+    [
+      "long_message",
+      "قفل پیام بلند"
+    ]
 
   ];
 
 
-  for (const [action, title] of options) {
+  for (
+    const [action, title]
+    of options
+  ) {
 
     bot.action(
-      new RegExp(`^${action}:(\\d+)$`),
+
+      new RegExp(
+        `^${action}:(\\d+)$`
+      ),
+
       async ctx => {
 
-        if (!protectPanel(ctx)) return;
+        if (
+          !(await protectPanel(ctx))
+        ) return;
+
 
         await ctx.answerCbQuery();
 
+
         await ctx.editMessageText(
-          `『𓆩 ${title} 𓆪』\n\nوضعیت این گزینه در این مرحله فقط نمایشی است.`,
+
+          `『𓆩 ${title} 𓆪』
+
+وضعیت این گزینه در این مرحله فقط نمایشی است.`,
+
           optionPanel(
             title,
             action,
-            ctx.from.id
+            ctx.match[1]
           )
+
         );
 
       }
+
     );
 
   }
@@ -971,42 +1247,104 @@ function registerPanelActions(bot) {
 
   const lockOptions = [
 
-    ["lock_link", "لینک"],
-    ["lock_forward", "فوروارد"],
-    ["lock_hashtag", "هشتگ"],
-    ["lock_mention", "منشن"],
-    ["lock_long_message", "پیام بلند"],
-    ["lock_username", "یوزرنیم"],
-    ["lock_media", "رسانه"],
-    ["lock_id", "آیدی"],
-    ["lock_member_thief", "ممبر دزد"],
-    ["lock_treason", "خیانت"],
-    ["lock_anti_treason", "ضد خیانت"],
-    ["lock_enemy", "دشمن"]
+    [
+      "lock_link",
+      "لینک"
+    ],
+
+    [
+      "lock_forward",
+      "فوروارد"
+    ],
+
+    [
+      "lock_hashtag",
+      "هشتگ"
+    ],
+
+    [
+      "lock_mention",
+      "منشن"
+    ],
+
+    [
+      "lock_long_message",
+      "پیام بلند"
+    ],
+
+    [
+      "lock_username",
+      "یوزرنیم"
+    ],
+
+    [
+      "lock_media",
+      "رسانه"
+    ],
+
+    [
+      "lock_id",
+      "آیدی"
+    ],
+
+    [
+      "lock_member_thief",
+      "ممبر دزد"
+    ],
+
+    [
+      "lock_treason",
+      "خیانت"
+    ],
+
+    [
+      "lock_anti_treason",
+      "ضد خیانت"
+    ],
+
+    [
+      "lock_enemy",
+      "دشمن"
+    ]
 
   ];
 
 
-  for (const [action, title] of lockOptions) {
+  for (
+    const [action, title]
+    of lockOptions
+  ) {
 
     bot.action(
-      new RegExp(`^${action}:(\\d+)$`),
+
+      new RegExp(
+        `^${action}:(\\d+)$`
+      ),
+
       async ctx => {
 
-        if (!protectPanel(ctx)) return;
+        if (
+          !(await protectPanel(ctx))
+        ) return;
+
 
         await ctx.answerCbQuery();
 
+
         await ctx.editMessageText(
+
           `『𓆩 قفل ${title} 𓆪』`,
+
           optionPanel(
             title,
             action,
-            ctx.from.id
+            ctx.match[1]
           )
+
         );
 
       }
+
     );
 
   }
@@ -1020,14 +1358,20 @@ function registerPanelActions(bot) {
     /^panel_close:(\d+)$/,
     async ctx => {
 
-      if (!protectPanel(ctx)) return;
+      if (
+        !(await protectPanel(ctx))
+      ) return;
+
 
       await ctx.answerCbQuery();
+
 
       try {
 
         await ctx.editMessageText(
+
           `『𓆩 ★ پنل مدیریت بسته شد ★ 𓆪』`
+
         );
 
       }
@@ -1055,6 +1399,8 @@ module.exports = {
 
   registerPanelActions,
   mainPanel,
-  panelText
+  panelText,
+  protectPanel,
+  getGroupRole
 
 };
