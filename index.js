@@ -24,6 +24,7 @@ const {
 const BOT_TOKEN =
   process.env.BOT_TOKEN;
 
+
 if (!BOT_TOKEN) {
 
   console.error(
@@ -31,6 +32,7 @@ if (!BOT_TOKEN) {
   );
 
   process.exit(1);
+
 }
 
 
@@ -43,45 +45,33 @@ const bot =
 
 
 // =====================================
-// دستور شروع
+// تابع تشخیص مالک / مدیر
 // =====================================
 
-bot.start(async (ctx) => {
-
-  await ctx.reply(
-    "『𓆩 ★ PulseGroupManager ★ 𓆪』\n\nربات فعال است."
-  );
-
-});
-
-
-// =====================================
-// دستور پنل
-// =====================================
-//
-// فقط در گروه قابل استفاده است.
-// بررسی مالک/مدیر بودن در زمان کار با پنل
-// توسط panel.js انجام می‌شود.
-//
-
-bot.command("panel", async (ctx) => {
-
-  // فقط گروه و سوپرگروه
-  if (
-    ctx.chat.type !== "group" &&
-    ctx.chat.type !== "supergroup"
-  ) {
-
-    return;
-
-  }
-
+async function isAdminOrOwner(ctx) {
 
   try {
 
-    // ---------------------------------
-    // تشخیص نقش کاربر
-    // ---------------------------------
+    if (
+      !ctx.chat ||
+      !ctx.from
+    ) {
+
+      return false;
+
+    }
+
+
+    // فقط گروه
+    if (
+      ctx.chat.type !== "group" &&
+      ctx.chat.type !== "supergroup"
+    ) {
+
+      return false;
+
+    }
+
 
     const member =
       await ctx.telegram.getChatMember(
@@ -90,29 +80,95 @@ bot.command("panel", async (ctx) => {
       );
 
 
-    // ---------------------------------
-    // فقط مالک یا مدیر
-    // ---------------------------------
+    if (!member) {
 
-    if (
-      member.status !== "creator" &&
-      member.status !== "administrator"
-    ) {
-
-      return;
+      return false;
 
     }
 
 
-    // ---------------------------------
-    // ارسال پنل شخصی
-    // ---------------------------------
+    // مالک اصلی
+    if (
+      member.status === "creator"
+    ) {
+
+      return true;
+
+    }
+
+
+    // مدیر
+    if (
+      member.status === "administrator"
+    ) {
+
+      return true;
+
+    }
+
+
+    // عضو عادی
+    return false;
+
+  }
+
+  catch (error) {
+
+    console.log(
+      "ADMIN CHECK ERROR:",
+      error.message
+    );
+
+    return false;
+
+  }
+
+}
+
+
+// =====================================
+// باز کردن پنل
+// =====================================
+
+async function openPanel(ctx) {
+
+  // فقط گروه
+  if (
+    !ctx.chat ||
+    (
+      ctx.chat.type !== "group" &&
+      ctx.chat.type !== "supergroup"
+    )
+  ) {
+
+    return;
+
+  }
+
+
+  // فقط مالک و مدیر
+  const allowed =
+    await isAdminOrOwner(ctx);
+
+
+  if (!allowed) {
+
+    // عضو عادی هیچ پاسخی نمی‌گیرد
+    return;
+
+  }
+
+
+  try {
 
     await ctx.reply(
+
       panelText(),
+
       mainPanel(
         ctx.from.id
       )
+
     );
 
   }
@@ -120,28 +176,72 @@ bot.command("panel", async (ctx) => {
   catch (error) {
 
     console.log(
-      "PANEL COMMAND ERROR:",
+      "PANEL OPEN ERROR:",
       error.message
     );
 
   }
 
-});
+}
 
 
 // =====================================
-// ثبت دکمه‌های پنل
+// دستور /panel
+// =====================================
+
+bot.command(
+  "panel",
+  async ctx => {
+
+    await openPanel(ctx);
+
+  }
+);
+
+
+// =====================================
+// دستور فارسی «پنل»
+// =====================================
+
+bot.hears(
+  /^پنل$/,
+  async ctx => {
+
+    await openPanel(ctx);
+
+  }
+);
+
+
+// =====================================
+// دستور /start
+// =====================================
+
+bot.start(
+  async ctx => {
+
+    await ctx.reply(
+      "『𓆩 ★ PulseGroupManager ★ 𓆪』\n\nربات فعال است."
+    );
+
+  }
+);
+
+
+// =====================================
+// ثبت تمام دکمه‌های پنل
 // =====================================
 
 registerPanelActions(bot);
 
 
 // =====================================
-// سرور برای Render
+// سرور Render
 // =====================================
 
 const PORT =
   process.env.PORT || 10000;
+
 
 const server =
   http.createServer(
@@ -154,6 +254,7 @@ const server =
             "text/plain; charset=utf-8"
         }
       );
+
 
       res.end(
         "PulseGroupManager is running."
@@ -191,7 +292,7 @@ bot.launch()
     );
 
   })
-  .catch((error) => {
+  .catch(error => {
 
     console.error(
       "BOT START ERROR:",
@@ -207,10 +308,19 @@ bot.launch()
 
 process.once(
   "SIGINT",
-  () => bot.stop("SIGINT")
+  () => {
+
+    bot.stop("SIGINT");
+
+  }
 );
+
 
 process.once(
   "SIGTERM",
-  () => bot.stop("SIGTERM")
+  () => {
+
+    bot.stop("SIGTERM");
+
+  }
 );
