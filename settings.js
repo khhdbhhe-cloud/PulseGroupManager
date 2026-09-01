@@ -48,26 +48,12 @@ function settingButton(
 function ensureNicknameSettings(group) {
 
   if (!group.botNicknames) {
-
     group.botNicknames = {};
-
   }
 
-
-  if (
-    group.nicknameLocked === undefined
-  ) {
-
+  if (group.nicknameLocked === undefined) {
     group.nicknameLocked = false;
-
   }
-
-
-  /*
-   * اگر نسخه قدیمی اطلاعات لقب را
-   * داخل botReply.nicknames داشته باشد،
-   * اطلاعات را به سیستم جدید منتقل می‌کنیم.
-   */
 
   if (
     group.botReply &&
@@ -77,7 +63,6 @@ function ensureNicknameSettings(group) {
 
     const oldNicknames =
       group.botReply.nicknames;
-
 
     for (
       const userId of Object.keys(oldNicknames)
@@ -95,13 +80,11 @@ function ensureNicknameSettings(group) {
 
     }
 
-
     delete group.botReply.nicknames;
 
     saveDB();
 
   }
-
 
   return group.botNicknames;
 
@@ -112,16 +95,12 @@ function ensureNicknameSettings(group) {
 // وضعیت قفل لقب
 // =====================================
 
-function isNicknameLocked(
-  chatId
-) {
+function isNicknameLocked(chatId) {
 
   const group =
     getGroup(chatId);
 
-
   ensureNicknameSettings(group);
-
 
   return Boolean(
     group.nicknameLocked
@@ -142,16 +121,12 @@ function setNicknameLocked(
   const group =
     getGroup(chatId);
 
-
   ensureNicknameSettings(group);
-
 
   group.nicknameLocked =
     Boolean(value);
 
-
   saveDB();
-
 
   return group.nicknameLocked;
 
@@ -170,10 +145,8 @@ function getUserNickname(
   const group =
     getGroup(chatId);
 
-
   const nicknames =
     ensureNicknameSettings(group);
-
 
   return (
     nicknames[String(userId)] ||
@@ -196,29 +169,20 @@ function setUserNickname(
   const group =
     getGroup(chatId);
 
-
   const nicknames =
     ensureNicknameSettings(group);
 
-
   const text =
-    String(nickname)
-      .trim();
-
+    String(nickname).trim();
 
   if (!text) {
-
     return false;
-
   }
-
 
   nicknames[String(userId)] =
     text;
 
-
   saveDB();
-
 
   return text;
 
@@ -237,26 +201,19 @@ function removeUserNickname(
   const group =
     getGroup(chatId);
 
-
   const nicknames =
     ensureNicknameSettings(group);
-
 
   const id =
     String(userId);
 
-
   if (!nicknames[id]) {
-
     return false;
-
   }
-
 
   delete nicknames[id];
 
   saveDB();
-
 
   return true;
 
@@ -267,17 +224,13 @@ function removeUserNickname(
 // تعداد لقب‌های ثبت‌شده
 // =====================================
 
-function getNicknameCount(
-  chatId
-) {
+function getNicknameCount(chatId) {
 
   const group =
     getGroup(chatId);
 
-
   const nicknames =
     ensureNicknameSettings(group);
-
 
   return Object.keys(
     nicknames
@@ -287,7 +240,7 @@ function getNicknameCount(
 
 
 // =====================================
-// دکمه لقب در صفحه اصلی تنظیمات
+// دکمه لقب
 // =====================================
 
 function nicknameSettingButton(
@@ -299,7 +252,6 @@ function nicknameSettingButton(
     chatId
       ? isNicknameLocked(chatId)
       : false;
-
 
   return settingButton(
     locked
@@ -411,20 +363,12 @@ function settingsPanel(
       )
     ],
 
-    // -------------------------------
-    // لقب
-    // -------------------------------
-
     [
       nicknameSettingButton(
         ownerId,
         chatId
       )
     ],
-
-    // -------------------------------
-    // لقب و پاسخ ربات
-    // -------------------------------
 
     [
       settingButton(
@@ -476,7 +420,6 @@ async function protectSettings(ctx) {
   const access =
     await checkAdmin(ctx);
 
-
   if (!access.ok) {
 
     try {
@@ -497,7 +440,6 @@ async function protectSettings(ctx) {
 
   }
 
-
   if (
     ctx.callbackQuery &&
     ctx.match &&
@@ -507,10 +449,8 @@ async function protectSettings(ctx) {
     const ownerId =
       String(ctx.match[1]);
 
-
     const currentUserId =
       String(ctx.from.id);
-
 
     if (
       ownerId !== currentUserId
@@ -535,7 +475,6 @@ async function protectSettings(ctx) {
 
   }
 
-
   return true;
 
 }
@@ -549,7 +488,6 @@ async function protectOwner(ctx) {
 
   const access =
     await checkOwner(ctx);
-
 
   if (!access.ok) {
 
@@ -571,7 +509,6 @@ async function protectOwner(ctx) {
 
   }
 
-
   return true;
 
 }
@@ -582,8 +519,7 @@ async function protectOwner(ctx) {
 // =====================================
 
 function backToSettings(
-  ownerId,
-  chatId = null
+  ownerId
 ) {
 
   return Markup.inlineKeyboard([
@@ -624,28 +560,19 @@ function ensureBotReplySettings(group) {
       random: true,
 
       replies: [
-
         "جانم، هستم 🌹",
-
         "جانم؟ من همیشه فعالم 😎",
-
         "بله؟ ربات اینجاست ❤️",
-
         "هستم، بگو ببینم چی شده 😄",
-
         "جانم، گوشم با توئه 🌹",
-
         "حاضرم، زیبای گپ 😎"
-
       ]
 
     };
 
-
     saveDB();
 
   }
-
 
   if (
     !Array.isArray(
@@ -659,7 +586,6 @@ function ensureBotReplySettings(group) {
 
   }
 
-
   if (
     group.botReply.enabled === undefined
   ) {
@@ -669,7 +595,6 @@ function ensureBotReplySettings(group) {
     saveDB();
 
   }
-
 
   if (
     group.botReply.random === undefined
@@ -681,10 +606,7 @@ function ensureBotReplySettings(group) {
 
   }
 
-
-  // مهاجرت اطلاعات لقب قدیمی
   ensureNicknameSettings(group);
-
 
   return group.botReply;
 
@@ -695,17 +617,13 @@ function ensureBotReplySettings(group) {
 // دریافت پاسخ‌های ربات
 // =====================================
 
-function getBotReplies(
-  chatId
-) {
+function getBotReplies(chatId) {
 
   const group =
     getGroup(chatId);
 
-
   const botReply =
     ensureBotReplySettings(group);
-
 
   return botReply.replies;
 
@@ -724,18 +642,15 @@ function addBotReply(
   const group =
     getGroup(chatId);
 
-
   const botReply =
     ensureBotReplySettings(group);
-
 
   const text =
     String(reply).trim();
 
-
-  if (!text)
+  if (!text) {
     return false;
-
+  }
 
   if (
     !botReply.replies.includes(text)
@@ -746,7 +661,6 @@ function addBotReply(
     saveDB();
 
   }
-
 
   return true;
 
@@ -765,19 +679,15 @@ function removeBotReply(
   const group =
     getGroup(chatId);
 
-
   const botReply =
     ensureBotReplySettings(group);
-
 
   botReply.replies =
     botReply.replies.filter(
       item => item !== reply
     );
 
-
   saveDB();
-
 
   return true;
 
@@ -796,17 +706,13 @@ function setBotReplyEnabled(
   const group =
     getGroup(chatId);
 
-
   const botReply =
     ensureBotReplySettings(group);
-
 
   botReply.enabled =
     Boolean(value);
 
-
   saveDB();
-
 
   return botReply.enabled;
 
@@ -817,17 +723,13 @@ function setBotReplyEnabled(
 // انتخاب پاسخ ربات
 // =====================================
 
-function getRandomBotReply(
-  chatId
-) {
+function getRandomBotReply(chatId) {
 
   const group =
     getGroup(chatId);
 
-
   const botReply =
     ensureBotReplySettings(group);
-
 
   if (
     !botReply.enabled ||
@@ -838,13 +740,11 @@ function getRandomBotReply(
 
   }
 
-
   const index =
     Math.floor(
       Math.random() *
       botReply.replies.length
     );
-
 
   return botReply.replies[index];
 
@@ -863,7 +763,6 @@ function formatBotReply(
   let result =
     String(text);
 
-
   if (nickname) {
 
     result =
@@ -879,8 +778,24 @@ function formatBotReply(
 
   }
 
-
   return result;
+
+}
+
+
+// =====================================
+// نمایش صفحه تنظیمات
+// =====================================
+
+async function showSettingsHome(ctx) {
+
+  await ctx.editMessageText(
+    settingsText(),
+    settingsPanel(
+      ctx.from.id,
+      ctx.chat.id
+    )
+  );
 
 }
 
@@ -914,17 +829,12 @@ function registerSettings(bot) {
 
         }
 
-
         const access =
           await checkAdmin(ctx);
 
-
         if (!access.ok) {
-
           return;
-
         }
-
 
         await ctx.reply(
           settingsText(),
@@ -936,10 +846,8 @@ function registerSettings(bot) {
             ),
 
             reply_parameters: {
-
               message_id:
                 ctx.message.message_id
-
             }
 
           }
@@ -972,21 +880,11 @@ function registerSettings(bot) {
         !(await protectSettings(ctx))
       ) return;
 
-
       await ctx.answerCbQuery();
-
 
       try {
 
-        await ctx.editMessageText(
-          settingsText(),
-
-          settingsPanel(
-            ctx.from.id,
-            ctx.chat.id
-          )
-
-        );
+        await showSettingsHome(ctx);
 
       }
 
@@ -1015,21 +913,17 @@ function registerSettings(bot) {
         !(await protectSettings(ctx))
       ) return;
 
-
       await ctx.answerCbQuery();
-
 
       const locked =
         isNicknameLocked(
           ctx.chat.id
         );
 
-
       const count =
         getNicknameCount(
           ctx.chat.id
         );
-
 
       await ctx.editMessageText(
 
@@ -1097,22 +991,18 @@ ${locked ? "☆ لقب" : "★ لقب"}
         !(await protectSettings(ctx))
       ) return;
 
-
       const locked =
         isNicknameLocked(
           ctx.chat.id
         );
 
-
       const newValue =
         !locked;
-
 
       setNicknameLocked(
         ctx.chat.id,
         newValue
       );
-
 
       await ctx.answerCbQuery(
         newValue
@@ -1120,12 +1010,10 @@ ${locked ? "☆ لقب" : "★ لقب"}
           : "★ لقب باز شد."
       );
 
-
       const count =
         getNicknameCount(
           ctx.chat.id
         );
-
 
       await ctx.editMessageText(
 
@@ -1189,9 +1077,7 @@ ${newValue
         !(await protectSettings(ctx))
       ) return;
 
-
       await ctx.answerCbQuery();
-
 
       await ctx.editMessageText(
 
@@ -1222,8 +1108,6 @@ ${newValue
 ★ حذف رسانه
 
 حذف خوشامد
-
-با این دستور رسانه خوشامد حذف می‌شود.
 
 ★ مقام خوشامد
 
@@ -1257,9 +1141,7 @@ ${newValue
         !(await protectSettings(ctx))
       ) return;
 
-
       await ctx.answerCbQuery();
-
 
       await ctx.editMessageText(
 
@@ -1296,15 +1178,12 @@ ${newValue
         !(await protectSettings(ctx))
       ) return;
 
-
       await ctx.answerCbQuery();
-
 
       const config =
         getWarningSettings(
           ctx.chat.id
         );
-
 
       const punishmentText =
         config.punishment === "mute"
@@ -1312,7 +1191,6 @@ ${newValue
           : config.punishment === "restrict"
             ? "محدودیت"
             : "بن";
-
 
       await ctx.editMessageText(
 
@@ -1447,22 +1325,930 @@ ${newValue
         !(await protectSettings(ctx))
       ) return;
 
-
       const count =
         Number(ctx.match[1]);
-
 
       setMaxWarnings(
         ctx.chat.id,
         count
       );
 
-
       await ctx.answerCbQuery(
         `تعداد اخطار روی ${count} تنظیم شد.`
       );
 
+      const config =
+        getWarningSettings(
+          ctx.chat.id
+        );
+
+      const punishmentText =
+        config.punishment === "mute"
+          ? "سکوت"
+          : config.punishment === "restrict"
+            ? "محدودیت"
+            : "بن";
 
       await ctx.editMessageText(
 
-`『𓆩 ت
+`『𓆩 تنظیمات اختیار 𓆪』
+
+تعداد اخطار فعلی:
+★ ${config.maxWarnings}
+
+مجازات فعلی:
+★ ${punishmentText}
+
+مدت مجازات:
+★ ${config.duration} دقیقه
+تعداد اخطار با موفقیت تغییر کرد.`,
+
+        Markup.inlineKeyboard([
+
+          [
+            settingButton(
+              "بازگشت",
+              "set_warn",
+              ctx.from.id
+            )
+          ],
+
+          [
+            settingButton(
+              "بستن",
+              "settings_close",
+              ctx.from.id
+            )
+          ]
+
+        ])
+
+      );
+
+    }
+  );
+
+
+  // ===================================
+  // مجازات اخطار - سکوت
+  // ===================================
+
+  bot.action(
+    /^warn_punish_mute:(\d+)$/,
+    async ctx => {
+
+      if (
+        !(await protectSettings(ctx))
+      ) return;
+
+      setWarningPunishment(
+        ctx.chat.id,
+        "mute"
+      );
+
+      await ctx.answerCbQuery(
+        "مجازات اخطار روی سکوت تنظیم شد."
+      );
+
+      const config =
+        getWarningSettings(
+          ctx.chat.id
+        );
+
+      await ctx.editMessageText(
+
+`『𓆩 تنظیمات اختیار 𓆪』
+
+تعداد اخطار:
+★ ${config.maxWarnings}
+
+مجازات:
+★ سکوت
+
+مدت مجازات:
+★ ${config.duration} دقیقه
+
+مجازات اخطار با موفقیت تغییر کرد.`,
+
+        Markup.inlineKeyboard([
+
+          [
+            settingButton(
+              "مجازات: سکوت",
+              "warn_punish_mute",
+              ctx.from.id
+            )
+          ],
+
+          [
+            settingButton(
+              "مجازات: محدودیت",
+              "warn_punish_restrict",
+              ctx.from.id
+            )
+          ],
+
+          [
+            settingButton(
+              "مجازات: بن",
+              "warn_punish_ban",
+              ctx.from.id
+            )
+          ],
+
+          [
+            settingButton(
+              "بازگشت",
+              "set_warn",
+              ctx.from.id
+            )
+          ]
+
+        ])
+
+      );
+
+    }
+  );
+
+
+  // ===================================
+  // مجازات اخطار - محدودیت
+  // ===================================
+
+  bot.action(
+    /^warn_punish_restrict:(\d+)$/,
+    async ctx => {
+
+      if (
+        !(await protectSettings(ctx))
+      ) return;
+
+      setWarningPunishment(
+        ctx.chat.id,
+        "restrict"
+      );
+
+      await ctx.answerCbQuery(
+        "مجازات اخطار روی محدودیت تنظیم شد."
+      );
+
+      const config =
+        getWarningSettings(
+          ctx.chat.id
+        );
+
+      await ctx.editMessageText(
+
+`『𓆩 تنظیمات اختیار 𓆪』
+
+تعداد اخطار:
+★ ${config.maxWarnings}
+
+مجازات:
+★ محدودیت
+
+مدت مجازات:
+★ ${config.duration} دقیقه
+
+مجازات اخطار با موفقیت تغییر کرد.`,
+
+        Markup.inlineKeyboard([
+
+          [
+            settingButton(
+              "مجازات: سکوت",
+              "warn_punish_mute",
+              ctx.from.id
+            )
+          ],
+
+          [
+            settingButton(
+              "مجازات: محدودیت",
+              "warn_punish_restrict",
+              ctx.from.id
+            )
+          ],
+
+          [
+            settingButton(
+              "مجازات: بن",
+              "warn_punish_ban",
+              ctx.from.id
+            )
+          ],
+
+          [
+            settingButton(
+              "بازگشت",
+              "set_warn",
+              ctx.from.id
+            )
+          ]
+
+        ])
+
+      );
+
+    }
+  );
+
+
+  // ===================================
+  // مجازات اخطار - بن
+  // ===================================
+
+  bot.action(
+    /^warn_punish_ban:(\d+)$/,
+    async ctx => {
+
+      if (
+        !(await protectSettings(ctx))
+      ) return;
+
+      setWarningPunishment(
+        ctx.chat.id,
+        "ban"
+      );
+
+      await ctx.answerCbQuery(
+        "مجازات اخطار روی بن تنظیم شد."
+      );
+
+      const config =
+        getWarningSettings(
+          ctx.chat.id
+        );
+
+      await ctx.editMessageText(
+
+`『𓆩 تنظیمات اختیار 𓆪』
+
+تعداد اخطار:
+★ ${config.maxWarnings}
+
+مجازات:
+★ بن
+
+مدت مجازات:
+★ ${config.duration} دقیقه
+
+مجازات اخطار با موفقیت تغییر کرد.`,
+
+        Markup.inlineKeyboard([
+
+          [
+            settingButton(
+              "مجازات: سکوت",
+              "warn_punish_mute",
+              ctx.from.id
+            )
+          ],
+
+          [
+            settingButton(
+              "مجازات: محدودیت",
+              "warn_punish_restrict",
+              ctx.from.id
+            )
+          ],
+
+          [
+            settingButton(
+              "مجازات: بن",
+              "warn_punish_ban",
+              ctx.from.id
+            )
+          ],
+
+          [
+            settingButton(
+              "بازگشت",
+              "set_warn",
+              ctx.from.id
+            )
+          ]
+
+        ])
+
+      );
+
+    }
+  );
+
+
+  // ===================================
+  // مدت مجازات
+  // ===================================
+
+  bot.action(
+    /^warn_duration_(60|120|180|360):(\d+)$/,
+    async ctx => {
+
+      if (
+        !(await protectSettings(ctx))
+      ) return;
+
+      const duration =
+        Number(ctx.match[1]);
+
+      setWarningDuration(
+        ctx.chat.id,
+        duration
+      );
+
+      await ctx.answerCbQuery(
+        `مدت مجازات روی ${duration} دقیقه تنظیم شد.`
+      );
+
+      const config =
+        getWarningSettings(
+          ctx.chat.id
+        );
+
+      const punishmentText =
+        config.punishment === "mute"
+          ? "سکوت"
+          : config.punishment === "restrict"
+            ? "محدودیت"
+            : "بن";
+
+      await ctx.editMessageText(
+
+`『𓆩 تنظیمات اختیار 𓆪』
+
+تعداد اخطار:
+★ ${config.maxWarnings}
+
+مجازات:
+★ ${punishmentText}
+
+مدت مجازات:
+★ ${config.duration} دقیقه
+
+مدت مجازات با موفقیت تغییر کرد.`,
+
+        Markup.inlineKeyboard([
+
+          [
+            settingButton(
+              "مدت ۱ ساعت",
+              "warn_duration_60",
+              ctx.from.id
+            ),
+
+            settingButton(
+              "مدت ۲ ساعت",
+              "warn_duration_120",
+              ctx.from.id
+            )
+          ],
+
+          [
+            settingButton(
+              "مدت ۳ ساعت",
+              "warn_duration_180",
+              ctx.from.id
+            ),
+
+            settingButton(
+              "مدت ۶ ساعت",
+              "warn_duration_360",
+              ctx.from.id
+            )
+          ],
+
+          [
+            settingButton(
+              "بازگشت",
+              "set_warn",
+              ctx.from.id
+            )
+          ]
+
+        ])
+
+      );
+
+    }
+  );
+
+
+  // ===================================
+  // سکوت
+  // ===================================
+
+  bot.action(
+    /^set_mute:(\d+)$/,
+    async ctx => {
+
+      if (
+        !(await protectSettings(ctx))
+      ) return;
+
+      await ctx.answerCbQuery();
+
+      await ctx.editMessageText(
+
+`『𓆩 تنظیمات سکوت 𓆪』
+
+مدیریت تنظیمات مربوط به سکوت کاربران.
+
+★ فعال‌سازی سکوت
+★ مدت سکوت
+★ دسترسی مدیریت سکوت
+
+این بخش از سیستم مدیریت گروه استفاده می‌کند.`,
+
+        backToSettings(
+          ctx.from.id
+        )
+
+      );
+
+    }
+  );
+
+
+  // ===================================
+  // محدودیت
+  // ===================================
+
+  bot.action(
+    /^set_restrict:(\d+)$/,
+    async ctx => {
+
+      if (
+        !(await protectSettings(ctx))
+      ) return;
+
+      await ctx.answerCbQuery();
+
+      await ctx.editMessageText(
+
+`『𓆩 تنظیمات محدودیت 𓆪』
+
+مدیریت محدودیت کاربران.
+
+★ محدود کردن ارسال پیام
+★ محدود کردن رسانه
+★ محدود کردن لینک
+★ محدود کردن استیکر
+
+این بخش از سیستم مدیریت گروه استفاده می‌کند.`,
+
+        backToSettings(
+          ctx.from.id
+        )
+
+      );
+
+    }
+  );
+
+
+  // ===================================
+  // بن
+  // ===================================
+
+  bot.action(
+    /^set_ban:(\d+)$/,
+    async ctx => {
+
+      if (
+        !(await protectSettings(ctx))
+      ) return;
+
+      await ctx.answerCbQuery();
+
+      await ctx.editMessageText(
+
+`『𓆩 تنظیمات بن 𓆪』
+
+مدیریت سیستم بن کاربران.
+
+★ بن کاربر
+★ حذف بن
+★ مشاهده وضعیت بن
+
+دسترسی این بخش فقط برای مدیران مجاز است.`,
+
+        backToSettings(
+          ctx.from.id
+        )
+
+      );
+
+    }
+  );
+
+
+  // ===================================
+  // فوروارد
+  // ===================================
+
+  bot.action(
+    /^set_forward:(\d+)$/,
+    async ctx => {
+
+      if (
+        !(await protectSettings(ctx))
+      ) return;
+
+      await ctx.answerCbQuery();
+
+      await ctx.editMessageText(
+
+`『𓆩 تنظیمات فوروارد 𓆪』
+
+مدیریت پیام‌های فوروارد شده.
+
+★ کنترل فوروارد
+★ جلوگیری از فوروارد غیرمجاز
+
+این بخش برای مدیریت پیام‌های گروه است.`,
+
+        backToSettings(
+          ctx.from.id
+        )
+
+      );
+
+    }
+  );
+
+
+  // ===================================
+  // ضدفلود
+  // ===================================
+
+  bot.action(
+    /^set_flood:(\d+)$/,
+    async ctx => {
+
+      if (
+        !(await protectSettings(ctx))
+      ) return;
+
+      await ctx.answerCbQuery();
+
+      await ctx.editMessageText(
+
+`『𓆩 تنظیمات ضدفلود 𓆪』
+
+سیستم ضدفلود گروه.
+
+★ کنترل پیام‌های پشت‌سرهم
+★ جلوگیری از اسپم
+★ محدود کردن کاربر فلودر
+
+این بخش برای کنترل اسپم گروه است.`,
+
+        backToSettings(
+          ctx.from.id
+        )
+
+      );
+
+    }
+  );
+
+
+  // ===================================
+  // ورود و خروج
+  // ===================================
+
+  bot.action(
+    /^set_joinleave:(\d+)$/,
+    async ctx => {
+
+      if (
+        !(await protectSettings(ctx))
+      ) return;
+
+      await ctx.answerCbQuery();
+
+      await ctx.editMessageText(
+
+`『𓆩 تنظیمات ورود و خروج 𓆪』
+
+مدیریت پیام‌های ورود و خروج اعضا.
+
+★ پیام ورود
+★ پیام خروج
+★ حذف پیام‌های ورود و خروج
+
+این بخش از سیستم ورود و خروج گروه استفاده می‌کند.`,
+
+        backToSettings(
+          ctx.from.id
+        )
+
+      );
+
+    }
+  );
+
+
+  // ===================================
+  // پیام‌ها
+  // ===================================
+
+  bot.action(
+    /^set_messages:(\d+)$/,
+    async ctx => {
+
+      if (
+        !(await protectSettings(ctx))
+      ) return;
+
+      await ctx.answerCbQuery();
+
+      await ctx.editMessageText(
+
+`『𓆩 تنظیمات پیام‌ها 𓆪』
+
+مدیریت پیام‌های گروه.
+
+★ حذف پیام
+★ پاکسازی پیام‌ها
+★ مدیریت پیام‌های اضافی
+
+این بخش برای مدیریت پیام‌های گروه است.`,
+
+        backToSettings(
+          ctx.from.id
+        )
+
+      );
+
+    }
+  );
+
+
+  // ===================================
+  // قوانین
+  // ===================================
+
+  bot.action(
+    /^set_rules:(\d+)$/,
+    async ctx => {
+
+      if (
+        !(await protectSettings(ctx))
+      ) return;
+
+      await ctx.answerCbQuery();
+
+      await ctx.editMessageText(
+
+`『𓆩 قوانین گروه 𓆪』
+
+از این بخش می‌توانید قوانین گروه را مدیریت کنید.
+
+★ مشاهده قوانین
+★ تنظیم قوانین
+★ حذف قوانین
+
+دستورهای مربوط به قوانین در بخش راهنما قرار دارند.`,
+
+        backToSettings(
+          ctx.from.id
+        )
+
+      );
+
+    }
+  );
+
+
+  // ===================================
+  // لقب و پاسخ ربات
+  // ===================================
+
+  bot.action(
+    /^set_bot_reply:(\d+)$/,
+    async ctx => {
+
+      if (
+        !(await protectSettings(ctx))
+      ) return;
+
+      await ctx.answerCbQuery();
+
+      const config =
+        ensureBotReplySettings(
+          getGroup(ctx.chat.id)
+        );
+
+      await ctx.editMessageText(
+
+`『𓆩 لقب و پاسخ ربات 𓆪』
+
+وضعیت پاسخ ربات:
+
+${config.enabled ? "★ روشن" : "☆ خاموش"}
+
+تعداد پاسخ‌ها:
+
+★ ${config.replies.length}
+
+برای پاسخ‌ها می‌توانید از این قالب استفاده کنید:
+
+{nickname}
+
+یا:
+
+{لقب}
+
+مثال:
+
+جانم {nickname} 🌹`,
+
+        Markup.inlineKeyboard([
+
+          [
+            settingButton(
+              config.enabled
+                ? "☆ خاموش کردن ربات"
+                : "★ روشن کردن ربات",
+              "bot_reply_toggle",
+              ctx.from.id
+            )
+          ],
+
+          [
+            settingButton(
+              "بازگشت",
+              "settings_home",
+              ctx.from.id
+            )
+          ],
+
+          [
+            settingButton(
+              "بستن",
+              "settings_close",
+              ctx.from.id
+            )
+          ]
+
+        ])
+
+      );
+
+    }
+  );
+
+
+  // ===================================
+  // روشن / خاموش پاسخ ربات
+  // ===================================
+
+  bot.action(
+    /^bot_reply_toggle:(\d+)$/,
+    async ctx => {
+
+      if (
+        !(await protectSettings(ctx))
+      ) return;
+
+      const config =
+        ensureBotReplySettings(
+          getGroup(ctx.chat.id)
+        );
+
+      setBotReplyEnabled(
+        ctx.chat.id,
+        !config.enabled
+      );
+
+      await ctx.answerCbQuery(
+        config.enabled
+          ? "پاسخ ربات خاموش شد."
+          : "پاسخ ربات روشن شد."
+      );
+
+      const updated =
+        ensureBotReplySettings(
+          getGroup(ctx.chat.id)
+        );
+
+      await ctx.editMessageText(
+
+`『𓆩 لقب و پاسخ ربات 𓆪』
+
+وضعیت پاسخ ربات:
+
+${updated.enabled ? "★ روشن" : "☆ خاموش"}
+
+تعداد پاسخ‌ها:
+
+★ ${updated.replies.length}`,
+
+        Markup.inlineKeyboard([
+
+          [
+            settingButton(
+              updated.enabled
+                ? "☆ خاموش کردن ربات"
+                : "★ روشن کردن ربات",
+              "bot_reply_toggle",
+              ctx.from.id
+            )
+          ],
+
+          [
+            settingButton(
+              "بازگشت",
+              "settings_home",
+              ctx.from.id
+            )
+          ],
+
+          [
+            settingButton(
+              "بستن",
+              "settings_close",
+              ctx.from.id
+            )
+          ]
+
+        ])
+
+      );
+
+    }
+  );
+
+
+  // ===================================
+  // بستن تنظیمات
+  // ===================================
+
+  bot.action(
+    /^settings_close:(\d+)$/,
+    async ctx => {
+
+      if (
+        !(await protectSettings(ctx))
+      ) return;
+
+      await ctx.answerCbQuery();
+
+      try {
+
+        await ctx.deleteMessage();
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "SETTINGS CLOSE ERROR:",
+          error.message
+        );
+
+      }
+
+    }
+  );
+
+}
+
+
+// =====================================
+// EXPORT
+// =====================================
+
+module.exports = {
+
+  registerSettings,
+
+  settingsPanel,
+  settingsText,
+
+  protectSettings,
+  protectOwner,
+
+  ensureBotReplySettings,
+
+  getBotReplies,
+  addBotReply,
+  removeBotReply,
+
+  setBotReplyEnabled,
+  getRandomBotReply,
+  formatBotReply,
+
+  ensureNicknameSettings,
+  isNicknameLocked,
+  setNicknameLocked,
+
+  getUserNickname,
+  setUserNickname,
+  removeUserNickname,
+  getNicknameCount
+
+};
