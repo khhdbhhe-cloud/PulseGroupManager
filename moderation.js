@@ -131,7 +131,7 @@ function getTargetMessage(ctx) {
 
 
 // =====================================
-// کاربر هدف از طریق Reply
+// کاربر هدف مستقیم از Reply
 // =====================================
 
 function getReplyTarget(ctx) {
@@ -168,7 +168,7 @@ function getTargetReplyId(ctx) {
 
 
 // =====================================
-// پاسخ به همان پیام کاربر
+// پاسخ به پیام ریپلای‌شده
 // =====================================
 
 async function replyToTarget(
@@ -222,10 +222,6 @@ async function getMemberRole(
     if (!member) {
       return "unknown";
     }
-
-    // فقط وضعیت واقعی تلگرام
-    // مالک = creator
-    // مدیر = administrator
 
     if (member.status === "creator") {
       return "owner";
@@ -323,7 +319,7 @@ async function checkBotPermissions(
     if (!botId) {
 
       await ctx.reply(
-        "『𓆩 ★ شناسه ربات پیدا نشد ★ 𓆪』"
+        "『𓆩 ★ شناسه ربات پیدا نشد ★ 𓆪"
       );
 
       return false;
@@ -409,11 +405,47 @@ function findKnownUserByUsername(
       user.username &&
       user.username.toLowerCase() === clean
     ) {
+
       return user;
     }
   }
 
   return null;
+}
+
+
+// =====================================
+// پیدا کردن کاربر با ID
+// =====================================
+
+function findKnownUserById(
+  id
+) {
+
+  if (
+    id === undefined ||
+    id === null
+  ) {
+    return null;
+  }
+
+  const clean =
+    String(id).trim();
+
+  if (!/^-?\d+$/.test(clean)) {
+    return null;
+  }
+
+  if (knownUsers[clean]) {
+    return knownUsers[clean];
+  }
+
+  return {
+    id: Number(clean),
+    first_name: "کاربر",
+    last_name: "",
+    username: null
+  };
 }
 
 
@@ -441,14 +473,187 @@ function findKnownUserByName(
     const user =
       knownUsers[key];
 
+    const first =
+      String(user.first_name || "")
+        .toLowerCase();
+
+    const last =
+      String(user.last_name || "")
+        .toLowerCase();
+
     const fullName =
       getUserName(user)
         .toLowerCase();
 
     if (
       fullName === search ||
-      user.first_name.toLowerCase() === search
+      first === search ||
+      `${first} ${last}`.trim() === search
     ) {
+
+      return user;
+    }
+  }
+
+  return null;
+}
+
+
+// =====================================
+// پیدا کردن User از text_mention
+// =====================================
+
+function getTextMentionUser(
+  message
+) {
+
+  if (
+    !message ||
+    !message.entities ||
+    !Array.isArray(message.entities)
+  ) {
+    return null;
+  }
+
+  for (
+    const entity of message.entities
+  ) {
+
+    if (
+      entity &&
+      entity.type === "text_mention" &&
+      entity.user &&
+      entity.user.id
+    ) {
+
+      rememberUser(entity.user);
+
+      return entity.user;
+    }
+  }
+
+  return null;
+}
+
+
+// =====================================
+// پیدا کردن یوزرنیم داخل متن پیام
+// =====================================
+
+function getUsernameFromText(
+  text
+) {
+
+  if (!text) {
+    return null;
+  }
+
+  const match =
+    String(text).match(
+      /(^|\s)@([A-Za-z0-9_]{5,32})\b/
+    );
+
+  if (!match) {
+    return null;
+  }
+
+  return `@${match[2]}`;
+}
+
+
+// =====================================
+// پیدا کردن ID داخل متن پیام
+// =====================================
+
+function getIdFromText(
+  text
+) {
+
+  if (!text) {
+    return null;
+  }
+
+  const match =
+    String(text).match(
+      /(^|\s)(-?\d{5,20})(?=\s|$)/
+    );
+
+  if (!match) {
+    return null;
+  }
+
+  return match[2];
+}
+
+
+// =====================================
+// تشخیص هدف از محتوای پیام ریپلای‌شده
+// =====================================
+
+function resolveTargetFromReplyContent(
+  ctx
+) {
+
+  const message =
+    getTargetMessage(ctx);
+
+  if (!message) {
+    return null;
+  }
+
+
+  // -----------------------------------
+  // 1. text_mention واقعی تلگرام
+  // -----------------------------------
+
+  const mentionedUser =
+    getTextMentionUser(message);
+
+  if (
+    mentionedUser &&
+    mentionedUser.id
+  ) {
+
+    return mentionedUser;
+  }
+
+
+  // -----------------------------------
+  // 2. یوزرنیم داخل متن پیام
+  // -----------------------------------
+
+  const text =
+    message.text ||
+    message.caption ||
+    "";
+
+  const username =
+    getUsernameFromText(text);
+
+  if (username) {
+
+    const user =
+      findKnownUserByUsername(username);
+
+    if (user) {
+      return user;
+    }
+  }
+
+
+  // -----------------------------------
+  // 3. ID داخل متن پیام
+  // -----------------------------------
+
+  const id =
+    getIdFromText(text);
+
+  if (id) {
+
+    const user =
+      findKnownUserById(id);
+
+    if (user) {
       return user;
     }
   }
@@ -459,13 +664,89 @@ function findKnownUserByName(
 
 // =====================================
 // تشخیص کاربر هدف
-// اولویت اول همیشه Reply است
+//
+// اولویت:
+// 1. هدف صریح دستور
+// 2. کاربر معرفی‌شده داخل پیام Reply
+// 3. خود فرستنده پیام Reply
 // =====================================
 
-function resolveTarget(ctx, args = []) {
+function resolveTarget(
+  ctx,
+  args = []
+) {
 
   // -----------------------------------
-  // 1. Reply به پیام کاربر
+  // 1. اگر خود دستور هدف دارد
+  // -----------------------------------
+
+  if (
+    args &&
+    args.length > 0
+  ) {
+
+    const first =
+      String(args[0]).trim();
+
+    // ID
+    if (/^-?\d+$/.test(first)) {
+
+      const user =
+        findKnownUserById(first);
+
+      if (user) {
+        return user;
+      }
+    }
+
+
+    // Username
+    if (
+      first.startsWith("@")
+    ) {
+
+      const user =
+        findKnownUserByUsername(first);
+
+      if (user) {
+        return user;
+      }
+    }
+
+
+    // نام
+    const byName =
+      findKnownUserByName(
+        args.join(" ")
+      );
+
+    if (byName) {
+      return byName;
+    }
+  }
+
+
+  // -----------------------------------
+  // 2. اگر روی پیام ریپلای شده
+  // اول محتوای همان پیام را بررسی کن
+  // -----------------------------------
+
+  const contentTarget =
+    resolveTargetFromReplyContent(ctx);
+
+  if (
+    contentTarget &&
+    contentTarget.id
+  ) {
+
+    rememberUser(contentTarget);
+
+    return contentTarget;
+  }
+
+
+  // -----------------------------------
+  // 3. در نهایت خود فرستنده پیام Reply
   // -----------------------------------
 
   const replyUser =
@@ -479,61 +760,6 @@ function resolveTarget(ctx, args = []) {
     rememberUser(replyUser);
 
     return replyUser;
-  }
-
-
-  // -----------------------------------
-  // 2. آیدی
-  // -----------------------------------
-
-  if (args.length > 0) {
-
-    const first =
-      String(args[0]).trim();
-
-    if (/^-?\d+$/.test(first)) {
-
-      const id =
-        Number(first);
-
-      if (knownUsers[String(id)]) {
-        return knownUsers[String(id)];
-      }
-
-      return {
-        id,
-        first_name: "کاربر",
-        last_name: "",
-        username: null
-      };
-    }
-
-
-    // ---------------------------------
-    // 3. یوزرنیم
-    // ---------------------------------
-
-    if (first.startsWith("@")) {
-
-      const user =
-        findKnownUserByUsername(first);
-
-      if (user) {
-        return user;
-      }
-    }
-
-
-    // ---------------------------------
-    // 4. نام
-    // ---------------------------------
-
-    const byName =
-      findKnownUserByName(first);
-
-    if (byName) {
-      return byName;
-    }
   }
 
   return null;
@@ -555,7 +781,7 @@ async function checkTarget(
   ) {
 
     await ctx.reply(
-      "『𓆩 ★ روی پیام کاربر Reply کن ★ 𓆪』"
+      "『𓆩 ★ روی پیام کاربر Reply کن یا یوزرنیم / آیدی کاربر را مشخص کن ★ 𓆪』"
     );
 
     return false;
@@ -563,7 +789,7 @@ async function checkTarget(
 
 
   // -----------------------------------
-  // جلوگیری از اجرای دستور روی خود ربات
+  // جلوگیری از اجرای دستور روی ربات
   // -----------------------------------
 
   if (
@@ -572,7 +798,8 @@ async function checkTarget(
     Number(ctx.botInfo.id)
   ) {
 
-    await ctx.reply(
+    await replyToTarget(
+      ctx,
       "『𓆩 ★ روی خود ربات نمی‌توانی این کار را انجام بدهی ★ 𓆪』"
     );
 
@@ -592,12 +819,13 @@ async function checkTarget(
 
 
   // -----------------------------------
-  // فقط creator = مالک
+  // مالک گروه
   // -----------------------------------
 
   if (role === "owner") {
 
-    await ctx.reply(
+    await replyToTarget(
+      ctx,
       "『𓆩 ★ مالک گروه قابل بن، سکوت یا اخراج شدن نیست ★ 𓆪』"
     );
 
@@ -606,12 +834,13 @@ async function checkTarget(
 
 
   // -----------------------------------
-  // administrator = مدیر
+  // مدیر گروه
   // -----------------------------------
 
   if (role === "admin") {
 
-    await ctx.reply(
+    await replyToTarget(
+      ctx,
       "『𓆩 ★ مدیر گروه قابل بن، سکوت یا اخراج شدن نیست ★ 𓆪』"
     );
 
@@ -620,14 +849,15 @@ async function checkTarget(
 
 
   // -----------------------------------
-  // اگر تلگرام کاربر را پیدا نکرد
+  // کاربر پیدا نشد
   // -----------------------------------
 
   if (
     role === "unknown"
   ) {
 
-    await ctx.reply(
+    await replyToTarget(
+      ctx,
       "『𓆩 ★ اطلاعات عضویت این کاربر از تلگرام دریافت نشد ★ 𓆪』"
     );
 
@@ -700,7 +930,7 @@ function durationText(
   }
 
   return `${hours} ساعت`;
-}// =====================================
+  }// =====================================
 // BAN
 // =====================================
 
@@ -803,14 +1033,11 @@ async function kickUser(
 
   try {
 
-    // ابتدا کاربر از گروه حذف می‌شود
     await ctx.telegram.banChatMember(
       ctx.chat.id,
       target.id
     );
 
-    // سپس بلافاصله آزاد می‌شود
-    // بنابراین کاربر اخراج شده ولی بن دائمی نیست
     await ctx.telegram.unbanChatMember(
       ctx.chat.id,
       target.id,
@@ -1097,10 +1324,6 @@ function registerMuteCommands(
 
       let hours = 1;
 
-      // اگر Reply باشد و عدد نوشته شده باشد:
-      // سکوت 1
-      // سکوت 2
-      // ...
       if (
         args.length &&
         /^\d+$/.test(args[0])
@@ -1201,7 +1424,10 @@ function registerModerationActions(
   registerMuteCommands(bot);
 
   registerKhafeCommands(bot);
-      }// =====================================
+}
+
+
+// =====================================
 // تنظیمات اخطار
 // =====================================
 
@@ -1463,8 +1689,6 @@ async function executeWarningPunishment(
     );
   }
 
-
-  // مدت تنظیم‌شده بر حسب دقیقه است
   const minutes =
     Number(settings.duration || 1);
 
@@ -1563,11 +1787,6 @@ function registerWarningCommands(
         `『𓆩 ⚠️ کاربر ${mentionUser(target)} اخطار گرفت\n\nتعداد اخطار: ${total} از ${settings.maxWarnings} 𓆪』`
       );
 
-
-      // ---------------------------------
-      // رسیدن به سقف اخطار
-      // ---------------------------------
-
       if (
         total >=
         settings.maxWarnings
@@ -1628,12 +1847,9 @@ function registerWarningCommands(
         `『𓆩 ★ سقف اخطار روی ${value} تنظیم شد ★ 𓆪』`
       );
     }
-  );
-
-
-  // -----------------------------------
-  // تنظیم اخطار بن
-  // -----------------------------------
+  );// =====================================
+// تنظیم اخطار بن
+// =====================================
 
   bot.hears(
     /^تنظیم اخطار بن$/i,
@@ -1660,9 +1876,9 @@ function registerWarningCommands(
   );
 
 
-  // -----------------------------------
-  // تنظیم اخطار سکوت
-  // -----------------------------------
+// =====================================
+// تنظیم اخطار سکوت
+// =====================================
 
   bot.hears(
     /^تنظیم اخطار سکوت$/i,
@@ -1689,11 +1905,11 @@ function registerWarningCommands(
   );
 
 
-  // -----------------------------------
-  // تنظیم مدت اخطار
-  // مثال:
-  // تنظیم مدت اخطار 60
-  // -----------------------------------
+// =====================================
+// تنظیم مدت اخطار
+// مثال:
+// تنظیم مدت اخطار 60
+// =====================================
 
   bot.hears(
     /^تنظیم مدت اخطار\s+(\d+)$/i,
@@ -1732,9 +1948,9 @@ function registerWarningCommands(
   );
 
 
-  // -----------------------------------
-  // اخطارها
-  // -----------------------------------
+// =====================================
+// اخطارها
+// =====================================
 
   bot.hears(
     /^اخطارها$/i,
@@ -1762,6 +1978,15 @@ function registerWarningCommands(
         return;
       }
 
+      if (
+        !await checkTarget(
+          ctx,
+          target
+        )
+      ) {
+        return;
+      }
+
       const group =
         getGroup(ctx.chat.id);
 
@@ -1782,9 +2007,9 @@ function registerWarningCommands(
   );
 
 
-  // -----------------------------------
-  // وضعیت اخطار
-  // -----------------------------------
+// =====================================
+// وضعیت اخطار
+// =====================================
 
   bot.hears(
     /^اخطار وضعیت$/i,
@@ -1812,9 +2037,9 @@ function registerWarningCommands(
   );
 
 
-  // -----------------------------------
-  // شناسه
-  // -----------------------------------
+// =====================================
+// شناسه
+// =====================================
 
   bot.hears(
     /^شناسه$/i,
@@ -1874,6 +2099,7 @@ function registerModeration(
         if (
           ctx.from
         ) {
+
           rememberUser(
             ctx.from
           );
@@ -1888,6 +2114,31 @@ function registerModeration(
           rememberUser(
             ctx.message.reply_to_message.from
           );
+        }
+
+        // ---------------------------------
+        // ذخیره کاربران text_mention
+        // ---------------------------------
+
+        if (
+          ctx.message &&
+          ctx.message.reply_to_message
+        ) {
+
+          const mentionedUser =
+            getTextMentionUser(
+              ctx.message.reply_to_message
+            );
+
+          if (
+            mentionedUser &&
+            mentionedUser.id
+          ) {
+
+            rememberUser(
+              mentionedUser
+            );
+          }
         }
 
       } catch (error) {
