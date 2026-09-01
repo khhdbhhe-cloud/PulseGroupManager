@@ -118,14 +118,23 @@ async function replyToTarget(
   options = {}
 ) {
 
+  const replyId =
+    getTargetReplyId(ctx);
+
+  if (!replyId) {
+    return ctx.reply(
+      text,
+      options
+    );
+  }
+
   return ctx.reply(
     text,
     {
       ...options,
 
       reply_parameters: {
-        message_id:
-          getTargetReplyId(ctx)
+        message_id: replyId
       }
     }
   );
@@ -243,6 +252,65 @@ async function isAdmin(ctx) {
     role === "owner" ||
     role === "admin"
   );
+}
+
+
+// =====================================
+// بررسی دسترسی ربات برای مدیریت
+// =====================================
+
+async function checkBotPermissions(ctx) {
+
+  try {
+
+    const botMember =
+      await ctx.telegram.getChatMember(
+        ctx.chat.id,
+        ctx.botInfo.id
+      );
+
+
+    if (
+      botMember.status !== "administrator"
+    ) {
+
+      await ctx.reply(
+        "『𓆩 ★ ربات باید مدیر گروه باشد ★ 𓆪』"
+      );
+
+      return false;
+    }
+
+
+    if (
+      !botMember.can_restrict_members
+    ) {
+
+      await ctx.reply(
+        "『𓆩 ★ ربات دسترسی بن و سکوت اعضا را ندارد ★ 𓆪』"
+      );
+
+      return false;
+    }
+
+
+    return true;
+
+  }
+
+  catch (error) {
+
+    console.log(
+      "BOT PERMISSION ERROR:",
+      error.message
+    );
+
+    await ctx.reply(
+      "『𓆩 ★ دسترسی مدیریت ربات بررسی نشد ★ 𓆪』"
+    );
+
+    return false;
+  }
 }
 
 
@@ -757,8 +825,7 @@ function setWarningPunishment(
 
 
   return punishment;
-}
-// =====================================
+}// =====================================
 // اجرای مجازات اخطار
 // =====================================
 
@@ -782,6 +849,18 @@ async function executeWarningPunishment(
 
   if (
     count < settings.maxWarnings
+  ) {
+
+    return false;
+  }
+
+
+  // ===================================
+  // بررسی دسترسی ربات
+  // ===================================
+
+  if (
+    !(await checkBotPermissions(ctx))
   ) {
 
     return false;
@@ -821,7 +900,7 @@ async function executeWarningPunishment(
 
       console.log(
         "WARNING BAN ERROR:",
-        error.message
+        error
       );
 
 
@@ -895,7 +974,7 @@ async function executeWarningPunishment(
 
       console.log(
         "WARNING MUTE ERROR:",
-        error.message
+        error
       );
 
 
@@ -924,10 +1003,14 @@ function registerModeration(bot) {
   // ===================================
   // ذخیره کاربران دیده‌شده
   // ===================================
+  //
+  // مهم:
+  // next() نداریم تا با hears تداخل نکند.
+  // از middleware جدا استفاده می‌کنیم.
+  //
 
-  bot.on(
-    "message",
-    async ctx => {
+  bot.use(
+    async (ctx, next) => {
 
       try {
 
@@ -963,6 +1046,8 @@ function registerModeration(bot) {
         );
       }
 
+
+      return next();
     }
   );
 
@@ -981,6 +1066,11 @@ function registerModeration(bot) {
 
 
       if (!(await isAdmin(ctx))) {
+        return;
+      }
+
+
+      if (!(await checkBotPermissions(ctx))) {
         return;
       }
 
@@ -1022,13 +1112,13 @@ function registerModeration(bot) {
 
         console.log(
           "BAN ERROR:",
-          error.message
+          error
         );
 
 
         await replyToTarget(
           ctx,
-          "『𓆩 ★ انجام بن امکان‌پذیر نیست ★ 𓆪』"
+          "『𓆩 ★ انجام بن امکان‌پذیر نیست ★ 𓆪"
         );
       }
 
@@ -1050,6 +1140,11 @@ function registerModeration(bot) {
 
 
       if (!(await isAdmin(ctx))) {
+        return;
+      }
+
+
+      if (!(await checkBotPermissions(ctx))) {
         return;
       }
 
@@ -1099,7 +1194,7 @@ function registerModeration(bot) {
 
         console.log(
           "BAN ERROR:",
-          error.message
+          error
         );
 
 
@@ -1127,6 +1222,11 @@ function registerModeration(bot) {
 
 
       if (!(await isAdmin(ctx))) {
+        return;
+      }
+
+
+      if (!(await checkBotPermissions(ctx))) {
         return;
       }
 
@@ -1168,7 +1268,7 @@ function registerModeration(bot) {
 
         console.log(
           "SIK ERROR:",
-          error.message
+          error
         );
 
 
@@ -1196,6 +1296,11 @@ function registerModeration(bot) {
 
 
       if (!(await isAdmin(ctx))) {
+        return;
+      }
+
+
+      if (!(await checkBotPermissions(ctx))) {
         return;
       }
 
@@ -1243,7 +1348,7 @@ function registerModeration(bot) {
 
         console.log(
           "KICK ERROR:",
-          error.message
+          error
         );
 
 
@@ -1272,6 +1377,11 @@ function registerModeration(bot) {
 
 
       if (!(await isAdmin(ctx))) {
+        return;
+      }
+
+
+      if (!(await checkBotPermissions(ctx))) {
         return;
       }
 
@@ -1347,7 +1457,7 @@ function registerModeration(bot) {
 
         console.log(
           "MUTE ERROR:",
-          error.message
+          error
         );
 
 
@@ -1439,7 +1549,6 @@ function registerModeration(bot) {
 
   // ===================================
   // تعداد اخطار
-  // مثال: تعداد اخطار 3
   // ===================================
 
   bot.hears(
