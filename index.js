@@ -1,6 +1,6 @@
 // =====================================
 // PulseGroupManager
-// MAIN INDEX
+// MAIN INDEX - FIXED
 // =====================================
 
 const { Telegraf } = require("telegraf");
@@ -119,47 +119,99 @@ server.listen(
 bot.use(
   async (ctx, next) => {
 
-    try {
-
-      if (
-        ctx.message &&
-        ctx.message.text
-      ) {
-
-        console.log(
-          "MESSAGE RECEIVED:",
-          {
-            chatId:
-              ctx.chat
-                ? ctx.chat.id
-                : null,
-
-            chatType:
-              ctx.chat
-                ? ctx.chat.type
-                : null,
-
-            text:
-              ctx.message.text
-          }
-        );
-
-      }
-
-      await next();
-
-    }
-
-    catch (error) {
+    if (
+      ctx.message &&
+      ctx.message.text
+    ) {
 
       console.log(
-        "MIDDLEWARE ERROR:",
-        error.message
+        "MESSAGE RECEIVED:",
+        {
+          chatId:
+            ctx.chat
+              ? ctx.chat.id
+              : null,
+
+          chatType:
+            ctx.chat
+              ? ctx.chat.type
+              : null,
+
+          text:
+            ctx.message.text
+        }
       );
 
     }
 
+    await next();
+
   }
+);
+
+
+// =====================================
+// SYSTEM REGISTRATION
+// =====================================
+//
+// ترتیب مهم است.
+// سیستم دستورات قبل از Welcome ثبت می‌شود
+// تا پیام‌هایی مثل «ربات» و «تنظیمات»
+// توسط سیستم مربوط به خودشان دریافت شوند.
+// =====================================
+
+
+// =====================================
+// COMMANDS
+// =====================================
+
+registerCommands(
+  bot
+);
+
+
+// =====================================
+// PANEL ACTIONS
+// =====================================
+
+registerPanelActions(
+  bot
+);
+
+
+// =====================================
+// HELP
+// =====================================
+
+registerHelp(
+  bot
+);
+
+
+// =====================================
+// SETTINGS
+// =====================================
+
+registerSettings(
+  bot
+);
+
+
+// =====================================
+// WARNING ACTIONS
+// =====================================
+
+registerWarningActions(
+  bot
+);
+
+
+// =====================================
+// WARNING SETTINGS
+// =====================================
+
+registerWarningSettings(
+  bot
 );
 
 
@@ -173,35 +225,6 @@ registerWelcome(
 
 
 // =====================================
-// OTHER SYSTEMS
-// =====================================
-
-registerCommands(
-  bot
-);
-
-registerPanelActions(
-  bot
-);
-
-registerHelp(
-  bot
-);
-
-registerSettings(
-  bot
-);
-
-registerWarningActions(
-  bot
-);
-
-registerWarningSettings(
-  bot
-);
-
-
-// =====================================
 // START
 // =====================================
 
@@ -209,6 +232,11 @@ bot.start(
   async ctx => {
 
     try {
+
+      console.log(
+        "🔥 START COMMAND MATCHED 🔥"
+      );
+
 
       await ctx.reply(
 `『𓆩 PulseGroupManager 𓆪』
@@ -225,13 +253,18 @@ bot.start(
 راهنما`
       );
 
+
+      console.log(
+        "🔥 START REPLY SENT 🔥"
+      );
+
     }
 
     catch (error) {
 
       console.log(
-        "START COMMAND ERROR:",
-        error.message
+        "❌ START COMMAND ERROR:",
+        error
       );
 
     }
@@ -253,7 +286,7 @@ bot.catch(
 
     console.log(
       "BOT ERROR:",
-      error.message
+      error
     );
 
     if (
@@ -284,7 +317,10 @@ async function startBot() {
 
   try {
 
+    // ---------------------------------
     // حذف Webhook قبلی
+    // ---------------------------------
+
     await bot.telegram.deleteWebhook({
       drop_pending_updates: false
     });
@@ -295,7 +331,10 @@ async function startBot() {
     );
 
 
+    // ---------------------------------
     // شروع Polling
+    // ---------------------------------
+
     await bot.launch({
       dropPendingUpdates: false
     });
@@ -323,7 +362,7 @@ async function startBot() {
 
     console.log(
       "BOT LAUNCH ERROR:",
-      error.message
+      error
     );
 
     process.exit(1);
