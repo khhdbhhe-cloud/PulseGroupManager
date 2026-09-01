@@ -812,60 +812,89 @@ function registerSettings(bot) {
   // ===================================
 
   bot.hears(
-    /^تنظیمات$/u,
-    async ctx => {
+  /^تنظیمات$/u,
+  async ctx => {
 
-      try {
+    console.log(
+      "🔥 SETTINGS HANDLER STARTED 🔥"
+    );
 
-        if (
-          !ctx.chat ||
-          (
-            ctx.chat.type !== "group" &&
-            ctx.chat.type !== "supergroup"
-          )
-        ) {
+    try {
 
-          return;
-
-        }
-
-        const access =
-          await checkAdmin(ctx);
-
-        if (!access.ok) {
-          return;
-        }
-
-        await ctx.reply(
-          settingsText(),
-          {
-
-            ...settingsPanel(
-              ctx.from.id,
-              ctx.chat.id
-            ),
-
-            reply_parameters: {
-              message_id:
-                ctx.message.message_id
-            }
-
-          }
-        );
-
-      }
-
-      catch (error) {
+      if (
+        !ctx.chat ||
+        (
+          ctx.chat.type !== "group" &&
+          ctx.chat.type !== "supergroup"
+        )
+      ) {
 
         console.log(
-          "SETTINGS OPEN ERROR:",
-          error.message
+          "SETTINGS: NOT GROUP"
         );
 
+        return;
       }
 
+      console.log(
+        "SETTINGS: GROUP OK"
+      );
+
+      const access =
+        await checkAdmin(ctx);
+
+      console.log(
+        "SETTINGS ACCESS:",
+        access
+      );
+
+      if (!access.ok) {
+
+        console.log(
+          "SETTINGS ACCESS DENIED"
+        );
+
+        return;
+      }
+
+      console.log(
+        "SETTINGS ACCESS GRANTED"
+      );
+
+      await ctx.reply(
+        settingsText(),
+        {
+
+          ...settingsPanel(
+            ctx.from.id,
+            ctx.chat.id
+          ),
+
+          reply_parameters: {
+            message_id:
+              ctx.message.message_id
+          }
+
+        }
+      );
+
+      console.log(
+        "🔥 SETTINGS PANEL SENT 🔥"
+      );
+
     }
-  );
+
+    catch (error) {
+
+      console.log(
+        "❌ SETTINGS OPEN ERROR:",
+        error
+      );
+
+    }
+
+  }
+);
 
 
   // ===================================
