@@ -1,14 +1,7 @@
 // =====================================
 // PulseGroupManager
-// LINKS SYSTEM
-// لینک اصلی
-// لینک یک‌بار مصرف
-// لینک زمان‌دار
-// لینک موقعیت
-// لینک تأییدی عضویت
-// لینک عضویت درخواستی
-// دریافت لینک
-// دسترسی مدیریت لینک
+// LINKS
+// مدیریت کامل لینک‌های گروه
 // =====================================
 
 const {
@@ -19,21 +12,17 @@ const {
 
 // =====================================
 // حافظه پنل‌های باز
-// هر پنل فقط برای صاحب خودش
 // =====================================
 
 const openedPanels = {};
 
 
 // =====================================
-// بررسی گروه
+// بررسی گروه بودن چت
 // =====================================
 
 function isGroupChat(ctx) {
-
-  if (!ctx.chat) {
-    return false;
-  }
+  if (!ctx || !ctx.chat) return false;
 
   return (
     ctx.chat.type === "group" ||
@@ -47,56 +36,15 @@ function isGroupChat(ctx) {
 // =====================================
 
 async function getMemberRole(ctx, userId) {
-
-  if (!userId) {
-    return "unknown";
-  }
-
   try {
-
-    const member =
-      await ctx.telegram.getChatMember(
-        ctx.chat.id,
-        userId
-      );
-
-    if (!member) {
-      return "unknown";
-    }
-
-    if (member.status === "creator") {
-      return "owner";
-    }
-
-    if (member.status === "administrator") {
-      return "admin";
-    }
-
-    if (
-      member.status === "member" ||
-      member.status === "restricted"
-    ) {
-      return "member";
-    }
-
-    if (member.status === "left") {
-      return "left";
-    }
-
-    if (member.status === "kicked") {
-      return "kicked";
-    }
-
-    return "unknown";
-
-  } catch (error) {
-
-    console.error(
-      "links getMemberRole:",
-      error.message
+    const member = await ctx.telegram.getChatMember(
+      ctx.chat.id,
+      userId
     );
 
-    return "unknown";
+    return member.status;
+  } catch (error) {
+    return null;
   }
 }
 
@@ -108,74 +56,78 @@ async function getMemberRole(ctx, userId) {
 function getLinkData(group) {
 
   if (!group.links) {
-
     group.links = {
       main: null,
       oneTime: null,
       timed: [],
       location: null,
+
       approval: null,
       request: null,
 
       receiveEnabled: false,
       receiveDuration: 1,
 
+      timedDuration: 24,
+
+      allManagersAccess: false,
       managers: {}
     };
   }
-
-
-  if (!Array.isArray(group.links.timed)) {
-    group.links.timed = [];
-  }
-
-
-  if (
-    typeof group.links.receiveEnabled !== "boolean"
-  ) {
-    group.links.receiveEnabled = false;
-  }
-
-
-  if (
-    !Number.isFinite(
-      Number(group.links.receiveDuration)
-    )
-  ) {
-    group.links.receiveDuration = 1;
-  }
-
 
   if (!group.links.managers) {
     group.links.managers = {};
   }
 
+  if (typeof group.links.receiveEnabled !== "boolean") {
+    group.links.receiveEnabled = false;
+  }
+
+  if (!group.links.receiveDuration) {
+    group.links.receiveDuration = 1;
+  }
+
+  if (!group.links.timedDuration) {
+    group.links.timedDuration = 24;
+  }
+
+  if (typeof group.links.allManagersAccess !== "boolean") {
+    group.links.allManagersAccess = false;
+  }
+
+  if (!Array.isArray(group.links.timed)) {
+    group.links.timed = [];
+  }
 
   return group.links;
 }
 
 
 // =====================================
-// آیا کاربر مالک است؟
+// بررسی مالک
 // =====================================
 
-async function isOwner(ctx) {
+async function isOwner(ctx, userId = null) {
 
-  if (!ctx.from) {
+  if (!isGroupChat(ctx)) {
     return false;
   }
 
+  const id = userId || ctx.from.id;
+
+  const role = await getMemberRole(
+    ctx,
+    id
+  );
+
   return (
-    await getMemberRole(
-      ctx,
-      ctx.from.id
-    )
-  ) === "owner";
+    role === "creator"
+  );
 }
 
 
 // =====================================
-// آیا کاربر مدیر دارای دسترسی لینک است؟
+// بررسی دسترسی مدیریت لینک
 // =====================================
 
 async function hasLinkManagementAccess(
@@ -183,52 +135,56 @@ async function hasLinkManagementAccess(
   userId = null
 ) {
 
-  const id =
-    userId ||
-    (ctx.from && ctx.from.id);
-
-  if (!id) {
+  if (!isGroupChat(ctx)) {
     return false;
   }
 
-  const role =
-    await getMemberRole(
-      ctx,
-      id
-    );
+  const id = userId || ctx.from.id;
 
-  if (role === "owner") {
+  const role = await getMemberRole(
+    ctx,
+    id
+  );
+
+  // مالک همیشه دسترسی دارد
+  if (role === "creator") {
     return true;
   }
 
-  if (role !== "admin") {
+  // فقط مدیر می‌تواند دسترسی لینک داشته باشد
+  if (
+    role !== "administrator"
+  ) {
     return false;
   }
 
-  const group =
-    getGroup(ctx.chat.id);
+  const group = getGroup(
+    ctx.chat.id
+  );
 
-  const links =
-    getLinkData(group);
+  const links = getLinkData(
+    group
+  );
 
+  // دسترسی همه مدیران
+  if (links.allManagersAccess) {
+    return true;
+  }
+
+  // دسترسی اختصاصی مدیر
   return (
-    links.managers[String(id)] === true
+    links.managers[id] === true
   );
 }
 
 
 // =====================================
-// بررسی دسترسی مدیریت لینک
-// کاربران عادی کاملاً ساکت
+// بررسی مدیر لینک
 // =====================================
 
 async function checkLinkManager(ctx) {
 
   if (!isGroupChat(ctx)) {
-    return false;
-  }
-
-  if (!ctx.from || !ctx.from.id) {
     return false;
   }
 
@@ -240,7 +196,7 @@ async function checkLinkManager(ctx) {
 
 
 // =====================================
-// بررسی صاحب پنل
+// بررسی مالک پنل
 // =====================================
 
 function isPanelOwner(
@@ -248,34 +204,32 @@ function isPanelOwner(
   ownerId
 ) {
 
-  if (!ctx.from || !ownerId) {
+  if (!ctx || !ctx.from) {
     return false;
   }
 
-  return (
-    Number(ctx.from.id) ===
-    Number(ownerId)
-  );
+  return String(ctx.from.id) ===
+    String(ownerId);
 }
 
 
 // =====================================
-// ذخیره پنل
+// ثبت پنل باز شده
 // =====================================
 
 function rememberPanel(
   chatId,
   messageId,
-  ownerId
+  ownerId,
+  type
 ) {
 
   const key =
     `${chatId}:${messageId}`;
 
   openedPanels[key] = {
-    chatId,
-    messageId,
-    ownerId,
+    ownerId: String(ownerId),
+    type: type || "owner",
     createdAt: Date.now()
   };
 }
@@ -314,16 +268,12 @@ function removePanel(
 
 
 // =====================================
-// پاکسازی پنل‌های قدیمی
+// پاک کردن پنل‌های قدیمی
 // =====================================
 
 function cleanOldPanels() {
 
-  const now =
-    Date.now();
-
-  const maxAge =
-    30 * 60 * 1000;
+  const now = Date.now();
 
   for (
     const key of Object.keys(openedPanels)
@@ -332,9 +282,8 @@ function cleanOldPanels() {
     if (
       now -
       openedPanels[key].createdAt >
-      maxAge
+      30 * 60 * 1000
     ) {
-
       delete openedPanels[key];
     }
   }
@@ -342,7 +291,8 @@ function cleanOldPanels() {
 
 
 // =====================================
-// Reply به پیام اصلی
+// پاسخ به فرمان
+// همیشه Reply
 // =====================================
 
 async function replyToCommand(
@@ -351,85 +301,51 @@ async function replyToCommand(
   extra = {}
 ) {
 
-  if (
-    ctx.message &&
-    ctx.message.message_id
-  ) {
-
-    return ctx.reply(
-      text,
-      {
-        ...extra,
-        reply_parameters: {
-          message_id:
-            ctx.message.message_id
-        }
-      }
-    );
+  if (!ctx.message) {
+    return null;
   }
 
-  return ctx.reply(
+  return await ctx.reply(
     text,
-    extra
+    {
+      ...extra,
+      reply_parameters: {
+        message_id: ctx.message.message_id
+      }
+    }
   );
 }
 
 
 // =====================================
-// بررسی دسترسی ربات برای لینک
+// نام کاربر
 // =====================================
 
-async function checkBotInviteAccess(ctx) {
+function getUserName(user) {
 
-  try {
-
-    const botId =
-      ctx.botInfo &&
-      ctx.botInfo.id;
-
-    if (!botId) {
-      return false;
-    }
-
-    const member =
-      await ctx.telegram.getChatMember(
-        ctx.chat.id,
-        botId
-      );
-
-    if (
-      !member ||
-      (
-        member.status !== "administrator" &&
-        member.status !== "creator"
-      )
-    ) {
-      return false;
-    }
-
-    if (
-      member.status === "creator" ||
-      member.can_invite_users
-    ) {
-      return true;
-    }
-
-    return false;
-
-  } catch (error) {
-
-    console.error(
-      "links bot permission:",
-      error.message
-    );
-
-    return false;
+  if (!user) {
+    return "کاربر";
   }
+
+  const first =
+    user.first_name || "";
+
+  const last =
+    user.last_name || "";
+
+  const full =
+    `${first} ${last}`.trim();
+
+  return (
+    full ||
+    user.username ||
+    "کاربر"
+  );
 }
 
 
 // =====================================
-// متن اصلی پنل
+// ساخت متن پنل اصلی
 // =====================================
 
 function mainPanelText() {
@@ -443,15 +359,12 @@ function mainPanelText() {
 
 
 // =====================================
-// صفحه اول
+// صفحه اول مالک
 // =====================================
 
-function pageOneKeyboard(
-  ownerId
-) {
+function pageOneKeyboard(ownerId) {
 
   return {
-
     inline_keyboard: [
 
       [
@@ -504,11 +417,8 @@ function pageOneKeyboard(
 
     ]
   };
-}
-
-
-// =====================================
-// صفحه دوم
+}// =====================================
+// صفحه دوم مالک
 // =====================================
 
 function pageTwoKeyboard(
@@ -525,12 +435,12 @@ function pageTwoKeyboard(
       : "☆";
 
   return {
-
     inline_keyboard: [
 
       [
         {
-          text: "『𓆩 لینک تأییدی عضویت 𓆪』",
+          text:
+            "『𓆩 لینک تأییدی عضویت 𓆪』",
           callback_data:
             `lnk_approval:${ownerId}`
         }
@@ -538,7 +448,8 @@ function pageTwoKeyboard(
 
       [
         {
-          text: "『𓆩 لینک عضویت درخواستی 𓆪』",
+          text:
+            "『𓆩 لینک عضویت درخواستی 𓆪』",
           callback_data:
             `lnk_request:${ownerId}`
         }
@@ -555,7 +466,8 @@ function pageTwoKeyboard(
 
       [
         {
-          text: "『𓆩 مدت دریافت لینک 𓆪』",
+          text:
+            "『𓆩 مدت دریافت لینک 𓆪』",
           callback_data:
             `lnk_duration:${ownerId}`
         }
@@ -563,7 +475,8 @@ function pageTwoKeyboard(
 
       [
         {
-          text: "『𓆩 مدیریت دسترسی لینک 𓆪』",
+          text:
+            "『𓆩 مدیریت دسترسی لینک 𓆪』",
           callback_data:
             `lnk_access:${ownerId}`
         }
@@ -571,7 +484,8 @@ function pageTwoKeyboard(
 
       [
         {
-          text: "『𓆩 صفحه قبل 𓆪』",
+          text:
+            "『𓆩 صفحه قبل 𓆪』",
           callback_data:
             `lnk_page1:${ownerId}`
         }
@@ -579,7 +493,8 @@ function pageTwoKeyboard(
 
       [
         {
-          text: "『𓆩 بستن 𓆪』",
+          text:
+            "『𓆩 بستن 𓆩』",
           callback_data:
             `lnk_close:${ownerId}`
         }
@@ -591,26 +506,186 @@ function pageTwoKeyboard(
 
 
 // =====================================
+// پنل مدیر
+// فقط امکانات مجاز مدیر
+// =====================================
+
+function managerPanelKeyboard(
+  ownerId,
+  group
+) {
+
+  const links =
+    getLinkData(group);
+
+  const receive =
+    links.receiveEnabled
+      ? "★"
+      : "☆";
+
+  return {
+    inline_keyboard: [
+
+      [
+        {
+          text:
+            "『𓆩 لینک یک‌بار مصرف 𓆪』",
+          callback_data:
+            `lnk_mgr_one:${ownerId}`
+        }
+      ],
+
+      [
+        {
+          text:
+            `『𓆩 لینک زمان‌دار ${links.timedDuration} ساعت 𓆪』`,
+          callback_data:
+            `lnk_mgr_time:${ownerId}`
+        }
+      ],
+
+      [
+        {
+          text:
+            `『𓆩 دریافت لینک ${receive} 𓆪』`,
+          callback_data:
+            `lnk_mgr_receive:${ownerId}`
+        }
+      ],
+
+      [
+        {
+          text:
+            "『𓆩 بستن 𓆪』",
+          callback_data:
+            `lnk_close:${ownerId}`
+        }
+      ]
+
+    ]
+  };
+}
+
+
+// =====================================
+// منوی مدت دریافت لینک
+// 1 تا 24 ساعت
+// =====================================
+
+function receiveDurationKeyboard(
+  ownerId
+) {
+
+  const rows = [];
+
+  let row = [];
+
+  for (
+    let hour = 1;
+    hour <= 24;
+    hour++
+  ) {
+
+    row.push({
+      text: `${hour} ساعت`,
+      callback_data:
+        `lnk_setduration:${ownerId}:${hour}`
+    });
+
+    if (
+      row.length === 4
+    ) {
+      rows.push(row);
+      row = [];
+    }
+  }
+
+  if (row.length) {
+    rows.push(row);
+  }
+
+  rows.push([
+    {
+      text:
+        "『𓆩 بازگشت 𓆪』",
+      callback_data:
+        `lnk_page2:${ownerId}`
+    }
+  ]);
+
+  return {
+    inline_keyboard: rows
+  };
+}
+
+
+// =====================================
+// منوی مدت لینک زمان‌دار
+// 1 تا 24 ساعت
+// =====================================
+
+function timedDurationKeyboard(
+  ownerId
+) {
+
+  const rows = [];
+
+  let row = [];
+
+  for (
+    let hour = 1;
+    hour <= 24;
+    hour++
+  ) {
+
+    row.push({
+      text: `${hour} ساعت`,
+      callback_data:
+        `lnk_settimed:${ownerId}:${hour}`
+    });
+
+    if (
+      row.length === 4
+    ) {
+      rows.push(row);
+      row = [];
+    }
+  }
+
+  if (row.length) {
+    rows.push(row);
+  }
+
+  rows.push([
+    {
+      text:
+        "『𓆩 بازگشت 𓆪",
+      callback_data:
+        `lnk_page1:${ownerId}`
+    }
+  ]);
+
+  return {
+    inline_keyboard: rows
+  };
+}
+
+
+// =====================================
 // ساخت لینک اصلی
 // =====================================
 
-async function createMainLink(ctx) {
+async function createMainLink(
+  ctx
+) {
 
-  try {
+  const link =
+    await ctx.telegram
+      .exportChatInviteLink(
+        ctx.chat.id
+      );
 
-    return await ctx.telegram.exportChatInviteLink(
-      ctx.chat.id
-    );
-
-  } catch (error) {
-
-    console.error(
-      "createMainLink:",
-      error.message
-    );
-
-    return null;
-  }
+  return link;
 }
 
 
@@ -618,27 +693,21 @@ async function createMainLink(ctx) {
 // ساخت لینک یک‌بار مصرف
 // =====================================
 
-async function createOneTimeLink(ctx) {
+async function createOneTimeLink(
+  ctx
+) {
 
-  try {
+  const result =
+    await ctx.telegram
+      .createChatInviteLink(
+        ctx.chat.id,
+        {
+          name: "یک‌بار مصرف",
+          member_limit: 1
+        }
+      );
 
-    return await ctx.telegram.createChatInviteLink(
-      ctx.chat.id,
-      {
-        name: "یک‌بار مصرف",
-        member_limit: 1
-      }
-    );
-
-  } catch (error) {
-
-    console.error(
-      "createOneTimeLink:",
-      error.message
-    );
-
-    return null;
-  }
+  return result.invite_link;
 }
 
 
@@ -651,45 +720,27 @@ async function createTimedLink(
   hours
 ) {
 
-  const value =
-    Number(hours);
+  const expireDate =
+    Math.floor(Date.now() / 1000) +
+    (
+      Number(hours) *
+      60 *
+      60
+    );
 
-  if (
-    !Number.isFinite(value) ||
-    value <= 0
-  ) {
-    return null;
-  }
-
-  try {
-
-    const expireDate =
-      Math.floor(
-        Date.now() / 1000
-      ) +
-      Math.floor(
-        value * 60 * 60
+  const result =
+    await ctx.telegram
+      .createChatInviteLink(
+        ctx.chat.id,
+        {
+          name:
+            `${hours} ساعت`,
+          expire_date:
+            expireDate
+        }
       );
 
-    return await ctx.telegram.createChatInviteLink(
-      ctx.chat.id,
-      {
-        name:
-          `${value} ساعت`,
-        expire_date:
-          expireDate
-      }
-    );
-
-  } catch (error) {
-
-    console.error(
-      "createTimedLink:",
-      error.message
-    );
-
-    return null;
-  }
+  return result.invite_link;
 }
 
 
@@ -697,87 +748,71 @@ async function createTimedLink(
 // ساخت لینک موقعیت
 // =====================================
 
-async function createLocationLink(ctx) {
+async function createLocationLink(
+  ctx
+) {
 
-  try {
+  const result =
+    await ctx.telegram
+      .createChatInviteLink(
+        ctx.chat.id,
+        {
+          name: "موقعیت"
+        }
+      );
 
-    return await ctx.telegram.createChatInviteLink(
-      ctx.chat.id,
-      {
-        name: "موقعیت"
-      }
-    );
-
-  } catch (error) {
-
-    console.error(
-      "createLocationLink:",
-      error.message
-    );
-
-    return null;
-  }
+  return result.invite_link;
 }
 
 
 // =====================================
-// لینک تأییدی عضویت
+// ساخت لینک تأییدی
 // =====================================
 
-async function createApprovalLink(ctx) {
+async function createApprovalLink(
+  ctx
+) {
 
-  try {
+  const result =
+    await ctx.telegram
+      .createChatInviteLink(
+        ctx.chat.id,
+        {
+          name:
+            "تأییدی عضویت",
+          creates_join_request: true
+        }
+      );
 
-    return await ctx.telegram.createChatInviteLink(
-      ctx.chat.id,
-      {
-        name: "تأییدی عضویت",
-        creates_join_request: true
-      }
-    );
-
-  } catch (error) {
-
-    console.error(
-      "createApprovalLink:",
-      error.message
-    );
-
-    return null;
-  }
+  return result.invite_link;
 }
 
 
 // =====================================
-// لینک عضویت درخواستی
+// ساخت لینک عضویت درخواستی
 // =====================================
 
-async function createRequestLink(ctx) {
+async function createRequestLink(
+  ctx
+) {
 
-  try {
+  const result =
+    await ctx.telegram
+      .createChatInviteLink(
+        ctx.chat.id,
+        {
+          name:
+            "عضویت درخواستی",
+          creates_join_request: true
+        }
+      );
 
-    return await ctx.telegram.createChatInviteLink(
-      ctx.chat.id,
-      {
-        name: "عضویت درخواستی",
-        creates_join_request: true
-      }
-    );
-
-  } catch (error) {
-
-    console.error(
-      "createRequestLink:",
-      error.message
-    );
-
-    return null;
-  }
+  return result.invite_link;
 }
 
 
 // =====================================
-// ساخت لینک دریافت برای کاربران
+// ساخت لینک دریافت
 // =====================================
 
 async function createReceiveLink(
@@ -785,447 +820,725 @@ async function createReceiveLink(
   hours
 ) {
 
-  const value =
-    Number(hours);
-
-  if (
-    !Number.isFinite(value) ||
-    value <= 0
-  ) {
-    return null;
-  }
-
-  try {
-
-    const expireDate =
-      Math.floor(
-        Date.now() / 1000
-      ) +
-      Math.floor(
-        value * 60 * 60
-      );
-
-    return await ctx.telegram.createChatInviteLink(
-      ctx.chat.id,
-      {
-        name:
-          `دریافت ${value} ساعت`,
-        expire_date:
-          expireDate
-      }
-    );
-
-  } catch (error) {
-
-    console.error(
-      "createReceiveLink:",
-      error.message
-    );
-
-    return null;
-  }
-}
-
-
-// =====================================
-// ذخیره لینک
-// =====================================
-
-function saveLink(
-  group,
-  type,
-  value
-) {
-
-  const links =
-    getLinkData(group);
-
-  links[type] =
-    value;
-
-  saveDB();
-}
-
-
-// =====================================
-// فعال کردن دریافت لینک
-// =====================================
-
-function enableReceiveLink(
-  group
-) {
-
-  const links =
-    getLinkData(group);
-
-  links.receiveEnabled =
-    true;
-
-  saveDB();
-}
-
-
-// =====================================
-// بستن دریافت لینک
-// =====================================
-
-function disableReceiveLink(
-  group
-) {
-
-  const links =
-    getLinkData(group);
-
-  links.receiveEnabled =
-    false;
-
-  saveDB();
-}
-
-
-// =====================================
-// تنظیم مدت دریافت لینک
-// =====================================
-
-function setReceiveDuration(
-  group,
-  hours
-) {
-
-  const value =
-    Number(hours);
-
-  if (
-    !Number.isFinite(value) ||
-    value <= 0
-  ) {
-    return false;
-  }
-
-  const links =
-    getLinkData(group);
-
-  links.receiveDuration =
-    Math.floor(value);
-
-  saveDB();
-
-  return true;
-}
-
-
-// =====================================
-// تنظیم دسترسی مدیر
-// =====================================
-
-function setManagerAccess(
-  group,
-  userId,
-  enabled
-) {
-
-  const links =
-    getLinkData(group);
-
-  links.managers[
-    String(userId)
-  ] = Boolean(enabled);
-
-  saveDB();
-}
-
-
-// =====================================
-// گرفتن وضعیت دسترسی مدیر
-// =====================================
-
-function getManagerAccess(
-  group,
-  userId
-) {
-
-  const links =
-    getLinkData(group);
-
-  return (
-    links.managers[
-      String(userId)
-    ] === true
+  return await createTimedLink(
+    ctx,
+    hours
   );
 }
 
 
 // =====================================
-// نمایش نام کاربر
+// ارسال امن خطا
+// فقط به مدیر مجاز
 // =====================================
 
-function getUserName(user) {
+async function sendLinkError(
+  ctx,
+  error
+) {
 
-  if (!user) {
-    return "کاربر";
-  }
+  console.error(
+    "LINK ERROR:",
+    error
+  );
 
-  if (user.username) {
-    return `@${user.username}`;
-  }
+  try {
 
-  const first =
-    user.first_name || "";
+    await replyToCommand(
+      ctx,
+      "خطا در ساخت لینک. مطمئن شوید ربات دسترسی ساخت لینک دعوت را دارد."
+    );
 
-  const last =
-    user.last_name || "";
-
-  const full =
-    `${first} ${last}`.trim();
-
-  return full || "کاربر";
+  } catch (_) {}
 }
 
 
 // =====================================
-// پنل دسترسی
+// بررسی پنل خصوصی
 // =====================================
 
-function accessPanelText() {
+async function validatePanel(
+  ctx,
+  ownerId,
+  requiredType = null
+) {
 
-  return [
-    "『𓆩 مدیریت دسترسی لینک 𓆪』",
-    "",
-    "برای دادن یا حذف دسترسی،",
-    "روی پیام مدیر Reply کن و دستور مربوطه را بفرست."
-  ].join("\n");
-}
+  if (!ctx.callbackQuery) {
+    return false;
+  }
 
+  if (
+    !isPanelOwner(
+      ctx,
+      ownerId
+    )
+  ) {
+    return false;
+  }
 
-// =====================================
-// ثبت سیستم لینک
+  const message =
+    ctx.callbackQuery.message;
+
+  if (!message) {
+    return false;
+  }
+
+  const panel =
+    getPanel(
+      message.chat.id,
+      message.message_id
+    );
+
+  if (!panel) {
+    return false;
+  }
+
+  if (
+    String(panel.ownerId) !==
+    String(ownerId)
+  ) {
+    return false;
+  }
+
+  if (
+    requiredType &&
+    panel.type !== requiredType
+  ) {
+    return false;
+  }
+
+  if (
+    panel.type === "manager"
+  ) {
+
+    const access =
+      await hasLinkManagementAccess(
+        ctx,
+        ctx.from.id
+      );
+
+    if (!access) {
+      return false;
+    }
+  }
+
+  return true;
+}// =====================================
+// ثبت قابلیت‌های لینک
 // =====================================
 
 function registerLinks(bot) {
 
   // ===================================
-  // دستور اصلی «لینک»
+  // فرمان «لینک»
+  // فقط مالک یا مدیر دارای دسترسی
   // ===================================
 
   bot.hears(
     /^لینک$/i,
-    async ctx => {
+    async (ctx) => {
 
-      if (!await checkLinkManager(ctx)) {
+      if (!isGroupChat(ctx)) {
         return;
       }
 
-      cleanOldPanels();
+      const allowed =
+        await hasLinkManagementAccess(
+          ctx
+        );
+
+      // کاربر عادی کاملاً ساکت
+      if (!allowed) {
+        return;
+      }
+
+      const group =
+        getGroup(
+          ctx.chat.id
+        );
+
+      getLinkData(group);
+
+      saveDB();
+
+      const owner =
+        await isOwner(ctx);
+
+      const type =
+        owner
+          ? "owner"
+          : "manager";
+
+      const keyboard =
+        owner
+          ? pageOneKeyboard(
+              ctx.from.id
+            )
+          : managerPanelKeyboard(
+              ctx.from.id,
+              group
+            );
+
+      const panel =
+        await ctx.reply(
+          mainPanelText(),
+          {
+            reply_markup:
+              keyboard
+          }
+        );
+
+      rememberPanel(
+        ctx.chat.id,
+        panel.message_id,
+        ctx.from.id,
+        type
+      );
+    }
+  );
+
+
+  // ===================================
+  // فرمان دریافت لینک
+  // اعضا، مدیران و مالک
+  // فقط وقتی دریافت لینک باز باشد
+  // ===================================
+
+  bot.hears(
+    /^دریافت لینک(?:\s+(\d+))?$/i,
+    async (ctx) => {
+
+      if (!isGroupChat(ctx)) {
+        return;
+      }
+
+      const group =
+        getGroup(
+          ctx.chat.id
+        );
+
+      const links =
+        getLinkData(group);
+
+      // اگر بسته باشد هیچ جوابی
+      if (!links.receiveEnabled) {
+        return;
+      }
+
+      const requested =
+        ctx.match &&
+        ctx.match[1]
+          ? Number(ctx.match[1])
+          : links.receiveDuration;
+
+      const hours =
+        Math.min(
+          24,
+          Math.max(
+            1,
+            Number(requested) ||
+              links.receiveDuration
+          )
+        );
 
       try {
 
-        const ownerId =
-          ctx.from.id;
-
-        const sent =
-          await ctx.reply(
-            mainPanelText(),
-            {
-              reply_markup:
-                pageOneKeyboard(
-                  ownerId
-                ),
-
-              reply_parameters: {
-                message_id:
-                  ctx.message.message_id
-              }
-            }
+        const link =
+          await createReceiveLink(
+            ctx,
+            hours
           );
 
-        rememberPanel(
-          ctx.chat.id,
-          sent.message_id,
-          ownerId
+        await replyToCommand(
+          ctx,
+          [
+            "『𓆩 لینک دریافت 𓆪』",
+            "",
+            link,
+            "",
+            `مدت اعتبار: ${hours} ساعت`
+          ].join("\n")
         );
 
       } catch (error) {
 
         console.error(
-          "links open:",
-          error.message
+          "RECEIVE LINK ERROR:",
+          error
         );
+
+        // اینجا هم چون فرمان عمومی است
+        // فقط در صورت خطای واقعی پاسخ می‌دهیم
+        try {
+          await replyToCommand(
+            ctx,
+            "خطا در ساخت لینک دریافت."
+          );
+        } catch (_) {}
       }
     }
   );
 
 
   // ===================================
-  // صفحه اول
+  // دسترسی اختصاصی مدیر
+  // فقط مالک + فقط Reply
+  // ===================================
+
+  bot.hears(
+    /^دسترسی لینک$/i,
+    async (ctx) => {
+
+      if (!isGroupChat(ctx)) {
+        return;
+      }
+
+      const owner =
+        await isOwner(ctx);
+
+      if (!owner) {
+        return;
+      }
+
+      // بدون Reply = سکوت کامل
+      if (
+        !ctx.message.reply_to_message
+      ) {
+        return;
+      }
+
+      const target =
+        ctx.message.reply_to_message
+          .from;
+
+      if (!target) {
+        return;
+      }
+
+      const role =
+        await getMemberRole(
+          ctx,
+          target.id
+        );
+
+      // فقط مدیر می‌تواند مدیر لینک شود
+      if (
+        role !== "administrator"
+      ) {
+        return;
+      }
+
+      const group =
+        getGroup(
+          ctx.chat.id
+        );
+
+      const links =
+        getLinkData(group);
+
+      links.managers[
+        target.id
+      ] = true;
+
+      saveDB();
+
+      await replyToCommand(
+        ctx,
+        `دسترسی لینک برای ${getUserName(target)} فعال شد.`
+      );
+    }
+  );
+
+
+  // ===================================
+  // حذف دسترسی اختصاصی مدیر
+  // فقط مالک + فقط Reply
+  // ===================================
+
+  bot.hears(
+    /^حذف دسترسی لینک$/i,
+    async (ctx) => {
+
+      if (!isGroupChat(ctx)) {
+        return;
+      }
+
+      const owner =
+        await isOwner(ctx);
+
+      if (!owner) {
+        return;
+      }
+
+      // بدون Reply = سکوت کامل
+      if (
+        !ctx.message.reply_to_message
+      ) {
+        return;
+      }
+
+      const target =
+        ctx.message.reply_to_message
+          .from;
+
+      if (!target) {
+        return;
+      }
+
+      const role =
+        await getMemberRole(
+          ctx,
+          target.id
+        );
+
+      if (
+        role !== "administrator"
+      ) {
+        return;
+      }
+
+      const group =
+        getGroup(
+          ctx.chat.id
+        );
+
+      const links =
+        getLinkData(group);
+
+      delete links.managers[
+        target.id
+      ];
+
+      saveDB();
+
+      await replyToCommand(
+        ctx,
+        `دسترسی لینک ${getUserName(target)} حذف شد.`
+      );
+    }
+  );
+
+
+  // ===================================
+  // دسترسی همه مدیران
+  // فقط مالک + فقط Reply
+  // ===================================
+
+  bot.hears(
+    /^دسترسی لینک مدیران$/i,
+    async (ctx) => {
+
+      if (!isGroupChat(ctx)) {
+        return;
+      }
+
+      const owner =
+        await isOwner(ctx);
+
+      if (!owner) {
+        return;
+      }
+
+      // تأکید: این فرمان هم Reply لازم دارد
+      if (
+        !ctx.message.reply_to_message
+      ) {
+        return;
+      }
+
+      const target =
+        ctx.message.reply_to_message
+          .from;
+
+      if (!target) {
+        return;
+      }
+
+      const role =
+        await getMemberRole(
+          ctx,
+          target.id
+        );
+
+      if (
+        role !== "administrator"
+      ) {
+        return;
+      }
+
+      const group =
+        getGroup(
+          ctx.chat.id
+        );
+
+      const links =
+        getLinkData(group);
+
+      links.allManagersAccess =
+        true;
+
+      saveDB();
+
+      await replyToCommand(
+        ctx,
+        "دسترسی لینک برای همه مدیران فعال شد."
+      );
+    }
+  );
+
+
+  // ===================================
+  // حذف دسترسی همه مدیران
+  // فقط مالک + فقط Reply
+  // ===================================
+
+  bot.hears(
+    /^حذف دسترسی همه مدیران$/i,
+    async (ctx) => {
+
+      if (!isGroupChat(ctx)) {
+        return;
+      }
+
+      const owner =
+        await isOwner(ctx);
+
+      if (!owner) {
+        return;
+      }
+
+      // Reply اجباری
+      if (
+        !ctx.message.reply_to_message
+      ) {
+        return;
+      }
+
+      const target =
+        ctx.message.reply_to_message
+          .from;
+
+      if (!target) {
+        return;
+      }
+
+      const role =
+        await getMemberRole(
+          ctx,
+          target.id
+        );
+
+      if (
+        role !== "administrator"
+      ) {
+        return;
+      }
+
+      const group =
+        getGroup(
+          ctx.chat.id
+        );
+
+      const links =
+        getLinkData(group);
+
+      links.allManagersAccess =
+        false;
+
+      saveDB();
+
+      await replyToCommand(
+        ctx,
+        "دسترسی لینک همه مدیران بسته شد."
+      );
+    }
+  );
+
+
+  // ===================================
+  // Callback صفحه اول مالک
   // ===================================
 
   bot.action(
     /^lnk_page1:(\d+)$/,
-    async ctx => {
+    async (ctx) => {
 
       const ownerId =
-        Number(ctx.match[1]);
+        ctx.match[1];
 
-      if (
-        !isPanelOwner(
+      const valid =
+        await validatePanel(
           ctx,
-          ownerId
-        )
-      ) {
+          ownerId,
+          "owner"
+        );
+
+      if (!valid) {
         return;
       }
 
-      if (
-        !await checkLinkManager(ctx)
-      ) {
-        return;
-      }
+      await ctx.answerCbQuery();
 
-      try {
+      const group =
+        getGroup(
+          ctx.chat.id
+        );
 
-        await ctx.answerCbQuery();
-
-        const panel =
-          getPanel(
-            ctx.chat.id,
-            ctx.callbackQuery.message.message_id
-          );
-
-        if (!panel) {
-          return;
+      await ctx.editMessageText(
+        mainPanelText(),
+        {
+          reply_markup:
+            pageOneKeyboard(
+              ownerId
+            )
         }
-
-        await ctx.editMessageText(
-          mainPanelText(),
-          {
-            reply_markup:
-              pageOneKeyboard(
-                ownerId
-              )
-          }
-        );
-
-      } catch (error) {
-
-        console.error(
-          "links page1:",
-          error.message
-        );
-      }
+      );
     }
   );
 
 
   // ===================================
-  // صفحه دوم
+  // Callback صفحه دوم مالک
   // ===================================
 
   bot.action(
     /^lnk_page2:(\d+)$/,
-    async ctx => {
+    async (ctx) => {
 
       const ownerId =
-        Number(ctx.match[1]);
+        ctx.match[1];
 
-      if (
-        !isPanelOwner(
+      const valid =
+        await validatePanel(
           ctx,
-          ownerId
-        )
-      ) {
+          ownerId,
+          "owner"
+        );
+
+      if (!valid) {
         return;
       }
 
-      if (
-        !await checkLinkManager(ctx)
-      ) {
-        return;
-      }
+      await ctx.answerCbQuery();
 
-      try {
-
-        await ctx.answerCbQuery();
-
-        const group =
-          getGroup(ctx.chat.id);
-
-        await ctx.editMessageText(
-          mainPanelText(),
-          {
-            reply_markup:
-              pageTwoKeyboard(
-                ownerId,
-                group
-              )
-          }
+      const group =
+        getGroup(
+          ctx.chat.id
         );
 
-      } catch (error) {
-
-        console.error(
-          "links page2:",
-          error.message
-        );
-      }
+      await ctx.editMessageText(
+        mainPanelText(),
+        {
+          reply_markup:
+            pageTwoKeyboard(
+              ownerId,
+              group
+            )
+        }
+      );
     }
   );
 
 
   // ===================================
+  // بستن پنل
+  // ===================================
+
+  bot.action(
+    /^lnk_close:(\d+)$/,
+    async (ctx) => {
+
+      const ownerId =
+        ctx.match[1];
+
+      const valid =
+        await validatePanel(
+          ctx,
+          ownerId
+        );
+
+      if (!valid) {
+        return;
+      }
+
+      await ctx.answerCbQuery();
+
+      removePanel(
+        ctx.chat.id,
+        ctx.callbackQuery.message
+          .message_id
+      );
+
+      try {
+
+        await ctx.deleteMessage();
+
+      } catch (_) {
+
+        try {
+
+          await ctx.editMessageText(
+            "『𓆩 پنل بسته شد 𓆪』"
+          );
+
+        } catch (_) {}
+      }
+    }
+  );  // ===================================
   // لینک اصلی
+  // فقط مالک
   // ===================================
 
   bot.action(
     /^lnk_main:(\d+)$/,
-    async ctx => {
+    async (ctx) => {
 
       const ownerId =
-        Number(ctx.match[1]);
+        ctx.match[1];
 
-      if (
-        !isPanelOwner(
+      const valid =
+        await validatePanel(
           ctx,
-          ownerId
-        )
-      ) {
+          ownerId,
+          "owner"
+        );
+
+      if (!valid) {
         return;
       }
 
-      if (
-        !await checkLinkManager(ctx)
-      ) {
-        return;
-      }
+      await ctx.answerCbQuery();
 
       try {
-
-        await ctx.answerCbQuery();
-
-        const group =
-          getGroup(ctx.chat.id);
 
         const link =
           await createMainLink(ctx);
 
-        if (!link) {
-          return;
-        }
+        const group =
+          getGroup(
+            ctx.chat.id
+          );
 
-        saveLink(
-          group,
-          "main",
-          link
-        );
+        const links =
+          getLinkData(group);
+
+        links.main = link;
+
+        saveDB();
 
         await ctx.reply(
-          `『𓆩 لینک اصلی گروه 𓆪』\n\n${link}`
+          [
+            "『𓆩 لینک اصلی گروه 𓆪』",
+            "",
+            link
+          ].join("\n")
         );
 
       } catch (error) {
 
-        console.error(
-          "links main:",
-          error.message
+        await sendLinkError(
+          ctx,
+          error
         );
       }
     }
@@ -1233,158 +1546,61 @@ function registerLinks(bot) {
 
 
   // ===================================
-  // لینک یک‌بار مصرف
+  // لینک یک‌بار مصرف مالک
   // ===================================
 
   bot.action(
     /^lnk_one:(\d+)$/,
-    async ctx => {
+    async (ctx) => {
 
       const ownerId =
-        Number(ctx.match[1]);
+        ctx.match[1];
 
-      if (
-        !isPanelOwner(
+      const valid =
+        await validatePanel(
           ctx,
-          ownerId
-        )
-      ) {
+          ownerId,
+          "owner"
+        );
+
+      if (!valid) {
         return;
       }
 
-      if (
-        !await checkLinkManager(ctx)
-      ) {
-        return;
-      }
+      await ctx.answerCbQuery();
 
       try {
 
-        await ctx.answerCbQuery();
+        const link =
+          await createOneTimeLink(
+            ctx
+          );
 
         const group =
-          getGroup(ctx.chat.id);
+          getGroup(
+            ctx.chat.id
+          );
 
-        const result =
-          await createOneTimeLink(ctx);
+        const links =
+          getLinkData(group);
 
-        if (!result) {
-          return;
-        }
+        links.oneTime = link;
 
-        saveLink(
-          group,
-          "oneTime",
-          result.invite_link
-        );
+        saveDB();
 
         await ctx.reply(
-          `『𓆩 لینک یک‌بار مصرف 𓆪』\n\n${result.invite_link}`
+          [
+            "『𓆩 لینک یک‌بار مصرف 𓆪』",
+            "",
+            link
+          ].join("\n")
         );
 
       } catch (error) {
 
-        console.error(
-          "links one:",
-          error.message
-        );
-      }
-    }
-  );  // ===================================
-  // لینک زمان‌دار
-  // ===================================
-
-  bot.action(
-    /^lnk_time:(\d+)$/,
-    async ctx => {
-
-      const ownerId =
-        Number(ctx.match[1]);
-
-      if (
-        !isPanelOwner(
+        await sendLinkError(
           ctx,
-          ownerId
-        )
-      ) {
-        return;
-      }
-
-      if (
-        !await checkLinkManager(ctx)
-      ) {
-        return;
-      }
-
-      try {
-
-        await ctx.answerCbQuery();
-
-        await ctx.editMessageText(
-          "『𓆩 لینک زمان‌دار 𓆪』\n\nمدت زمان لینک را انتخاب کن:",
-          {
-            reply_markup: {
-              inline_keyboard: [
-                [
-                  {
-                    text: "۱ ساعت",
-                    callback_data:
-                      `lnk_time_set:${ownerId}:1`
-                  },
-                  {
-                    text: "۲ ساعت",
-                    callback_data:
-                      `lnk_time_set:${ownerId}:2`
-                  }
-                ],
-                [
-                  {
-                    text: "۳ ساعت",
-                    callback_data:
-                      `lnk_time_set:${ownerId}:3`
-                  },
-                  {
-                    text: "۴ ساعت",
-                    callback_data:
-                      `lnk_time_set:${ownerId}:4`
-                  }
-                ],
-                [
-                  {
-                    text: "۶ ساعت",
-                    callback_data:
-                      `lnk_time_set:${ownerId}:6`
-                  },
-                  {
-                    text: "۱۲ ساعت",
-                    callback_data:
-                      `lnk_time_set:${ownerId}:12`
-                  }
-                ],
-                [
-                  {
-                    text: "۲۴ ساعت",
-                    callback_data:
-                      `lnk_time_set:${ownerId}:24`
-                  }
-                ],
-                [
-                  {
-                    text: "『𓆩 بازگشت 𓆪』",
-                    callback_data:
-                      `lnk_page1:${ownerId}`
-                  }
-                ]
-              ]
-            }
-          }
-        );
-
-      } catch (error) {
-
-        console.error(
-          "links time:",
-          error.message
+          error
         );
       }
     }
@@ -1392,76 +1608,127 @@ function registerLinks(bot) {
 
 
   // ===================================
-  // ساخت لینک زمان‌دار
+  // انتخاب مدت لینک زمان‌دار
+  // فقط مالک
   // ===================================
 
   bot.action(
-    /^lnk_time_set:(\d+):(1|2|3|4|6|12|24)$/,
-    async ctx => {
+    /^lnk_time:(\d+)$/,
+    async (ctx) => {
 
       const ownerId =
-        Number(ctx.match[1]);
+        ctx.match[1];
+
+      const valid =
+        await validatePanel(
+          ctx,
+          ownerId,
+          "owner"
+        );
+
+      if (!valid) {
+        return;
+      }
+
+      await ctx.answerCbQuery();
+
+      await ctx.editMessageText(
+        "『𓆩 مدت لینک زمان‌دار 𓆪』\n\nمدت موردنظر را انتخاب کنید:",
+        {
+          reply_markup:
+            timedDurationKeyboard(
+              ownerId
+            )
+        }
+      );
+    }
+  );
+
+
+  // ===================================
+  // ذخیره مدت لینک زمان‌دار
+  // و ساخت لینک
+  // ===================================
+
+  bot.action(
+    /^lnk_settimed:(\d+):(\d+)$/,
+    async (ctx) => {
+
+      const ownerId =
+        ctx.match[1];
 
       const hours =
         Number(ctx.match[2]);
 
-      if (
-        !isPanelOwner(
+      const valid =
+        await validatePanel(
           ctx,
-          ownerId
-        )
+          ownerId,
+          "owner"
+        );
+
+      if (
+        !valid ||
+        hours < 1 ||
+        hours > 24
       ) {
         return;
       }
 
-      if (
-        !await checkLinkManager(ctx)
-      ) {
-        return;
-      }
+      await ctx.answerCbQuery();
 
       try {
 
-        await ctx.answerCbQuery();
-
         const group =
-          getGroup(ctx.chat.id);
+          getGroup(
+            ctx.chat.id
+          );
 
-        const result =
+        const links =
+          getLinkData(group);
+
+        links.timedDuration =
+          hours;
+
+        const link =
           await createTimedLink(
             ctx,
             hours
           );
 
-        if (!result) {
-          return;
-        }
-
-        const links =
-          getLinkData(group);
-
-        links.timed.push({
-          invite_link:
-            result.invite_link,
-
-          hours:
-            hours,
-
-          createdAt:
-            Date.now()
+        links.timed.unshift({
+          link,
+          hours,
+          createdAt: Date.now()
         });
+
+        if (
+          links.timed.length > 20
+        ) {
+          links.timed =
+            links.timed.slice(
+              0,
+              20
+            );
+        }
 
         saveDB();
 
         await ctx.reply(
-          `『𓆩 لینک ${hours} ساعته 𓆪』\n\n${result.invite_link}`
+          [
+            "『𓆩 لینک زمان‌دار 𓆪』",
+            "",
+            link,
+            "",
+            `مدت اعتبار: ${hours} ساعت`
+          ].join("\n")
         );
 
       } catch (error) {
 
-        console.error(
-          "links time set:",
-          error.message
+        await sendLinkError(
+          ctx,
+          error
         );
       }
     }
@@ -1470,59 +1737,61 @@ function registerLinks(bot) {
 
   // ===================================
   // لینک موقعیت
+  // فقط مالک
   // ===================================
 
   bot.action(
     /^lnk_location:(\d+)$/,
-    async ctx => {
+    async (ctx) => {
 
       const ownerId =
-        Number(ctx.match[1]);
+        ctx.match[1];
 
-      if (
-        !isPanelOwner(
+      const valid =
+        await validatePanel(
           ctx,
-          ownerId
-        )
-      ) {
+          ownerId,
+          "owner"
+        );
+
+      if (!valid) {
         return;
       }
 
-      if (
-        !await checkLinkManager(ctx)
-      ) {
-        return;
-      }
+      await ctx.answerCbQuery();
 
       try {
 
-        await ctx.answerCbQuery();
+        const link =
+          await createLocationLink(
+            ctx
+          );
 
         const group =
-          getGroup(ctx.chat.id);
+          getGroup(
+            ctx.chat.id
+          );
 
-        const link =
-          await createLocationLink(ctx);
+        const links =
+          getLinkData(group);
 
-        if (!link) {
-          return;
-        }
+        links.location = link;
 
-        saveLink(
-          group,
-          "location",
-          link
-        );
+        saveDB();
 
         await ctx.reply(
-          `『𓆩 لینک موقعیت 𓆪』\n\n${link}`
+          [
+            "『𓆩 لینک موقعیت 𓆪』",
+            "",
+            link
+          ].join("\n")
         );
 
       } catch (error) {
 
-        console.error(
-          "links location:",
-          error.message
+        await sendLinkError(
+          ctx,
+          error
         );
       }
     }
@@ -1531,59 +1800,61 @@ function registerLinks(bot) {
 
   // ===================================
   // لینک تأییدی عضویت
+  // فقط مالک
   // ===================================
 
   bot.action(
     /^lnk_approval:(\d+)$/,
-    async ctx => {
+    async (ctx) => {
 
       const ownerId =
-        Number(ctx.match[1]);
+        ctx.match[1];
 
-      if (
-        !isPanelOwner(
+      const valid =
+        await validatePanel(
           ctx,
-          ownerId
-        )
-      ) {
+          ownerId,
+          "owner"
+        );
+
+      if (!valid) {
         return;
       }
 
-      if (
-        !await checkLinkManager(ctx)
-      ) {
-        return;
-      }
+      await ctx.answerCbQuery();
 
       try {
 
-        await ctx.answerCbQuery();
+        const link =
+          await createApprovalLink(
+            ctx
+          );
 
         const group =
-          getGroup(ctx.chat.id);
+          getGroup(
+            ctx.chat.id
+          );
 
-        const link =
-          await createApprovalLink(ctx);
+        const links =
+          getLinkData(group);
 
-        if (!link) {
-          return;
-        }
+        links.approval = link;
 
-        saveLink(
-          group,
-          "approval",
-          link
-        );
+        saveDB();
 
         await ctx.reply(
-          `『𓆩 لینک تأییدی عضویت 𓆪』\n\n${link}`
+          [
+            "『𓆩 لینک تأییدی عضویت 𓆪』",
+            "",
+            link
+          ].join("\n")
         );
 
       } catch (error) {
 
-        console.error(
-          "links approval:",
-          error.message
+        await sendLinkError(
+          ctx,
+          error
         );
       }
     }
@@ -1592,149 +1863,61 @@ function registerLinks(bot) {
 
   // ===================================
   // لینک عضویت درخواستی
+  // فقط مالک
   // ===================================
 
   bot.action(
     /^lnk_request:(\d+)$/,
-    async ctx => {
+    async (ctx) => {
 
       const ownerId =
-        Number(ctx.match[1]);
+        ctx.match[1];
 
-      if (
-        !isPanelOwner(
+      const valid =
+        await validatePanel(
           ctx,
-          ownerId
-        )
-      ) {
+          ownerId,
+          "owner"
+        );
+
+      if (!valid) {
         return;
       }
 
-      if (
-        !await checkLinkManager(ctx)
-      ) {
-        return;
-      }
+      await ctx.answerCbQuery();
 
       try {
-
-        await ctx.answerCbQuery();
-
-        const group =
-          getGroup(ctx.chat.id);
 
         const link =
-          await createRequestLink(ctx);
-
-        if (!link) {
-          return;
-        }
-
-        saveLink(
-          group,
-          "request",
-          link
-        );
-
-        await ctx.reply(
-          `『𓆩 لینک عضویت درخواستی 𓆪』\n\n${link}`
-        );
-
-      } catch (error) {
-
-        console.error(
-          "links request:",
-          error.message
-        );
-      }
-    }
-  );
-
-
-  // ===================================
-  // دریافت لینک
-  // ===================================
-
-  bot.action(
-    /^lnk_receive:(\d+)$/,
-    async ctx => {
-
-      const ownerId =
-        Number(ctx.match[1]);
-
-      if (
-        !isPanelOwner(
-          ctx,
-          ownerId
-        )
-      ) {
-        return;
-      }
-
-      if (
-        !await checkLinkManager(ctx)
-      ) {
-        return;
-      }
-
-      try {
-
-        await ctx.answerCbQuery();
+          await createRequestLink(
+            ctx
+          );
 
         const group =
-          getGroup(ctx.chat.id);
+          getGroup(
+            ctx.chat.id
+          );
 
         const links =
           getLinkData(group);
 
-        const status =
-          links.receiveEnabled
-            ? "★ فعال"
-            : "☆ غیرفعال";
+        links.request = link;
 
-        await ctx.editMessageText(
-          `『𓆩 دریافت لینک 𓆪』\n\nوضعیت: ${status}\n\nاز گزینه‌های زیر استفاده کن:`,
-          {
-            reply_markup: {
-              inline_keyboard: [
-                [
-                  {
-                    text: "『𓆩 فعال کردن 𓆪』",
-                    callback_data:
-                      `lnk_receive_on:${ownerId}`
-                  }
-                ],
-                [
-                  {
-                    text: "『𓆩 غیرفعال کردن 𓆪』",
-                    callback_data:
-                      `lnk_receive_off:${ownerId}`
-                  }
-                ],
-                [
-                  {
-                    text: "『𓆩 تعیین مدت 𓆪』",
-                    callback_data:
-                      `lnk_duration:${ownerId}`
-                  }
-                ],
-                [
-                  {
-                    text: "『𓆩 بازگشت 𓆪』",
-                    callback_data:
-                      `lnk_page2:${ownerId}`
-                  }
-                ]
-              ]
-            }
-          }
+        saveDB();
+
+        await ctx.reply(
+          [
+            "『𓆩 لینک عضویت درخواستی 𓆪』",
+            "",
+            link
+          ].join("\n")
         );
 
       } catch (error) {
 
-        console.error(
-          "links receive:",
-          error.message
+        await sendLinkError(
+          ctx,
+          error
         );
       }
     }
@@ -1742,690 +1925,473 @@ function registerLinks(bot) {
 
 
   // ===================================
-  // فعال کردن دریافت لینک
+  // باز/بسته کردن دریافت لینک
+  // فقط مالک
   // ===================================
 
   bot.action(
-    /^lnk_receive_on:(\d+)$/,
-    async ctx => {
+    /^lnk_receive:(\d+)$/,
+    async (ctx) => {
 
       const ownerId =
-        Number(ctx.match[1]);
+        ctx.match[1];
 
-      if (
-        !isPanelOwner(
+      const valid =
+        await validatePanel(
           ctx,
-          ownerId
-        )
-      ) {
+          ownerId,
+          "owner"
+        );
+
+      if (!valid) {
         return;
       }
 
-      if (
-        !await checkLinkManager(ctx)
-      ) {
-        return;
-      }
+      const group =
+        getGroup(
+          ctx.chat.id
+        );
 
-      try {
+      const links =
+        getLinkData(group);
 
-        await ctx.answerCbQuery();
+      links.receiveEnabled =
+        !links.receiveEnabled;
 
-        const group =
-          getGroup(ctx.chat.id);
+      saveDB();
 
-        enableReceiveLink(
+      await ctx.answerCbQuery(
+        links.receiveEnabled
+          ? "دریافت لینک فعال شد"
+          : "دریافت لینک بسته شد"
+      );
+
+      await ctx.editMessageReplyMarkup(
+        pageTwoKeyboard(
+          ownerId,
           group
-        );
-
-        await ctx.editMessageText(
-          "『𓆩 دریافت لینک 𓆪』\n\n★ دریافت لینک فعال شد.",
-          {
-            reply_markup: {
-              inline_keyboard: [
-                [
-                  {
-                    text: "『𓆩 بازگشت 𓆪』",
-                    callback_data:
-                      `lnk_receive:${ownerId}`
-                  }
-                ]
-              ]
-            }
-          }
-        );
-
-      } catch (error) {
-
-        console.error(
-          "links receive on:",
-          error.message
-        );
-      }
+        )
+      );
     }
   );
 
 
   // ===================================
-  // غیرفعال کردن دریافت لینک
-  // ===================================
-
-  bot.action(
-    /^lnk_receive_off:(\d+)$/,
-    async ctx => {
-
-      const ownerId =
-        Number(ctx.match[1]);
-
-      if (
-        !isPanelOwner(
-          ctx,
-          ownerId
-        )
-      ) {
-        return;
-      }
-
-      if (
-        !await checkLinkManager(ctx)
-      ) {
-        return;
-      }
-
-      try {
-
-        await ctx.answerCbQuery();
-
-        const group =
-          getGroup(ctx.chat.id);
-
-        disableReceiveLink(
-          group
-        );
-
-        await ctx.editMessageText(
-          "『𓆩 دریافت لینک 𓆪』\n\n☆ دریافت لینک غیرفعال شد.",
-          {
-            reply_markup: {
-              inline_keyboard: [
-                [
-                  {
-                    text: "『𓆩 بازگشت 𓆪』",
-                    callback_data:
-                      `lnk_receive:${ownerId}`
-                  }
-                ]
-              ]
-            }
-          }
-        );
-
-      } catch (error) {
-
-        console.error(
-          "links receive off:",
-          error.message
-        );
-      }
-    }
-  );
-
-
-  // ===================================
-  // انتخاب مدت دریافت لینک
+  // مدت دریافت لینک
+  // فقط مالک
   // ===================================
 
   bot.action(
     /^lnk_duration:(\d+)$/,
-    async ctx => {
+    async (ctx) => {
 
       const ownerId =
-        Number(ctx.match[1]);
+        ctx.match[1];
 
-      if (
-        !isPanelOwner(
+      const valid =
+        await validatePanel(
           ctx,
-          ownerId
-        )
-      ) {
+          ownerId,
+          "owner"
+        );
+
+      if (!valid) {
         return;
       }
 
-      if (
-        !await checkLinkManager(ctx)
-      ) {
-        return;
-      }
+      await ctx.answerCbQuery();
 
-      try {
-
-        await ctx.answerCbQuery();
-
-        await ctx.editMessageText(
-          "『𓆩 مدت دریافت لینک 𓆪』\n\nمدت زمان را انتخاب کن:",
-          {
-            reply_markup: {
-              inline_keyboard: [
-                [
-                  {
-                    text: "۱ ساعت",
-                    callback_data:
-                      `lnk_receive_time:${ownerId}:1`
-                  },
-                  {
-                    text: "۲ ساعت",
-                    callback_data:
-                      `lnk_receive_time:${ownerId}:2`
-                  }
-                ],
-                [
-                  {
-                    text: "۳ ساعت",
-                    callback_data:
-                      `lnk_receive_time:${ownerId}:3`
-                  },
-                  {
-                    text: "۴ ساعت",
-                    callback_data:
-                      `lnk_receive_time:${ownerId}:4`
-                  }
-                ],
-                [
-                  {
-                    text: "۶ ساعت",
-                    callback_data:
-                      `lnk_receive_time:${ownerId}:6`
-                  },
-                  {
-                    text: "۱۲ ساعت",
-                    callback_data:
-                      `lnk_receive_time:${ownerId}:12`
-                  }
-                ],
-                [
-                  {
-                    text: "۲۴ ساعت",
-                    callback_data:
-                      `lnk_receive_time:${ownerId}:24`
-                  }
-                ],
-                [
-                  {
-                    text: "『𓆩 بازگشت 𓆪`",
-                    callback_data:
-                      `lnk_receive:${ownerId}`
-                  }
-                ]
-              ]
-            }
-          }
-        );
-
-      } catch (error) {
-
-        console.error(
-          "links duration:",
-          error.message
-        );
-      }
+      await ctx.editMessageText(
+        "『𓆩 مدت دریافت لینک 𓆪』\n\nمدت را از ۱ تا ۲۴ ساعت انتخاب کنید:",
+        {
+          reply_markup:
+            receiveDurationKeyboard(
+              ownerId
+            )
+        }
+      );
     }
   );
 
 
   // ===================================
-  // ثبت مدت دریافت لینک
+  // تنظیم مدت دریافت
   // ===================================
 
   bot.action(
-    /^lnk_receive_time:(\d+):(1|2|3|4|6|12|24)$/,
-    async ctx => {
+    /^lnk_setduration:(\d+):(\d+)$/,
+    async (ctx) => {
 
       const ownerId =
-        Number(ctx.match[1]);
+        ctx.match[1];
 
       const hours =
         Number(ctx.match[2]);
 
-      if (
-        !isPanelOwner(
+      const valid =
+        await validatePanel(
           ctx,
-          ownerId
-        )
-      ) {
-        return;
-      }
+          ownerId,
+          "owner"
+        );
 
       if (
-        !await checkLinkManager(ctx)
+        !valid ||
+        hours < 1 ||
+        hours > 24
       ) {
         return;
       }
 
-      try {
-
-        await ctx.answerCbQuery();
-
-        const group =
-          getGroup(ctx.chat.id);
-
-        setReceiveDuration(
-          group,
-          hours
+      const group =
+        getGroup(
+          ctx.chat.id
         );
 
-        await ctx.editMessageText(
-          `『𓆩 مدت دریافت لینک 𓆪』\n\nمدت دریافت لینک روی ${hours} ساعت تنظیم شد.`,
-          {
-            reply_markup: {
-              inline_keyboard: [
-                [
-                  {
-                    text: "『𓆩 بازگشت 𓆪』",
-                    callback_data:
-                      `lnk_receive:${ownerId}`
-                  }
-                ]
-              ]
-            }
-          }
-        );
+      const links =
+        getLinkData(group);
 
-      } catch (error) {
+      links.receiveDuration =
+        hours;
 
-        console.error(
-          "links receive time:",
-          error.message
-        );
-      }
-    }
-  );  // ===================================
-  // بستن پنل لینک
-  // ===================================
+      saveDB();
 
-  bot.action(
-    /^lnk_close:(\d+)$/,
-    async ctx => {
+      await ctx.answerCbQuery(
+        `مدت دریافت روی ${hours} ساعت تنظیم شد`
+      );
 
-      const ownerId =
-        Number(ctx.match[1]);
-
-      if (
-        !isPanelOwner(
-          ctx,
-          ownerId
-        )
-      ) {
-        return;
-      }
-
-      try {
-
-        await ctx.answerCbQuery();
-
-        removePanel(
-          ctx.chat.id,
-          ctx.callbackQuery.message.message_id
-        );
-
-        await ctx.deleteMessage();
-
-      } catch (error) {
-
-        console.error(
-          "links close:",
-          error.message
-        );
-      }
+      await ctx.editMessageText(
+        mainPanelText(),
+        {
+          reply_markup:
+            pageTwoKeyboard(
+              ownerId,
+              group
+            )
+        }
+      );
     }
   );
 
 
   // ===================================
   // مدیریت دسترسی لینک
+  // فقط مالک
   // ===================================
 
   bot.action(
     /^lnk_access:(\d+)$/,
-    async ctx => {
+    async (ctx) => {
 
       const ownerId =
-        Number(ctx.match[1]);
+        ctx.match[1];
 
-      if (
-        !isPanelOwner(
+      const valid =
+        await validatePanel(
           ctx,
-          ownerId
-        )
-      ) {
-        return;
-      }
-
-      if (
-        !await checkLinkManager(ctx)
-      ) {
-        return;
-      }
-
-      try {
-
-        await ctx.answerCbQuery();
-
-        await ctx.editMessageText(
-          accessPanelText(),
-          {
-            reply_markup: {
-              inline_keyboard: [
-                [
-                  {
-                    text: "『𓆩 صفحه قبل 𓆪』",
-                    callback_data:
-                      `lnk_page2:${ownerId}`
-                  }
-                ],
-                [
-                  {
-                    text: "『𓆩 بستن 𓆪』",
-                    callback_data:
-                      `lnk_close:${ownerId}`
-                  }
-                ]
-              ]
-            }
-          }
+          ownerId,
+          "owner"
         );
 
-      } catch (error) {
-
-        console.error(
-          "links access:",
-          error.message
-        );
-      }
-    }
-  );
-
-
-  // ===================================
-  // دادن دسترسی مدیریت لینک
-  // فقط مالک
-  // ===================================
-
-  bot.hears(
-    /^دسترسی لینک$/i,
-    async ctx => {
-
-      if (
-        !isGroupChat(ctx)
-      ) {
-        return;
-      }
-
-      if (
-        !await isOwner(ctx)
-      ) {
-        return;
-      }
-
-      const replied =
-        ctx.message.reply_to_message;
-
-      if (
-        !replied ||
-        !replied.from
-      ) {
-        return;
-      }
-
-      const targetId =
-        replied.from.id;
-
-      const targetRole =
-        await getMemberRole(
-          ctx,
-          targetId
-        );
-
-      if (
-        targetRole !== "admin"
-      ) {
-
-        await replyToCommand(
-          ctx,
-          "『𓆩 دسترسی لینک 𓆪』\n\nفقط می‌توانی به مدیر گروه دسترسی بدهی."
-        );
-
+      if (!valid) {
         return;
       }
 
       const group =
-        getGroup(ctx.chat.id);
-
-      setManagerAccess(
-        group,
-        targetId,
-        true
-      );
-
-      await replyToCommand(
-        ctx,
-        `『𓆩 دسترسی لینک 𓆪』\n\nدسترسی لینک برای ${getUserName(replied.from)} فعال شد.`
-      );
-    }
-  );
-
-
-  // ===================================
-  // حذف دسترسی مدیریت لینک
-  // فقط مالک
-  // ===================================
-
-  bot.hears(
-    /^حذف دسترسی لینک$/i,
-    async ctx => {
-
-      if (
-        !isGroupChat(ctx)
-      ) {
-        return;
-      }
-
-      if (
-        !await isOwner(ctx)
-      ) {
-        return;
-      }
-
-      const replied =
-        ctx.message.reply_to_message;
-
-      if (
-        !replied ||
-        !replied.from
-      ) {
-        return;
-      }
-
-      const targetId =
-        replied.from.id;
-
-      const targetRole =
-        await getMemberRole(
-          ctx,
-          targetId
+        getGroup(
+          ctx.chat.id
         );
-
-      if (
-        targetRole !== "admin"
-      ) {
-
-        await replyToCommand(
-          ctx,
-          "『𓆩 دسترسی لینک 𓆪』\n\nاین کاربر مدیر گروه نیست."
-        );
-
-        return;
-      }
-
-      const group =
-        getGroup(ctx.chat.id);
-
-      setManagerAccess(
-        group,
-        targetId,
-        false
-      );
-
-      await replyToCommand(
-        ctx,
-        `『𓆩 دسترسی لینک 𓆪』\n\nدسترسی لینک برای ${getUserName(replied.from)} حذف شد.`
-      );
-    }
-  );
-
-
-  // ===================================
-  // باز کردن دریافت لینک
-  // فقط مالک و مدیر دارای دسترسی
-  // ===================================
-
-  bot.hears(
-    /^باز کردن دریافت لینک$/i,
-    async ctx => {
-
-      if (
-        !await checkLinkManager(ctx)
-      ) {
-        return;
-      }
-
-      const group =
-        getGroup(ctx.chat.id);
-
-      enableReceiveLink(
-        group
-      );
-
-      await replyToCommand(
-        ctx,
-        "『𓆩 دریافت لینک 𓆪』\n\n★ دریافت لینک فعال شد."
-      );
-    }
-  );
-
-
-  // ===================================
-  // قفل دریافت لینک
-  // فقط مالک و مدیر دارای دسترسی
-  // ===================================
-
-  bot.hears(
-    /^قفل دریافت لینک$/i,
-    async ctx => {
-
-      if (
-        !await checkLinkManager(ctx)
-      ) {
-        return;
-      }
-
-      const group =
-        getGroup(ctx.chat.id);
-
-      disableReceiveLink(
-        group
-      );
-
-      await replyToCommand(
-        ctx,
-        "『𓆩 دریافت لینک 𓆪』\n\n☆ دریافت لینک غیرفعال شد."
-      );
-    }
-  );
-
-
-  // ===================================
-  // دریافت لینک توسط اعضا
-  // مثال:
-  // دریافت لینک
-  // دریافت لینک ۲
-  // ===================================
-
-  bot.hears(
-    /^دریافت لینک(?:\s+(\d+))?$/i,
-    async ctx => {
-
-      if (
-        !isGroupChat(ctx)
-      ) {
-        return;
-      }
-
-      const group =
-        getGroup(ctx.chat.id);
 
       const links =
         getLinkData(group);
 
-      if (
-        !links.receiveEnabled
-      ) {
-        return;
-      }
+      const state =
+        links.allManagersAccess
+          ? "★ باز"
+          : "☆ بسته";
 
-      const requestedHours =
-        ctx.match[1]
-          ? Number(ctx.match[1])
-          : Number(
-              links.receiveDuration
-            );
+      await ctx.answerCbQuery();
 
-      const allowedHours = [
-        1,
-        2,
-        3,
-        4,
-        6,
-        12,
-        24
-      ];
-
-      if (
-        !allowedHours.includes(
-          requestedHours
-        )
-      ) {
-
-        await replyToCommand(
-          ctx,
-          "『𓆩 دریافت لینک 𓆪』\n\nمدت معتبر:\n۱، ۲، ۳، ۴، ۶، ۱۲ یا ۲۴ ساعت"
-        );
-
-        return;
-      }
-
-      const result =
-        await createReceiveLink(
-          ctx,
-          requestedHours
-        );
-
-      if (!result) {
-        return;
-      }
-
-      await replyToCommand(
-        ctx,
-        `『𓆩 لینک عضویت 𓆪』\n\nمدت اعتبار: ${requestedHours} ساعت\n\n${result.invite_link}`
+      await ctx.editMessageText(
+        [
+          "『𓆩 مدیریت دسترسی لینک 𓆪』",
+          "",
+          `دسترسی همه مدیران: ${state}`,
+          "",
+          "برای دسترسی اختصاصی:",
+          "روی پیام مدیر Reply کنید و بنویسید:",
+          "دسترسی لینک",
+          "",
+          "برای حذف دسترسی:",
+          "حذف دسترسی لینک",
+          "",
+          "برای فعال کردن دسترسی همه مدیران:",
+          "روی پیام یک مدیر Reply کنید و بنویسید:",
+          "دسترسی لینک مدیران",
+          "",
+          "برای بستن دسترسی همه مدیران:",
+          "روی پیام یک مدیر Reply کنید و بنویسید:",
+          "حذف دسترسی همه مدیران"
+        ].join("\n"),
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text:
+                    "『𓆩 بازگشت 𓆪』",
+                  callback_data:
+                    `lnk_page2:${ownerId}`
+                }
+              ],
+              [
+                {
+                  text:
+                    "『𓆩 بستن 𓆪』",
+                  callback_data:
+                    `lnk_close:${ownerId}`
+                }
+              ]
+            ]
+          }
+        }
       );
     }
   );
 
 
   // ===================================
-  // خروجی فایل
+  // لینک یک‌بار مصرف مدیر
   // ===================================
 
-  return;
+  bot.action(
+    /^lnk_mgr_one:(\d+)$/,
+    async (ctx) => {
+
+      const ownerId =
+        ctx.match[1];
+
+      const valid =
+        await validatePanel(
+          ctx,
+          ownerId,
+          "manager"
+        );
+
+      if (!valid) {
+        return;
+      }
+
+      await ctx.answerCbQuery();
+
+      try {
+
+        const link =
+          await createOneTimeLink(
+            ctx
+          );
+
+        await ctx.reply(
+          [
+            "『𓆩 لینک یک‌بار مصرف 𓆪』",
+            "",
+            link
+          ].join("\n")
+        );
+
+      } catch (error) {
+
+        await sendLinkError(
+          ctx,
+          error
+        );
+      }
+    }
+  );
+
+
+  // ===================================
+  // لینک زمان‌دار مدیر
+  // از تنظیم مالک استفاده می‌کند
+  // ===================================
+
+  bot.action(
+    /^lnk_mgr_time:(\d+)$/,
+    async (ctx) => {
+
+      const ownerId =
+        ctx.match[1];
+
+      const valid =
+        await validatePanel(
+          ctx,
+          ownerId,
+          "manager"
+        );
+
+      if (!valid) {
+        return;
+      }
+
+      await ctx.answerCbQuery();
+
+      const group =
+        getGroup(
+          ctx.chat.id
+        );
+
+      const links =
+        getLinkData(group);
+
+      const hours =
+        Math.min(
+          24,
+          Math.max(
+            1,
+            Number(
+              links.timedDuration
+            ) || 24
+          )
+        );
+
+      try {
+
+        const link =
+          await createTimedLink(
+            ctx,
+            hours
+          );
+
+        links.timed.unshift({
+          link,
+          hours,
+          createdAt: Date.now()
+        });
+
+        if (
+          links.timed.length > 20
+        ) {
+          links.timed =
+            links.timed.slice(
+              0,
+              20
+            );
+        }
+
+        saveDB();
+
+        await ctx.reply(
+          [
+            "『𓆩 لینک زمان‌دار 𓆪』",
+            "",
+            link,
+            "",
+            `مدت اعتبار: ${hours} ساعت`
+          ].join("\n")
+        );
+
+      } catch (error) {
+
+        await sendLinkError(
+          ctx,
+          error
+        );
+      }
+    }
+  );
+
+
+  // ===================================
+  // دریافت لینک از پنل مدیر
+  // فقط استفاده، بدون امکان تغییر ★/☆
+  // ===================================
+
+  bot.action(
+    /^lnk_mgr_receive:(\d+)$/,
+    async (ctx) => {
+
+      const ownerId =
+        ctx.match[1];
+
+      const valid =
+        await validatePanel(
+          ctx,
+          ownerId,
+          "manager"
+        );
+
+      if (!valid) {
+        return;
+      }
+
+      const group =
+        getGroup(
+          ctx.chat.id
+        );
+
+      const links =
+        getLinkData(group);
+
+      // بسته بودن = هیچ لینک مدیریتی
+      if (!links.receiveEnabled) {
+
+        await ctx.answerCbQuery(
+          "دریافت لینک بسته است"
+        );
+
+        return;
+      }
+
+      const hours =
+        Math.min(
+          24,
+          Math.max(
+            1,
+            Number(
+              links.receiveDuration
+            ) || 1
+          )
+        );
+
+      await ctx.answerCbQuery();
+
+      try {
+
+        const link =
+          await createReceiveLink(
+            ctx,
+            hours
+          );
+
+        await ctx.reply(
+          [
+            "『𓆩 لینک دریافت 𓆪』",
+            "",
+            link,
+            "",
+            `مدت اعتبار: ${hours} ساعت`
+          ].join("\n")
+        );
+
+      } catch (error) {
+
+        await sendLinkError(
+          ctx,
+          error
+        );
+      }
+    }
+  );
+
+
+  // ===================================
+  // پاکسازی پنل‌های قدیمی
+  // ===================================
+
+  setInterval(
+    cleanOldPanels,
+    10 * 60 * 1000
+  );
 }
 
 
@@ -2434,5 +2400,7 @@ function registerLinks(bot) {
 // =====================================
 
 module.exports = {
-  registerLinks
+  registerLinks,
+  getLinkData,
+  hasLinkManagementAccess
 };
