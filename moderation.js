@@ -12,36 +12,26 @@ const {
 
 
 // =====================================
-// حافظه کاربران شناخته‌شده
+// حافظه کاربران دیده‌شده
 // =====================================
 
 const knownUsers = {};
-
-
-// =====================================
-// لیست‌های باز
-// =====================================
-
 const openLists = {};
-
-
-// =====================================
-// تنظیمات
-// =====================================
-
 const LIST_PAGE_SIZE = 10;
 
 
 // =====================================
-// بررسی گروه
+// تشخیص گروه
 // =====================================
 
 function isGroupChat(ctx) {
-  if (!ctx || !ctx.chat) return false;
-
-  return (
-    ctx.chat.type === "group" ||
-    ctx.chat.type === "supergroup"
+  return !!(
+    ctx &&
+    ctx.chat &&
+    (
+      ctx.chat.type === "group" ||
+      ctx.chat.type === "supergroup"
+    )
   );
 }
 
@@ -51,27 +41,21 @@ function isGroupChat(ctx) {
 // =====================================
 
 function getGroupData(ctx) {
-  if (!isGroupChat(ctx)) return null;
+  if (!ctx || !ctx.chat) return null;
 
   try {
-    const group = getGroup(ctx.chat.id);
-
-    if (!group) return null;
-
-    return group;
-  } catch (err) {
+    return getGroup(ctx.chat.id);
+  } catch {
     return null;
   }
 }
 
 
 // =====================================
-// آماده‌سازی ذخیره مدیریت
+// ساخت حافظه مدیریت
 // =====================================
 
 function ensureModerationStorage(group) {
-  if (!group) return null;
-
   if (!group.moderation) {
     group.moderation = {};
   }
@@ -112,53 +96,37 @@ function ensureModerationStorage(group) {
 
 
 // =====================================
-// ذخیره دیتابیس
+// ذخیره مدیریت
 // =====================================
 
 function saveModeration(group) {
-  if (!group) return;
-
   ensureModerationStorage(group);
 
   try {
     saveDB();
-  } catch (err) {
+  } catch {
     try {
       saveDB(group);
-    } catch (err2) {
-      // عمداً ساکت
-    }
+    } catch {}
   }
 }
 
 
 // =====================================
-// ذخیره کاربر
+// ذخیره کاربر در حافظه کلی
 // =====================================
 
 function rememberUser(user) {
-  if (!user || !user.id) {
-    return null;
-  }
+  if (!user || !user.id) return null;
 
   const id = String(user.id);
-  const old = knownUsers[id] || {};
 
   knownUsers[id] = {
-    ...old,
     id: user.id,
-    first_name:
-      user.first_name ||
-      old.first_name ||
-      "",
-    last_name:
-      user.last_name ||
-      old.last_name ||
-      "",
-    username:
-      user.username ||
-      old.username ||
-      ""
+    first_name: user.first_name || "",
+    last_name: user.last_name || "",
+    username: user.username || "",
+    language_code: user.language_code || ""
   };
 
   return knownUsers[id];
@@ -170,37 +138,25 @@ function rememberUser(user) {
 // =====================================
 
 function rememberUserInGroup(group, user) {
-  if (!group || !user || !user.id) {
-    return null;
-  }
+  if (!group || !user || !user.id) return null;
 
-  if (!group.knownUsers) {
-    group.knownUsers = {};
+  if (!group.users) {
+    group.users = {};
   }
 
   const id = String(user.id);
-  const old = group.knownUsers[id] || {};
 
-  group.knownUsers[id] = {
-    ...old,
+  group.users[id] = {
     id: user.id,
-    first_name:
-      user.first_name ||
-      old.first_name ||
-      "",
-    last_name:
-      user.last_name ||
-      old.last_name ||
-      "",
-    username:
-      user.username ||
-      old.username ||
-      ""
+    first_name: user.first_name || "",
+    last_name: user.last_name || "",
+    username: user.username || "",
+    language_code: user.language_code || ""
   };
 
   rememberUser(user);
 
-  return group.knownUsers[id];
+  return group.users[id];
 }
 
 
@@ -209,56 +165,33 @@ function rememberUserInGroup(group, user) {
 // =====================================
 
 function learnUserFromMessage(ctx) {
-  if (!ctx) return;
+  if (!ctx || !ctx.from) return null;
 
-  if (ctx.from) {
-    rememberUser(ctx.from);
+  const group = getGroupData(ctx);
+
+  rememberUser(ctx.from);
+
+  if (group) {
+    rememberUserInGroup(group, ctx.from);
   }
 
-  if (
-    ctx.message &&
-    ctx.message.from
-  ) {
-    const group = getGroupData(ctx);
-
-    if (group) {
-      rememberUserInGroup(
-        group,
-        ctx.message.from
-      );
-    }
-  }
-
-  if (
-    ctx.message &&
-    ctx.message.reply_to_message &&
-    ctx.message.reply_to_message.from
-  ) {
-    const group = getGroupData(ctx);
-
-    if (group) {
-      rememberUserInGroup(
-        group,
-        ctx.message.reply_to_message.from
-      );
-    }
-  }
+  return ctx.from;
 }
 
 
 // =====================================
-// بارگذاری کاربران گروه
+// بارگذاری کاربران شناخته‌شده گروه
 // =====================================
 
 function loadGroupKnownUsers(group) {
-  if (!group || !group.knownUsers) {
-    return;
+  if (!group) return;
+
+  if (!group.users || typeof group.users !== "object") {
+    group.users = {};
   }
 
-  for (
-    const id of Object.keys(group.knownUsers)
-  ) {
-    const user = group.knownUsers[id];
+  for (const id of Object.keys(group.users)) {
+    const user = group.users[id];
 
     if (user && user.id) {
       rememberUser(user);
@@ -274,29 +207,17 @@ function loadGroupKnownUsers(group) {
 function getUserName(user) {
   if (!user) return "کاربر";
 
-  const first =
-    user.first_name || "";
+  const first = String(user.first_name || "").trim();
+  const last = String(user.last_name || "").trim();
 
-  const last =
-    user.last_name || "";
+  const name = `${first} ${last}`.trim();
 
-  const full =
-    `${first} ${last}`.trim();
-
-  if (full) return full;
-
-  if (user.username) {
-    return `@${user.username}`;
-  }
-
-  return String(
-    user.id || "کاربر"
-  );
+  return name || "کاربر";
 }
 
 
 // =====================================
-// منشن HTML
+// نمایش کاربر
 // =====================================
 
 function mentionUser(user) {
@@ -304,122 +225,75 @@ function mentionUser(user) {
     return "کاربر";
   }
 
-  const name =
-    getUserName(user)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
+  const name = getUserName(user);
 
-  return (
-    `<a href="tg://user?id=${user.id}">` +
-    `${name}</a>`
-  );
+  return `<a href="tg://user?id=${user.id}">${name}</a>`;
 }
 
 
 // =====================================
-// پیام Reply شده
+// نام مناسب برای پیام لیست
+// یوزرنیم → @username
+// بدون یوزرنیم → اسم اصلی، بدون لینک
+// =====================================
+
+function getListUserLabel(user) {
+  if (!user) return "کاربر";
+
+  if (user.username) {
+    return `@${String(user.username).replace(/^@/, "")}`;
+  }
+
+  return getUserName(user);
+}
+
+
+// =====================================
+// پیام مورد Reply
 // =====================================
 
 function getTargetMessage(ctx) {
-  if (!ctx || !ctx.message) {
-    return null;
-  }
+  if (!ctx || !ctx.message) return null;
 
-  return (
-    ctx.message.reply_to_message ||
-    null
-  );
+  return ctx.message.reply_to_message || null;
 }
 
 
 // =====================================
-// کاربر Reply شده
+// کاربر مورد Reply
 // =====================================
 
 function getReplyTarget(ctx) {
-  const reply =
-    getTargetMessage(ctx);
+  const message = getTargetMessage(ctx);
 
-  if (!reply || !reply.from) {
+  if (!message || !message.from) {
     return null;
   }
 
-  return rememberUser(
-    reply.from
-  );
+  const user = message.from;
+
+  rememberUser(user);
+
+  const group = getGroupData(ctx);
+
+  if (group) {
+    rememberUserInGroup(group, user);
+  }
+
+  return user;
 }
 
 
 // =====================================
-// شناسه پیام Reply شده
+// شناسه Reply
 // =====================================
 
 function getTargetReplyId(ctx) {
-  const reply =
-    getTargetMessage(ctx);
+  const target = getReplyTarget(ctx);
 
-  if (
-    !reply ||
-    !reply.message_id
-  ) {
-    return null;
-  }
-
-  return reply.message_id;
-}
-
-
-// =====================================
-// پاسخ مدیریتی روی پیام فرمان
-// =====================================
-
-async function replyToCommand(
-  ctx,
-  text,
-  extra = {}
-) {
-  if (
-    !ctx ||
-    !ctx.message ||
-    !ctx.message.message_id
-  ) {
-    return null;
-  }
-
-  return ctx.reply(text, {
-    ...extra,
-    reply_parameters: {
-      message_id:
-        ctx.message.message_id
-    }
-  });
-}
-
-
-// =====================================
-// پاسخ روی پیام هدف
-// =====================================
-
-async function replyToTarget(
-  ctx,
-  text,
-  extra = {}
-) {
-  const replyId =
-    getTargetReplyId(ctx);
-
-  if (!replyId) {
-    return null;
-  }
-
-  return ctx.reply(text, {
-    ...extra,
-    reply_parameters: {
-      message_id: replyId
-    }
-  });
+  return target && target.id
+    ? target.id
+    : null;
 }
 
 
@@ -430,66 +304,40 @@ async function replyToTarget(
 function normalizeName(value) {
   return String(value || "")
     .trim()
-    .replace(/\s+/g, " ")
-    .toLowerCase();
+    .toLowerCase()
+    .replace(/\s+/g, " ");
 }
 
 
 // =====================================
-// جستجوی کاربر با ID
+// پیدا کردن کاربر با ID
 // =====================================
 
 function findKnownUserById(id) {
-  if (
-    id === undefined ||
-    id === null
-  ) {
-    return null;
-  }
+  if (!id) return null;
 
-  const clean =
-    String(id).trim();
-
-  if (!/^-?\d+$/.test(clean)) {
-    return null;
-  }
-
-  return (
-    knownUsers[clean] ||
-    null
-  );
+  return knownUsers[String(id)] || null;
 }
 
 
 // =====================================
-// جستجوی کاربر با Username
+// پیدا کردن کاربر با Username
 // =====================================
 
-function findKnownUserByUsername(
-  username
-) {
+function findKnownUserByUsername(username) {
   if (!username) return null;
 
-  const clean =
-    String(username)
-      .trim()
-      .replace(/^@/, "")
-      .toLowerCase();
+  const wanted = String(username)
+    .replace(/^@/, "")
+    .toLowerCase();
 
-  if (!clean) return null;
-
-  for (
-    const id of Object.keys(knownUsers)
-  ) {
-    const user =
-      knownUsers[id];
+  for (const id of Object.keys(knownUsers)) {
+    const user = knownUsers[id];
 
     if (
       user &&
       user.username &&
-      String(
-        user.username
-      ).toLowerCase() === clean
+      String(user.username).toLowerCase() === wanted
     ) {
       return user;
     }
@@ -500,44 +348,30 @@ function findKnownUserByUsername(
 
 
 // =====================================
-// جستجوی کاربر با نام
+// پیدا کردن کاربر با نام
 // =====================================
 
-function findKnownUserByName(
-  name
-) {
-  const wanted =
-    normalizeName(name);
+function findKnownUserByName(name) {
+  const wanted = normalizeName(name);
 
   if (!wanted) return null;
 
-  for (
-    const id of Object.keys(knownUsers)
-  ) {
-    const user =
-      knownUsers[id];
+  for (const id of Object.keys(knownUsers)) {
+    const user = knownUsers[id];
 
     if (!user) continue;
 
-    const first =
-      normalizeName(
-        user.first_name
-      );
+    const fullName = normalizeName(
+      `${user.first_name || ""} ${user.last_name || ""}`
+    );
 
-    const last =
-      normalizeName(
-        user.last_name
-      );
-
-    const full =
-      normalizeName(
-        `${user.first_name || ""} ${user.last_name || ""}`
-      );
+    if (fullName === wanted) {
+      return user;
+    }
 
     if (
-      wanted === full ||
-      wanted === first ||
-      wanted === last
+      normalizeName(user.first_name) === wanted ||
+      normalizeName(user.last_name) === wanted
     ) {
       return user;
     }
@@ -548,67 +382,38 @@ function findKnownUserByName(
 
 
 // =====================================
-// جستجوی کاربر داخل گروه
+// پیدا کردن کاربر گروه با ID
 // =====================================
 
-function findGroupUserById(
-  group,
-  id
-) {
-  if (
-    !group ||
-    !group.knownUsers
-  ) {
+function findGroupUserById(group, id) {
+  if (!group || !group.users || !id) {
     return null;
   }
 
-  const clean =
-    String(id || "").trim();
-
-  if (!/^-?\d+$/.test(clean)) {
-    return null;
-  }
-
-  return (
-    group.knownUsers[clean] ||
-    null
-  );
+  return group.users[String(id)] || null;
 }
 
 
-function findGroupUserByUsername(
-  group,
-  username
-) {
-  if (
-    !group ||
-    !group.knownUsers
-  ) {
+// =====================================
+// پیدا کردن کاربر گروه با Username
+// =====================================
+
+function findGroupUserByUsername(group, username) {
+  if (!group || !group.users || !username) {
     return null;
   }
 
-  const clean =
-    String(username || "")
-      .trim()
-      .replace(/^@/, "")
-      .toLowerCase();
+  const wanted = String(username)
+    .replace(/^@/, "")
+    .toLowerCase();
 
-  if (!clean) return null;
-
-  for (
-    const id of Object.keys(
-      group.knownUsers
-    )
-  ) {
-    const user =
-      group.knownUsers[id];
+  for (const id of Object.keys(group.users)) {
+    const user = group.users[id];
 
     if (
       user &&
       user.username &&
-      String(
-        user.username
-      ).toLowerCase() === clean
+      String(user.username).toLowerCase() === wanted
     ) {
       return user;
     }
@@ -618,51 +423,35 @@ function findGroupUserByUsername(
 }
 
 
-function findGroupUserByName(
-  group,
-  name
-) {
-  if (
-    !group ||
-    !group.knownUsers
-  ) {
+// =====================================
+// پیدا کردن کاربر گروه با نام
+// =====================================
+
+function findGroupUserByName(group, name) {
+  if (!group || !group.users || !name) {
     return null;
   }
 
-  const wanted =
-    normalizeName(name);
+  const wanted = normalizeName(name);
 
   if (!wanted) return null;
 
-  for (
-    const id of Object.keys(
-      group.knownUsers
-    )
-  ) {
-    const user =
-      group.knownUsers[id];
+  for (const id of Object.keys(group.users)) {
+    const user = group.users[id];
 
     if (!user) continue;
 
-    const first =
-      normalizeName(
-        user.first_name
-      );
+    const fullName = normalizeName(
+      `${user.first_name || ""} ${user.last_name || ""}`
+    );
 
-    const last =
-      normalizeName(
-        user.last_name
-      );
-
-    const full =
-      normalizeName(
-        `${user.first_name || ""} ${user.last_name || ""}`
-      );
+    if (fullName === wanted) {
+      return user;
+    }
 
     if (
-      wanted === full ||
-      wanted === first ||
-      wanted === last
+      normalizeName(user.first_name) === wanted ||
+      normalizeName(user.last_name) === wanted
     ) {
       return user;
     }
@@ -673,31 +462,23 @@ function findGroupUserByName(
 
 
 // =====================================
-// Text Mention
+// پیدا کردن کاربر از Text Mention
 // =====================================
 
-function getTextMentionUser(
-  message
-) {
-  if (!message) return null;
+function getTextMentionUser(message) {
+  if (!message || !Array.isArray(message.entities)) {
+    return null;
+  }
 
-  const entities =
-    message.entities ||
-    message.caption_entities ||
-    [];
+  const text = message.text || message.caption || "";
 
-  for (
-    const entity of entities
-  ) {
+  for (const entity of message.entities) {
     if (
       entity &&
-      entity.type ===
-        "text_mention" &&
+      entity.type === "text_mention" &&
       entity.user
     ) {
-      return rememberUser(
-        entity.user
-      );
+      return entity.user;
     }
   }
 
@@ -706,42 +487,28 @@ function getTextMentionUser(
 
 
 // =====================================
-// استخراج Username
+// گرفتن Username از متن
 // =====================================
 
-function getUsernameFromText(
-  text
-) {
+function getUsernameFromText(text) {
   if (!text) return null;
 
-  const match =
-    String(text).match(
-      /(^|\s)@([A-Za-z0-9_]{5,32})(?=\s|$|[^\w])/i
-    );
+  const match = String(text).match(/@([a-zA-Z0-9_]{5,32})/);
 
-  if (!match) return null;
-
-  return `@${match[2]}`;
+  return match ? match[1] : null;
 }
 
 
 // =====================================
-// استخراج ID
+// گرفتن ID از متن
 // =====================================
 
-function getIdFromText(
-  text
-) {
+function getIdFromText(text) {
   if (!text) return null;
 
-  const match =
-    String(text).match(
-      /(^|\s)(-?\d{5,20})(?=\s|$)/
-    );
+  const match = String(text).match(/\b\d{5,20}\b/);
 
-  if (!match) return null;
-
-  return match[2];
+  return match ? match[0] : null;
 }
 
 
@@ -749,89 +516,108 @@ function getIdFromText(
 // متن پیام
 // =====================================
 
-function getMessageText(
-  message
-) {
+function getMessageText(message) {
   if (!message) return "";
 
-  return (
+  return String(
     message.text ||
     message.caption ||
     ""
-  );
+  ).trim();
 }
 
 
 // =====================================
-// آیا Reply هدف دیگری معرفی می‌کند؟
-/*
- * اگر پیام Reply شده دارای
- * @username یا ID یا Text Mention باشد،
- * همان هدف بررسی می‌شود.
- * اگر پیدا نشود، کاربر دیگری حدس زده نمی‌شود.
- */
+// بررسی وجود هدف در Reply
 // =====================================
 
-function hasTargetReferenceInReply(
-  ctx
-) {
-  const reply =
-    getTargetMessage(ctx);
+function hasTargetReferenceInReply(ctx) {
+  const message = getTargetMessage(ctx);
 
-  if (!reply) return false;
+  if (!message) return false;
 
-  if (
-    getTextMentionUser(reply)
-  ) {
+  if (message.from && message.from.id) {
     return true;
   }
 
-  const text =
-    getMessageText(reply);
-
-  return !!(
-    getUsernameFromText(text) ||
-    getIdFromText(text)
-  );
-}
-
-
-// =====================================
-// حل هدف از محتوای Reply
-// =====================================
-
-function resolveTargetFromReplyContent(
-  ctx
-) {
-  const reply =
-    getTargetMessage(ctx);
-
-  if (!reply) return null;
-
-  const mention =
-    getTextMentionUser(reply);
-
-  if (mention) {
-    return mention;
+  if (getTextMentionUser(message)) {
+    return true;
   }
 
-  const text =
-    getMessageText(reply);
+  const text = getMessageText(message);
 
-  const username =
-    getUsernameFromText(text);
+  if (getUsernameFromText(text)) {
+    return true;
+  }
+
+  if (getIdFromText(text)) {
+    return true;
+  }
+
+  return false;
+}// =====================================
+// پیدا کردن هدف از محتوای Reply
+// =====================================
+
+function resolveTargetFromReplyContent(ctx) {
+  const message = getTargetMessage(ctx);
+
+  if (!message) return null;
+
+  if (message.from && message.from.id) {
+    return getReplyTarget(ctx);
+  }
+
+  const mentionedUser = getTextMentionUser(message);
+
+  if (mentionedUser && mentionedUser.id) {
+    rememberUser(mentionedUser);
+
+    const group = getGroupData(ctx);
+
+    if (group) {
+      rememberUserInGroup(group, mentionedUser);
+    }
+
+    return mentionedUser;
+  }
+
+  const text = getMessageText(message);
+
+  const username = getUsernameFromText(text);
 
   if (username) {
-    return findKnownUserByUsername(
-      username
-    );
+    const group = getGroupData(ctx);
+
+    const groupUser = findGroupUserByUsername(group, username);
+
+    if (groupUser) {
+      return groupUser;
+    }
+
+    const knownUser = findKnownUserByUsername(username);
+
+    if (knownUser) {
+      return knownUser;
+    }
   }
 
-  const id =
-    getIdFromText(text);
+  const id = getIdFromText(text);
 
   if (id) {
-    return findKnownUserById(id);
+    const group = getGroupData(ctx);
+
+    const groupUser = findGroupUserById(group, id);
+
+    if (groupUser) {
+      return groupUser;
+    }
+
+    const knownUser = findKnownUserById(id);
+
+    if (knownUser) {
+      return knownUser;
+    }
   }
 
   return null;
@@ -839,104 +625,78 @@ function resolveTargetFromReplyContent(
 
 
 // =====================================
-// حل کامل هدف
+// پیدا کردن هدف
 // =====================================
 
-function resolveTarget(
-  ctx,
-  args = []
-) {
+function resolveTarget(ctx, args = []) {
+  if (!ctx) return null;
+
   learnUserFromMessage(ctx);
 
-  const group =
-    getGroupData(ctx);
+  const group = getGroupData(ctx);
 
   if (group) {
     loadGroupKnownUsers(group);
   }
 
-  // -------------------------------
-  // هدف صریح
-  // -------------------------------
+  const cleanArgs = Array.isArray(args)
+    ? args
+        .map(item => String(item || "").trim())
+        .filter(Boolean)
+    : [];
 
-  if (
-    Array.isArray(args) &&
-    args.length
-  ) {
-    const raw =
-      args.join(" ").trim();
+  if (cleanArgs.length) {
+    const text = cleanArgs.join(" ").trim();
 
-    if (!raw) {
-      return null;
+    const id = getIdFromText(text);
+
+    if (id) {
+      const groupUser = findGroupUserById(group, id);
+
+      if (groupUser) {
+        return groupUser;
+      }
+
+      const knownUser = findKnownUserById(id);
+
+      if (knownUser) {
+        return knownUser;
+      }
     }
 
-    const byId =
-      findKnownUserById(raw) ||
-      (
-        group
-          ? findGroupUserById(
-              group,
-              raw
-            )
-          : null
-      );
+    const username = getUsernameFromText(text);
 
-    if (byId) {
-      return byId;
+    if (username) {
+      const groupUser = findGroupUserByUsername(group, username);
+
+      if (groupUser) {
+        return groupUser;
+      }
+
+      const knownUser = findKnownUserByUsername(username);
+
+      if (knownUser) {
+        return knownUser;
+      }
     }
 
-    const byUsername =
-      findKnownUserByUsername(
-        raw
-      ) ||
-      (
-        group
-          ? findGroupUserByUsername(
-              group,
-              raw
-            )
-          : null
-      );
+    const groupUser = findGroupUserByName(group, text);
 
-    if (byUsername) {
-      return byUsername;
+    if (groupUser) {
+      return groupUser;
     }
 
-    const byName =
-      findKnownUserByName(raw) ||
-      (
-        group
-          ? findGroupUserByName(
-              group,
-              raw
-            )
-          : null
-      );
+    const knownUser = findKnownUserByName(text);
 
-    if (byName) {
-      return byName;
+    if (knownUser) {
+      return knownUser;
     }
-
-    return null;
   }
 
-  // -------------------------------
-  // Reply
-  // -------------------------------
+  const replyTarget = resolveTargetFromReplyContent(ctx);
 
-  const reply =
-    getTargetMessage(ctx);
-
-  if (!reply) {
-    return null;
-  }
-
-  if (
-    hasTargetReferenceInReply(ctx)
-  ) {
-    return resolveTargetFromReplyContent(
-      ctx
-    );
+  if (replyTarget && replyTarget.id) {
+    return replyTarget;
   }
 
   return getReplyTarget(ctx);
@@ -944,83 +704,56 @@ function resolveTarget(
 
 
 // =====================================
-// نقش کاربر
+// نقش کاربر در گروه
 // =====================================
 
-async function getMemberRole(
-  ctx,
-  userId
-) {
-  if (
-    !ctx ||
-    !ctx.telegram ||
-    !ctx.chat ||
-    !userId
-  ) {
+async function getMemberRole(ctx, userId) {
+  if (!ctx || !ctx.telegram || !ctx.chat || !userId) {
     return "member";
   }
 
   try {
-    const member =
-      await ctx.telegram.getChatMember(
-        ctx.chat.id,
-        userId
-      );
+    const member = await ctx.telegram.getChatMember(
+      ctx.chat.id,
+      userId
+    );
 
     if (!member) {
       return "member";
     }
 
-    if (
-      member.status === "creator"
-    ) {
+    if (member.status === "creator") {
       return "owner";
     }
 
-    if (
-      member.status ===
-        "administrator"
-    ) {
+    if (member.status === "administrator") {
       return "admin";
     }
 
     return "member";
-  } catch (err) {
+  } catch {
     return "member";
   }
 }
 
 
 // =====================================
-// مالک
+// بررسی مالک
 // =====================================
 
-async function isOwner(
-  ctx,
-  userId
-) {
-  return (
-    await getMemberRole(
-      ctx,
-      userId
-    )
-  ) === "owner";
+async function isOwner(ctx, userId) {
+  const role = await getMemberRole(ctx, userId);
+
+  return role === "owner";
 }
 
 
 // =====================================
-// مدیر
+// بررسی ادمین
 // =====================================
 
-async function isAdmin(
-  ctx,
-  userId
-) {
-  const role =
-    await getMemberRole(
-      ctx,
-      userId
-    );
+async function isAdmin(ctx, userId) {
+  const role = await getMemberRole(ctx, userId);
 
   return (
     role === "owner" ||
@@ -1030,13 +763,10 @@ async function isAdmin(
 
 
 // =====================================
-// بررسی اجراکننده
-// کاربر عادی کاملاً ساکت
+// بررسی اجراکننده فرمان
 // =====================================
 
-async function checkExecutor(
-  ctx
-) {
+async function checkExecutor(ctx) {
   if (!isGroupChat(ctx)) {
     return false;
   }
@@ -1047,11 +777,10 @@ async function checkExecutor(
     return false;
   }
 
-  const allowed =
-    await isAdmin(
-      ctx,
-      ctx.from.id
-    );
+  const allowed = await isAdmin(
+    ctx,
+    ctx.from.id
+  );
 
   if (!allowed) {
     return false;
@@ -1065,23 +794,12 @@ async function checkExecutor(
 // بررسی هدف
 // =====================================
 
-async function checkTarget(
-  ctx,
-  target
-) {
-  if (
-    target &&
-    target.id
-  ) {
-    const group =
-      getGroupData(ctx);
+async function checkTarget(ctx, target) {
+  if (target && target.id) {
+    const group = getGroupData(ctx);
 
     if (group) {
-      rememberUserInGroup(
-        group,
-        target
-      );
-
+      rememberUserInGroup(group, target);
       saveModeration(group);
     }
 
@@ -1090,7 +808,9 @@ async function checkTarget(
 
   await replyToCommand(
     ctx,
-    "『𓆩 ★ خطا ★ 𓆪』\n\nروی پیام کاربر Reply کن یا کاربر شناخته‌شده را با شناسه، نام یا @username مشخص کن."
+    "『𓆩 ★ خطا ★ 𓆪』\n\n" +
+    "روی پیام کاربر Reply کن یا کاربر شناخته‌شده را " +
+    "با شناسه، نام یا @username مشخص کن."
   );
 
   return false;
@@ -1101,9 +821,7 @@ async function checkTarget(
 // بررسی دسترسی ربات
 // =====================================
 
-async function checkBotPermissions(
-  ctx
-) {
+async function checkBotPermissions(ctx) {
   if (
     !ctx ||
     !ctx.telegram ||
@@ -1113,8 +831,7 @@ async function checkBotPermissions(
   }
 
   try {
-    const me =
-      await ctx.telegram.getMe();
+    const me = await ctx.telegram.getMe();
 
     if (!me || !me.id) {
       return false;
@@ -1130,12 +847,16 @@ async function checkBotPermissions(
       return false;
     }
 
-    return (
-      member.status ===
-        "administrator" ||
-      member.status === "creator"
-    );
-  } catch (err) {
+    if (member.status === "creator") {
+      return true;
+    }
+
+    if (member.status !== "administrator") {
+      return false;
+    }
+
+    return member.can_restrict_members === true;
+  } catch {
     return false;
   }
 }
@@ -1145,37 +866,28 @@ async function checkBotPermissions(
 // پیدا کردن رکورد
 // =====================================
 
-function findRecord(
-  list,
-  userId
-) {
+function findRecord(list, userId) {
   if (!Array.isArray(list)) {
     return null;
   }
 
-  const id =
-    String(userId);
+  const id = String(userId);
 
   return (
-    list.find(item => {
-      return (
+    list.find(
+      item =>
         item &&
         String(item.userId) === id
-      );
-    }) || null
+    ) || null
   );
 }
 
 
 // =====================================
-// مدت سکوت
-// 1 تا 10 ساعت
-// 10 تا 45 دقیقه
+// پردازش مدت سکوت
 // =====================================
 
-function parseMuteDuration(
-  args = []
-) {
+function parseMuteDuration(args = []) {
   if (
     !Array.isArray(args) ||
     !args.length
@@ -1183,20 +895,19 @@ function parseMuteDuration(
     return null;
   }
 
-  const text =
-    args.join(" ")
-      .trim()
-      .toLowerCase();
+  const text = args
+    .join(" ")
+    .trim()
+    .toLowerCase();
 
-  // سکوت 1 تا سکوت 10
-  const hourMatch =
-    text.match(
-      /^(\d{1,2})$/
-    );
+  const hourMatch = text.match(
+    /^(\d{1,2})$/
+  );
 
   if (hourMatch) {
-    const hours =
-      Number(hourMatch[1]);
+    const hours = Number(
+      hourMatch[1]
+    );
 
     if (
       Number.isInteger(hours) &&
@@ -1213,17 +924,14 @@ function parseMuteDuration(
     return null;
   }
 
-  // دقیقه
-  const minuteMatch =
-    text.match(
-      /^(\d{1,2})\s*(دقیقه|دقیقه‌ای|دقیقه ای|min|minute|minutes)$/
-    );
+  const minuteMatch = text.match(
+    /^(\d{1,2})\s*(دقیقه|دقیقه‌ای|دقیقه ای|min|minute|minutes)$/
+  );
 
   if (minuteMatch) {
-    const minutes =
-      Number(
-        minuteMatch[1]
-      );
+    const minutes = Number(
+      minuteMatch[1]
+    );
 
     if (
       Number.isInteger(minutes) &&
@@ -1246,16 +954,12 @@ function parseMuteDuration(
 // متن مدت
 // =====================================
 
-function durationText(
-  duration
-) {
+function durationText(duration) {
   if (!duration) {
     return "نامشخص";
   }
 
-  if (
-    duration.type === "hours"
-  ) {
+  if (duration.type === "hours") {
     return `${duration.value} ساعت`;
   }
 
@@ -1267,9 +971,7 @@ function durationText(
 // زمان پایان
 // =====================================
 
-function getEndTime(
-  minutes
-) {
+function getEndTime(minutes) {
   return (
     Date.now() +
     Number(minutes) * 60 * 1000
@@ -1278,56 +980,48 @@ function getEndTime(
 
 
 // =====================================
-// زمان باقی‌مانده
+// مدت باقی‌مانده
 // =====================================
 
-function remainingDuration(
-  until
-) {
+function remainingDuration(until) {
   if (!until) {
     return "نامحدود";
   }
 
   const diff =
-    Number(until) -
-    Date.now();
+    Number(until) - Date.now();
 
   if (diff <= 0) {
     return "پایان‌یافته";
   }
 
-  const minutes =
-    Math.ceil(
-      diff / 60000
-    );
+  const minutes = Math.ceil(
+    diff / 60000
+  );
 
   if (minutes < 60) {
     return `${minutes} دقیقه`;
   }
 
-  const hours =
-    Math.floor(
-      minutes / 60
-    );
+  const hours = Math.floor(
+    minutes / 60
+  );
 
-  const rest =
-    minutes % 60;
+  const rest = minutes % 60;
 
   if (rest === 0) {
     return `${hours} ساعت`;
   }
 
-  return (
-    `${hours} ساعت و ` +
-    `${rest} دقیقه`
-  );
-}// =====================================
-// پاکسازی رکوردهای منقضی
+  return `${hours} ساعت و ${rest} دقیقه`;
+}
+
+
+// =====================================
+// پاکسازی سکوت‌های منقضی
 // =====================================
 
-function cleanExpiredMutes(
-  group
-) {
+function cleanExpiredMutes(group) {
   if (
     !group ||
     !group.moderation
@@ -1353,8 +1047,7 @@ function cleanExpiredMutes(
 
       if (
         record.until &&
-        Number(record.until) <=
-          Date.now()
+        Number(record.until) <= Date.now()
       ) {
         removed++;
         return false;
@@ -1367,9 +1060,11 @@ function cleanExpiredMutes(
 }
 
 
-function cleanExpiredKhafe(
-  group
-) {
+// =====================================
+// پاکسازی خفه‌های منقضی
+// =====================================
+
+function cleanExpiredKhafe(group) {
   if (
     !group ||
     !group.moderation
@@ -1395,8 +1090,7 @@ function cleanExpiredKhafe(
 
       if (
         record.until &&
-        Number(record.until) <=
-          Date.now()
+        Number(record.until) <= Date.now()
       ) {
         removed++;
         return false;
@@ -1410,7 +1104,7 @@ function cleanExpiredKhafe(
 
 
 // =====================================
-// ثبت بن
+// ذخیره رکورد بن
 // =====================================
 
 function saveBanRecord(
@@ -1419,9 +1113,7 @@ function saveBanRecord(
   executor,
   reason = ""
 ) {
-  ensureModerationStorage(
-    group
-  );
+  ensureModerationStorage(group);
 
   const user =
     rememberUserInGroup(
@@ -1429,10 +1121,11 @@ function saveBanRecord(
       target
     );
 
-  if (!user) return null;
+  if (!user) {
+    return null;
+  }
 
-  const id =
-    String(user.id);
+  const id = String(user.id);
 
   let record =
     findRecord(
@@ -1442,28 +1135,19 @@ function saveBanRecord(
 
   if (record) {
     record.first_name =
-      user.first_name ||
-      record.first_name ||
-      "";
+      user.first_name || "";
 
     record.last_name =
-      user.last_name ||
-      record.last_name ||
-      "";
+      user.last_name || "";
 
     record.username =
-      user.username ||
-      record.username ||
-      "";
+      user.username || "";
 
     record.reason =
-      reason ||
-      record.reason ||
-      "";
+      reason || record.reason || "";
 
     record.executorId =
-      executor &&
-      executor.id
+      executor && executor.id
         ? executor.id
         : record.executorId;
 
@@ -1481,17 +1165,13 @@ function saveBanRecord(
       user.last_name || "",
     username:
       user.username || "",
-    reason:
-      reason || "",
+    reason: reason || "",
     executorId:
-      executor &&
-      executor.id
+      executor && executor.id
         ? executor.id
         : null,
-    createdAt:
-      Date.now(),
-    updatedAt:
-      Date.now()
+    createdAt: Date.now(),
+    updatedAt: Date.now()
   };
 
   group.moderation.bans.push(
@@ -1503,7 +1183,7 @@ function saveBanRecord(
 
 
 // =====================================
-// ثبت سکوت
+// ذخیره رکورد سکوت
 // =====================================
 
 function saveMuteRecord(
@@ -1513,9 +1193,7 @@ function saveMuteRecord(
   duration,
   reason = ""
 ) {
-  ensureModerationStorage(
-    group
-  );
+  ensureModerationStorage(group);
 
   const user =
     rememberUserInGroup(
@@ -1523,10 +1201,11 @@ function saveMuteRecord(
       target
     );
 
-  if (!user) return null;
+  if (!user) {
+    return null;
+  }
 
-  const id =
-    String(user.id);
+  const id = String(user.id);
 
   const until =
     getEndTime(
@@ -1541,19 +1220,13 @@ function saveMuteRecord(
 
   if (record) {
     record.first_name =
-      user.first_name ||
-      record.first_name ||
-      "";
+      user.first_name || "";
 
     record.last_name =
-      user.last_name ||
-      record.last_name ||
-      "";
+      user.last_name || "";
 
     record.username =
-      user.username ||
-      record.username ||
-      "";
+      user.username || "";
 
     record.durationType =
       duration.type;
@@ -1568,13 +1241,10 @@ function saveMuteRecord(
       until;
 
     record.reason =
-      reason ||
-      record.reason ||
-      "";
+      reason || record.reason || "";
 
     record.executorId =
-      executor &&
-      executor.id
+      executor && executor.id
         ? executor.id
         : record.executorId;
 
@@ -1599,17 +1269,13 @@ function saveMuteRecord(
     minutes:
       duration.minutes,
     until,
-    reason:
-      reason || "",
+    reason: reason || "",
     executorId:
-      executor &&
-      executor.id
+      executor && executor.id
         ? executor.id
         : null,
-    createdAt:
-      Date.now(),
-    updatedAt:
-      Date.now()
+    createdAt: Date.now(),
+    updatedAt: Date.now()
   };
 
   group.moderation.mutes.push(
@@ -1617,11 +1283,8 @@ function saveMuteRecord(
   );
 
   return record;
-}
-
-
-// =====================================
-// ثبت خفه
+}// =====================================
+// ذخیره رکورد خفه
 // =====================================
 
 function saveKhafeRecord(
@@ -1631,9 +1294,7 @@ function saveKhafeRecord(
   duration,
   reason = ""
 ) {
-  ensureModerationStorage(
-    group
-  );
+  ensureModerationStorage(group);
 
   const user =
     rememberUserInGroup(
@@ -1641,10 +1302,11 @@ function saveKhafeRecord(
       target
     );
 
-  if (!user) return null;
+  if (!user) {
+    return null;
+  }
 
-  const id =
-    String(user.id);
+  const id = String(user.id);
 
   const until =
     getEndTime(
@@ -1659,19 +1321,13 @@ function saveKhafeRecord(
 
   if (record) {
     record.first_name =
-      user.first_name ||
-      record.first_name ||
-      "";
+      user.first_name || "";
 
     record.last_name =
-      user.last_name ||
-      record.last_name ||
-      "";
+      user.last_name || "";
 
     record.username =
-      user.username ||
-      record.username ||
-      "";
+      user.username || "";
 
     record.durationType =
       duration.type;
@@ -1686,13 +1342,10 @@ function saveKhafeRecord(
       until;
 
     record.reason =
-      reason ||
-      record.reason ||
-      "";
+      reason || record.reason || "";
 
     record.executorId =
-      executor &&
-      executor.id
+      executor && executor.id
         ? executor.id
         : record.executorId;
 
@@ -1717,17 +1370,13 @@ function saveKhafeRecord(
     minutes:
       duration.minutes,
     until,
-    reason:
-      reason || "",
+    reason: reason || "",
     executorId:
-      executor &&
-      executor.id
+      executor && executor.id
         ? executor.id
         : null,
-    createdAt:
-      Date.now(),
-    updatedAt:
-      Date.now()
+    createdAt: Date.now(),
+    updatedAt: Date.now()
   };
 
   group.moderation.khafe.push(
@@ -1739,7 +1388,32 @@ function saveKhafeRecord(
 
 
 // =====================================
-// ثبت اخطار
+// پیدا کردن رکورد اخطار
+// =====================================
+
+function findWarningRecord(
+  group,
+  userId
+) {
+  if (
+    !group ||
+    !group.moderation ||
+    !Array.isArray(
+      group.moderation.warnings
+    )
+  ) {
+    return null;
+  }
+
+  return findRecord(
+    group.moderation.warnings,
+    userId
+  );
+}
+
+
+// =====================================
+// ذخیره اخطار
 // =====================================
 
 function saveWarningRecord(
@@ -1748,9 +1422,7 @@ function saveWarningRecord(
   executor,
   reason = ""
 ) {
-  ensureModerationStorage(
-    group
-  );
+  ensureModerationStorage(group);
 
   const user =
     rememberUserInGroup(
@@ -1758,291 +1430,46 @@ function saveWarningRecord(
       target
     );
 
-  if (!user) return null;
+  if (!user) {
+    return null;
+  }
 
-  const id =
-    String(user.id);
+  const id = String(user.id);
 
   let record =
-    findRecord(
-      group.moderation.warnings,
+    findWarningRecord(
+      group,
       id
     );
 
-  if (!record) {
-    record = {
-      userId: user.id,
-      first_name:
-        user.first_name || "",
-      last_name:
-        user.last_name || "",
-      username:
-        user.username || "",
-      count: 0,
-      reasons: [],
-      createdAt:
-        Date.now(),
-      updatedAt:
-        Date.now()
-    };
+  if (record) {
+    record.first_name =
+      user.first_name || "";
 
-    group.moderation.warnings.push(
-      record
-    );
-  }
+    record.last_name =
+      user.last_name || "";
 
-  record.first_name =
-    user.first_name ||
-    record.first_name ||
-    "";
+    record.username =
+      user.username || "";
 
-  record.last_name =
-    user.last_name ||
-    record.last_name ||
-    "";
+    record.count =
+      Number(record.count || 0) + 1;
 
-  record.username =
-    user.username ||
-    record.username ||
-    "";
+    record.reason =
+      reason || "";
 
-  record.count =
-    Number(record.count || 0) + 1;
-
-  if (
-    !Array.isArray(
-      record.reasons
-    )
-  ) {
-    record.reasons = [];
-  }
-
-  record.reasons.push({
-    reason:
-      reason || "بدون دلیل",
-    executorId:
-      executor &&
-      executor.id
+    record.executorId =
+      executor && executor.id
         ? executor.id
-        : null,
-    createdAt:
-      Date.now()
-  });
+        : record.executorId;
 
-  record.updatedAt =
-    Date.now();
+    record.updatedAt =
+      Date.now();
 
-  return record;
-}
-
-
-// =====================================
-// حذف یک اخطار
-// =====================================
-
-function removeWarningRecord(
-  group,
-  target
-) {
-  ensureModerationStorage(
-    group
-  );
-
-  const id =
-    String(target.id);
-
-  const record =
-    findRecord(
-      group.moderation.warnings,
-      id
-    );
-
-  if (!record) {
-    return {
-      found: false,
-      removed: false,
-      count: 0
-    };
+    return record;
   }
 
-  record.count =
-    Math.max(
-      0,
-      Number(record.count || 0) - 1
-    );
-
-  if (
-    Array.isArray(
-      record.reasons
-    ) &&
-    record.reasons.length
-  ) {
-    record.reasons.pop();
-  }
-
-  record.updatedAt =
-    Date.now();
-
-  if (
-    record.count <= 0
-  ) {
-    group.moderation.warnings =
-      group.moderation.warnings.filter(
-        item =>
-          String(
-            item.userId
-          ) !== id
-      );
-
-    return {
-      found: true,
-      removed: true,
-      count: 0
-    };
-  }
-
-  return {
-    found: true,
-    removed: false,
-    count: record.count
-  };
-}
-
-
-// =====================================
-// پاک کردن کامل اخطار یک کاربر
-// =====================================
-
-function clearWarningRecord(
-  group,
-  target
-) {
-  ensureModerationStorage(
-    group
-  );
-
-  const id =
-    String(target.id);
-
-  const before =
-    group.moderation.warnings.length;
-
-  group.moderation.warnings =
-    group.moderation.warnings.filter(
-      item =>
-        String(
-          item.userId
-        ) !== id
-    );
-
-  return (
-    before !==
-    group.moderation.warnings.length
-  );
-}
-
-
-// =====================================
-// ثبت اختیار
-// =====================================
-
-function savePermissionRecord(
-  group,
-  target,
-  permissions = {}
-) {
-  ensureModerationStorage(
-    group
-  );
-
-  const user =
-    rememberUserInGroup(
-      group,
-      target
-    );
-
-  if (!user) return null;
-
-  const id =
-    String(user.id);
-
-  let record =
-    findRecord(
-      group.moderation.permissions,
-      id
-    );
-
-  if (!record) {
-    record = {
-      userId: user.id,
-      first_name:
-        user.first_name || "",
-      last_name:
-        user.last_name || "",
-      username:
-        user.username || "",
-      permissions: {},
-      createdAt:
-        Date.now(),
-      updatedAt:
-        Date.now()
-    };
-
-    group.moderation.permissions.push(
-      record
-    );
-  }
-
-  record.first_name =
-    user.first_name ||
-    record.first_name ||
-    "";
-
-  record.last_name =
-    user.last_name ||
-    record.last_name ||
-    "";
-
-  record.username =
-    user.username ||
-    record.username ||
-    "";
-
-  record.permissions = {
-    ...(record.permissions || {}),
-    ...permissions
-  };
-
-  record.updatedAt =
-    Date.now();
-
-  return record;
-}
-
-
-// =====================================
-// ثبت اخراج
-// =====================================
-
-function saveKickRecord(
-  group,
-  target,
-  executor,
-  reason = ""
-) {
-  ensureModerationStorage(
-    group
-  );
-
-  const user =
-    rememberUserInGroup(
-      group,
-      target
-    );
-
-  if (!user) return null;
-
-  const record = {
+  record = {
     userId: user.id,
     first_name:
       user.first_name || "",
@@ -2050,18 +1477,17 @@ function saveKickRecord(
       user.last_name || "",
     username:
       user.username || "",
-    reason:
-      reason || "",
+    count: 1,
+    reason: reason || "",
     executorId:
-      executor &&
-      executor.id
+      executor && executor.id
         ? executor.id
         : null,
-    createdAt:
-      Date.now()
+    createdAt: Date.now(),
+    updatedAt: Date.now()
   };
 
-  group.moderation.kicks.push(
+  group.moderation.warnings.push(
     record
   );
 
@@ -2070,625 +1496,134 @@ function saveKickRecord(
 
 
 // =====================================
-// گرفتن لیست
+// حذف اخطار
 // =====================================
 
-function getModerationList(
+function removeWarningRecord(
   group,
-  type
-) {
-  ensureModerationStorage(
-    group
-  );
-
-  if (type === "ban") {
-    return group.moderation.bans;
-  }
-
-  if (type === "mute") {
-    cleanExpiredMutes(group);
-    return group.moderation.mutes;
-  }
-
-  if (type === "khafe") {
-    cleanExpiredKhafe(group);
-    return group.moderation.khafe;
-  }
-
-  if (type === "warning") {
-    return group.moderation.warnings;
-  }
-
-  if (type === "permission") {
-    return group.moderation.permissions;
-  }
-
-  if (type === "kick") {
-    return group.moderation.kicks;
-  }
-
-  return [];
-}
-
-
-// =====================================
-// عنوان لیست
-// =====================================
-
-function listTitle(type) {
-  if (type === "ban") {
-    return "لیست بن";
-  }
-
-  if (type === "mute") {
-    return "لیست سکوت";
-  }
-
-  if (type === "khafe") {
-    return "لیست خفه";
-  }
-
-  if (type === "warning") {
-    return "لیست اخطار";
-  }
-
-  if (type === "permission") {
-    return "لیست اختیار";
-  }
-
-  if (type === "kick") {
-    return "لیست اخراج";
-  }
-
-  return "لیست مدیریت";
-}
-
-
-// =====================================
-// صفحه‌بندی
-// =====================================
-
-function getPageData(
-  list,
-  page
-) {
-  const safePage =
-    Number.isInteger(page)
-      ? page
-      : 0;
-
-  const totalItems =
-    Array.isArray(list)
-      ? list.length
-      : 0;
-
-  const totalPages =
-    Math.max(
-      1,
-      Math.ceil(
-        totalItems /
-        LIST_PAGE_SIZE
-      )
-    );
-
-  const currentPage =
-    Math.min(
-      Math.max(
-        safePage,
-        0
-      ),
-      totalPages - 1
-    );
-
-  const start =
-    currentPage *
-    LIST_PAGE_SIZE;
-
-  return {
-    items:
-      Array.isArray(list)
-        ? list.slice(
-            start,
-            start +
-              LIST_PAGE_SIZE
-          )
-        : [],
-    page:
-      currentPage,
-    totalPages,
-    totalItems
-  };
-}
-
-
-// =====================================
-// خط هر کاربر در لیست
-// =====================================
-
-function userListLine(
-  record,
-  number,
-  type
-) {
-  const user = {
-    id: record.userId,
-    first_name:
-      record.first_name || "",
-    last_name:
-      record.last_name || "",
-    username:
-      record.username || ""
-  };
-
-  let text =
-    `${number}. ${mentionUser(user)}\n` +
-    `   🆔 ${record.userId}`;
-
-  if (record.username) {
-    text +=
-      `\n   👤 @${record.username}`;
-  }
-
-  if (type === "ban") {
-    if (record.reason) {
-      text +=
-        `\n   📝 ${record.reason}`;
-    }
-  }
-
-  if (
-    type === "mute" ||
-    type === "khafe"
-  ) {
-    if (record.until) {
-      text +=
-        `\n   ⏳ ${remainingDuration(
-          record.until
-        )}`;
-    }
-
-    if (record.reason) {
-      text +=
-        `\n   📝 ${record.reason}`;
-    }
-  }
-
-  if (type === "warning") {
-    text +=
-      `\n   ⚠️ تعداد اخطار: ${
-        record.count || 0
-      }`;
-
-    if (
-      Array.isArray(
-        record.reasons
-      ) &&
-      record.reasons.length
-    ) {
-      const last =
-        record.reasons[
-          record.reasons.length - 1
-        ];
-
-      if (
-        last &&
-        last.reason
-      ) {
-        text +=
-          `\n   📝 ${last.reason}`;
-      }
-    }
-  }
-
-  if (
-    type === "permission"
-  ) {
-    const permissions =
-      record.permissions || {};
-
-    const enabled =
-      Object.keys(
-        permissions
-      ).filter(
-        key =>
-          permissions[key] === true
-      ).length;
-
-    text +=
-      `\n   ★ اختیار فعال: ${enabled}`;
-  }
-
-  return text;
-}
-
-
-// =====================================
-// ساخت متن لیست
-// =====================================
-
-function buildListText(
-  group,
-  type,
-  page
-) {
-  const list =
-    getModerationList(
-      group,
-      type
-    );
-
-  const data =
-    getPageData(
-      list,
-      page
-    );
-
-  let text =
-    `『𓆩 ★ ${listTitle(type)} ★ 𓆪』\n\n`;
-
-  if (
-    data.totalItems === 0
-  ) {
-    text +=
-      "『𓆩 ☆ لیست خالی است ☆ 𓆪』";
-
-    return {
-      text,
-      data
-    };
-  }
-
-  text +=
-    `تعداد کل: ${data.totalItems}\n` +
-    `صفحه: ${
-      data.page + 1
-    } از ${
-      data.totalPages
-    }\n\n`;
-
-  data.items.forEach(
-    (record, index) => {
-      const number =
-        data.page *
-          LIST_PAGE_SIZE +
-        index +
-        1;
-
-      text +=
-        userListLine(
-          record,
-          number,
-          type
-        ) +
-        "\n\n";
-    }
-  );
-
-  return {
-    text: text.trim(),
-    data
-  };
-}
-
-
-// =====================================
-// کلید لیست
-// =====================================
-
-function getListKey(
-  chatId,
-  ownerId,
-  type
-) {
-  return (
-    `${chatId}:` +
-    `${ownerId}:` +
-    `${type}`
-  );
-}
-
-
-// =====================================
-// ذخیره لیست باز
-// =====================================
-
-function saveOpenList(
-  ctx,
-  type,
-  ownerId,
-  page
-) {
-  const key =
-    getListKey(
-      ctx.chat.id,
-      ownerId,
-      type
-    );
-
-  openLists[key] = {
-    chatId:
-      ctx.chat.id,
-    ownerId,
-    type,
-    page,
-    messageId: null,
-    createdAt:
-      Date.now()
-  };
-
-  return key;
-}
-
-
-// =====================================
-// دریافت لیست باز
-// =====================================
-
-function getOpenList(
-  chatId,
-  ownerId,
-  type
-) {
-  const key =
-    getListKey(
-      chatId,
-      ownerId,
-      type
-    );
-
-  return (
-    openLists[key] ||
-    null
-  );
-}
-
-
-// =====================================
-// ساخت دکمه‌های صفحه
-// =====================================
-
-function buildPaginationKeyboard(
-  type,
-  ownerId,
-  page,
-  totalPages
-) {
-  const row = [];
-
-  if (page > 0) {
-    row.push({
-      text: "‹ صفحه قبل",
-      callback_data:
-        `mlist:${type}:` +
-        `${ownerId}:` +
-        `${page - 1}`
-    });
-  }
-
-  if (
-    page + 1 <
-    totalPages
-  ) {
-    row.push({
-      text: "صفحه بعد ›",
-      callback_data:
-        `mlist:${type}:` +
-        `${ownerId}:` +
-        `${page + 1}`
-    });
-  }
-
-  if (!row.length) {
-    return [];
-  }
-
-  return [row];
-}
-
-
-// =====================================
-// اجرای لیست
-// =====================================
-
-async function showModerationList(
-  ctx,
-  type
+  userId
 ) {
   if (
-    !isGroupChat(ctx)
-  ) {
-    return;
-  }
-
-  if (
-    !(await checkExecutor(ctx))
-  ) {
-    return;
-  }
-
-  const group =
-    getGroupData(ctx);
-
-  if (!group) {
-    return;
-  }
-
-  ensureModerationStorage(
-    group
-  );
-
-  const ownerId =
-    ctx.from.id;
-
-  const result =
-    buildListText(
-      group,
-      type,
-      0
-    );
-
-  const keyboard =
-    buildPaginationKeyboard(
-      type,
-      ownerId,
-      result.data.page,
-      result.data.totalPages
-    );
-
-  const sent =
-    await replyToCommand(
-      ctx,
-      result.text,
-      {
-        parse_mode: "HTML",
-        ...(keyboard.length
-          ? {
-              reply_markup: {
-                inline_keyboard:
-                  keyboard
-              }
-            }
-          : {})
-      }
-    );
-
-  const key =
-    saveOpenList(
-      ctx,
-      type,
-      ownerId,
-      result.data.page
-    );
-
-  if (
-    sent &&
-    sent.message_id
-  ) {
-    openLists[key].messageId =
-      sent.message_id;
-  }
-}
-
-
-// =====================================
-// بررسی مالک لیست
-// =====================================
-
-async function checkListOwner(
-  ctx,
-  ownerId
-) {
-  if (
-    !ctx ||
-    !ctx.from ||
-    String(ctx.from.id) !==
-      String(ownerId)
+    !group ||
+    !group.moderation ||
+    !Array.isArray(
+      group.moderation.warnings
+    )
   ) {
     return false;
   }
 
+  const before =
+    group.moderation.warnings.length;
+
+  group.moderation.warnings =
+    group.moderation.warnings.filter(
+      record =>
+        !record ||
+        String(record.userId) !==
+          String(userId)
+    );
+
   return (
-    await isAdmin(
-      ctx,
-      ctx.from.id
-    )
+    group.moderation.warnings.length !==
+    before
   );
-}// =====================================
-// تغییر صفحه لیست
+}
+
+
+// =====================================
+// ارسال پیام فرمان
 // =====================================
 
-async function changeModerationListPage(
+async function replyToCommand(
   ctx,
-  type,
-  ownerId,
-  page
+  text
 ) {
-  if (!ctx || !ctx.chat) {
-    return;
-  }
-
   if (
-    !(await checkListOwner(
-      ctx,
-      ownerId
-    ))
+    !ctx ||
+    !ctx.reply
   ) {
-    try {
-      await ctx.answerCbQuery();
-    } catch (err) {}
-
-    return;
+    return null;
   }
-
-  const group =
-    getGroupData(ctx);
-
-  if (!group) {
-    try {
-      await ctx.answerCbQuery();
-    } catch (err) {}
-
-    return;
-  }
-
-  ensureModerationStorage(
-    group
-  );
-
-  const result =
-    buildListText(
-      group,
-      type,
-      Number(page)
-    );
-
-  const keyboard =
-    buildPaginationKeyboard(
-      type,
-      ownerId,
-      result.data.page,
-      result.data.totalPages
-    );
 
   try {
-    await ctx.editMessageText(
-      result.text,
+    return await ctx.reply(
+      text,
       {
-        parse_mode: "HTML",
-        ...(keyboard.length
-          ? {
-              reply_markup: {
-                inline_keyboard:
-                  keyboard
-              }
-            }
-          : {})
+        parse_mode: "HTML"
       }
     );
-
-    const key =
-      getListKey(
-        ctx.chat.id,
-        ownerId,
-        type
-      );
-
-    if (openLists[key]) {
-      openLists[key].page =
-        result.data.page;
-    }
-
-    await ctx.answerCbQuery();
-  } catch (err) {
+  } catch {
     try {
-      await ctx.answerCbQuery();
-    } catch (e) {}
+      return await ctx.reply(text);
+    } catch {
+      return null;
+    }
   }
 }
 
 
 // =====================================
-// بن
+// ارسال پاسخ به پیام هدف
+// =====================================
+
+async function replyToTarget(
+  ctx,
+  text
+) {
+  if (
+    !ctx ||
+    !ctx.reply
+  ) {
+    return null;
+  }
+
+  const target =
+    getTargetMessage(ctx);
+
+  try {
+    if (target && target.message_id) {
+      return await ctx.reply(
+        text,
+        {
+          parse_mode: "HTML",
+          reply_to_message_id:
+            target.message_id
+        }
+      );
+    }
+
+    return await ctx.reply(
+      text,
+      {
+        parse_mode: "HTML"
+      }
+    );
+  } catch {
+    try {
+      if (
+        target &&
+        target.message_id
+      ) {
+        return await ctx.reply(
+          text,
+          {
+            reply_to_message_id:
+              target.message_id
+          }
+        );
+      }
+
+      return await ctx.reply(text);
+    } catch {
+      return null;
+    }
+  }
+}
+
+
+// =====================================
+// بن کردن کاربر
 // =====================================
 
 async function banUser(
@@ -2699,7 +1634,11 @@ async function banUser(
   const group =
     getGroupData(ctx);
 
-  if (!group || !target) {
+  if (
+    !group ||
+    !target ||
+    !target.id
+  ) {
     return false;
   }
 
@@ -2708,7 +1647,8 @@ async function banUser(
   ) {
     await replyToCommand(
       ctx,
-      "『𓆩 ★ خطا ★ 𓆪』\n\nربات دسترسی مدیریت اعضا را ندارد."
+      "『𓆩 ★ خطا ★ 𓆪』\n\n" +
+      "ربات دسترسی مدیریت اعضا را ندارد."
     );
 
     return false;
@@ -2719,10 +1659,11 @@ async function banUser(
       ctx.chat.id,
       target.id
     );
-  } catch (err) {
+  } catch {
     await replyToCommand(
       ctx,
-      "『𓆩 ★ خطا ★ 𓆪』\n\nربات نتوانست کاربر را بن کند."
+      "『𓆩 ★ خطا ★ 𓆪』\n\n" +
+      "بن کردن کاربر انجام نشد."
     );
 
     return false;
@@ -2737,11 +1678,13 @@ async function banUser(
 
   saveModeration(group);
 
+  const userLabel =
+    getListUserLabel(target);
+
   await replyToTarget(
     ctx,
     `『𓆩 ★ بن شد ★ 𓆪』\n\n` +
-      `${mentionUser(target)}\n` +
-      `🆔 ${target.id}`
+    `کاربر ${userLabel} به لیست بن اضافه شد.`
   );
 
   return true;
@@ -2759,7 +1702,11 @@ async function unbanUser(
   const group =
     getGroupData(ctx);
 
-  if (!group || !target) {
+  if (
+    !group ||
+    !target ||
+    !target.id
+  ) {
     return false;
   }
 
@@ -2768,7 +1715,8 @@ async function unbanUser(
   ) {
     await replyToCommand(
       ctx,
-      "『𓆩 ★ خطا ★ 𓆪』\n\nربات دسترسی مدیریت اعضا را ندارد."
+      "『𓆩 ★ خطا ★ 𓆪』\n\n" +
+      "ربات دسترسی مدیریت اعضا را ندارد."
     );
 
     return false;
@@ -2782,10 +1730,11 @@ async function unbanUser(
         only_if_banned: false
       }
     );
-  } catch (err) {
+  } catch {
     await replyToCommand(
       ctx,
-      "『𓆩 ★ خطا ★ 𓆪』\n\nحذف بن انجام نشد."
+      "『𓆩 ★ خطا ★ 𓆪』\n\n" +
+      "حذف بن کاربر انجام نشد."
     );
 
     return false;
@@ -2794,17 +1743,20 @@ async function unbanUser(
   group.moderation.bans =
     group.moderation.bans.filter(
       record =>
+        !record ||
         String(record.userId) !==
-        String(target.id)
+          String(target.id)
     );
 
   saveModeration(group);
 
+  const userLabel =
+    getListUserLabel(target);
+
   await replyToTarget(
     ctx,
-    `『𓆩 ★ حذف بن شد ★ 𓆪』\n\n` +
-      `${mentionUser(target)}\n` +
-      `🆔 ${target.id}`
+    `『𓆩 ★ حذف بن ★ 𓆪』\n\n` +
+    `کاربر ${userLabel} از لیست بن حذف شد.`
   );
 
   return true;
@@ -2812,7 +1764,7 @@ async function unbanUser(
 
 
 // =====================================
-// اخراج
+// اخراج کاربر
 // =====================================
 
 async function kickUser(
@@ -2823,7 +1775,11 @@ async function kickUser(
   const group =
     getGroupData(ctx);
 
-  if (!group || !target) {
+  if (
+    !group ||
+    !target ||
+    !target.id
+  ) {
     return false;
   }
 
@@ -2832,7 +1788,8 @@ async function kickUser(
   ) {
     await replyToCommand(
       ctx,
-      "『𓆩 ★ خطا ★ 𓆪』\n\nربات دسترسی مدیریت اعضا را ندارد."
+      "『𓆩 ★ خطا ★ 𓆪』\n\n" +
+      "ربات دسترسی مدیریت اعضا را ندارد."
     );
 
     return false;
@@ -2851,29 +1808,43 @@ async function kickUser(
         only_if_banned: false
       }
     );
-  } catch (err) {
+  } catch {
     await replyToCommand(
       ctx,
-      "『𓆩 ★ خطا ★ 𓆪』\n\nاخراج کاربر انجام نشد."
+      "『𓆩 ★ خطا ★ 𓆪』\n\n" +
+      "اخراج کاربر انجام نشد."
     );
 
     return false;
   }
 
-  saveKickRecord(
-    group,
-    target,
-    ctx.from,
-    reason
-  );
+  ensureModerationStorage(group);
+
+  group.moderation.kicks.push({
+    userId: target.id,
+    first_name:
+      target.first_name || "",
+    last_name:
+      target.last_name || "",
+    username:
+      target.username || "",
+    reason: reason || "",
+    executorId:
+      ctx.from && ctx.from.id
+        ? ctx.from.id
+        : null,
+    createdAt: Date.now()
+  });
 
   saveModeration(group);
+
+  const userLabel =
+    getListUserLabel(target);
 
   await replyToTarget(
     ctx,
     `『𓆩 ★ اخراج شد ★ 𓆪』\n\n` +
-      `${mentionUser(target)}\n` +
-      `🆔 ${target.id}`
+    `کاربر ${userLabel} از گروه اخراج شد.`
   );
 
   return true;
@@ -2881,7 +1852,7 @@ async function kickUser(
 
 
 // =====================================
-// سکوت
+// سکوت واقعی کاربر
 // =====================================
 
 async function muteUser(
@@ -2896,6 +1867,7 @@ async function muteUser(
   if (
     !group ||
     !target ||
+    !target.id ||
     !duration
   ) {
     return false;
@@ -2906,11 +1878,19 @@ async function muteUser(
   ) {
     await replyToCommand(
       ctx,
-      "『𓆩 ★ خطا ★ 𓆪』\n\nربات دسترسی مدیریت اعضا را ندارد."
+      "『𓆩 ★ خطا ★ 𓆪』\n\n" +
+      "ربات دسترسی محدود کردن اعضا را ندارد."
     );
 
     return false;
   }
+
+  const untilDate =
+    Math.floor(
+      getEndTime(
+        duration.minutes
+      ) / 1000
+    );
 
   try {
     await ctx.telegram.restrictChatMember(
@@ -2933,18 +1913,14 @@ async function muteUser(
           can_pin_messages: false,
           can_manage_topics: false
         },
-        until_date:
-          Math.floor(
-            getEndTime(
-              duration.minutes
-            ) / 1000
-          )
+        until_date: untilDate
       }
     );
-  } catch (err) {
+  } catch {
     await replyToCommand(
       ctx,
-      "『𓆩 ★ خطا ★ 𓆪』\n\nسکوت کاربر انجام نشد."
+      "『𓆩 ★ خطا ★ 𓆪』\n\n" +
+      "سکوت کاربر انجام نشد."
     );
 
     return false;
@@ -2960,14 +1936,13 @@ async function muteUser(
 
   saveModeration(group);
 
+  const userLabel =
+    getListUserLabel(target);
+
   await replyToTarget(
     ctx,
-    `『𓆩 ★ سکوت شد ★ 𓆪』\n\n` +
-      `${mentionUser(target)}\n` +
-      `🆔 ${target.id}\n` +
-      `⏳ مدت: ${durationText(
-        duration
-      )}`
+    `『𓆩 ★ سکوت اضافه شد ★ 𓆪』\n\n` +
+    `کاربر ${userLabel} به لیست سکوت ${durationText(duration)} اضافه شد.`
   );
 
   return true;
@@ -2975,7 +1950,7 @@ async function muteUser(
 
 
 // =====================================
-// حذف سکوت
+// حذف سکوت واقعی
 // =====================================
 
 async function unmuteUser(
@@ -2985,7 +1960,11 @@ async function unmuteUser(
   const group =
     getGroupData(ctx);
 
-  if (!group || !target) {
+  if (
+    !group ||
+    !target ||
+    !target.id
+  ) {
     return false;
   }
 
@@ -2994,7 +1973,8 @@ async function unmuteUser(
   ) {
     await replyToCommand(
       ctx,
-      "『𓆩 ★ خطا ★ 𓆪』\n\nربات دسترسی مدیریت اعضا را ندارد."
+      "『𓆩 ★ خطا ★ 𓆪』\n\n" +
+      "ربات دسترسی محدود کردن اعضا را ندارد."
     );
 
     return false;
@@ -3023,10 +2003,11 @@ async function unmuteUser(
         }
       }
     );
-  } catch (err) {
+  } catch {
     await replyToCommand(
       ctx,
-      "『𓆩 ★ خطا ★ 𓆪』\n\nحذف سکوت انجام نشد."
+      "『𓆩 ★ خطا ★ 𓆪』\n\n" +
+      "حذف سکوت کاربر انجام نشد."
     );
 
     return false;
@@ -3035,25 +2016,25 @@ async function unmuteUser(
   group.moderation.mutes =
     group.moderation.mutes.filter(
       record =>
+        !record ||
         String(record.userId) !==
-        String(target.id)
+          String(target.id)
     );
 
   saveModeration(group);
 
+  const userLabel =
+    getListUserLabel(target);
+
   await replyToTarget(
     ctx,
     `『𓆩 ★ حذف سکوت ★ 𓆪』\n\n` +
-      `${mentionUser(target)}\n` +
-      `🆔 ${target.id}`
+    `کاربر ${userLabel} از لیست سکوت حذف شد.`
   );
 
   return true;
-}
-
-
-// =====================================
-// خفه
+      }// =====================================
+// خفه کردن واقعی کاربر
 // =====================================
 
 async function khafeUser(
@@ -3068,6 +2049,7 @@ async function khafeUser(
   if (
     !group ||
     !target ||
+    !target.id ||
     !duration
   ) {
     return false;
@@ -3078,11 +2060,19 @@ async function khafeUser(
   ) {
     await replyToCommand(
       ctx,
-      "『𓆩 ★ خطا ★ 𓆪』\n\nربات دسترسی مدیریت اعضا را ندارد."
+      "『𓆩 ★ خطا ★ 𓆪』\n\n" +
+      "ربات دسترسی محدود کردن اعضا را ندارد."
     );
 
     return false;
   }
+
+  const untilDate =
+    Math.floor(
+      getEndTime(
+        duration.minutes
+      ) / 1000
+    );
 
   try {
     await ctx.telegram.restrictChatMember(
@@ -3105,18 +2095,14 @@ async function khafeUser(
           can_pin_messages: false,
           can_manage_topics: false
         },
-        until_date:
-          Math.floor(
-            getEndTime(
-              duration.minutes
-            ) / 1000
-          )
+        until_date: untilDate
       }
     );
-  } catch (err) {
+  } catch {
     await replyToCommand(
       ctx,
-      "『𓆩 ★ خطا ★ 𓆪』\n\nخفه کردن کاربر انجام نشد."
+      "『𓆩 ★ خطا ★ 𓆪』\n\n" +
+      "خفه کردن کاربر انجام نشد."
     );
 
     return false;
@@ -3132,14 +2118,13 @@ async function khafeUser(
 
   saveModeration(group);
 
+  const userLabel =
+    getListUserLabel(target);
+
   await replyToTarget(
     ctx,
-    `『𓆩 ★ خفه شد ★ 𓆪』\n\n` +
-      `${mentionUser(target)}\n` +
-      `🆔 ${target.id}\n` +
-      `⏳ مدت: ${durationText(
-        duration
-      )}`
+    `『𓆩 ★ خفه اضافه شد ★ 𓆪』\n\n` +
+    `کاربر ${userLabel} به لیست خفه ${durationText(duration)} اضافه شد.`
   );
 
   return true;
@@ -3147,7 +2132,7 @@ async function khafeUser(
 
 
 // =====================================
-// حذف خفه
+// حذف خفه واقعی
 // =====================================
 
 async function unkhafeUser(
@@ -3157,7 +2142,11 @@ async function unkhafeUser(
   const group =
     getGroupData(ctx);
 
-  if (!group || !target) {
+  if (
+    !group ||
+    !target ||
+    !target.id
+  ) {
     return false;
   }
 
@@ -3166,7 +2155,8 @@ async function unkhafeUser(
   ) {
     await replyToCommand(
       ctx,
-      "『𓆩 ★ خطا ★ 𓆪』\n\nربات دسترسی مدیریت اعضا را ندارد."
+      "『𓆩 ★ خطا ★ 𓆪』\n\n" +
+      "ربات دسترسی محدود کردن اعضا را ندارد."
     );
 
     return false;
@@ -3195,10 +2185,11 @@ async function unkhafeUser(
         }
       }
     );
-  } catch (err) {
+  } catch {
     await replyToCommand(
       ctx,
-      "『𓆩 ★ خطا ★ 𓆪』\n\nحذف خفه انجام نشد."
+      "『𓆩 ★ خطا ★ 𓆪』\n\n" +
+      "حذف خفه کاربر انجام نشد."
     );
 
     return false;
@@ -3207,17 +2198,20 @@ async function unkhafeUser(
   group.moderation.khafe =
     group.moderation.khafe.filter(
       record =>
+        !record ||
         String(record.userId) !==
-        String(target.id)
+          String(target.id)
     );
 
   saveModeration(group);
 
+  const userLabel =
+    getListUserLabel(target);
+
   await replyToTarget(
     ctx,
     `『𓆩 ★ حذف خفه ★ 𓆪』\n\n` +
-      `${mentionUser(target)}\n` +
-      `🆔 ${target.id}`
+    `کاربر ${userLabel} از لیست خفه حذف شد.`
   );
 
   return true;
@@ -3225,7 +2219,7 @@ async function unkhafeUser(
 
 
 // =====================================
-// اخطار
+// اخطار کاربر
 // =====================================
 
 async function warnUser(
@@ -3236,9 +2230,15 @@ async function warnUser(
   const group =
     getGroupData(ctx);
 
-  if (!group || !target) {
+  if (
+    !group ||
+    !target ||
+    !target.id
+  ) {
     return false;
   }
+
+  ensureModerationStorage(group);
 
   const record =
     saveWarningRecord(
@@ -3252,22 +2252,88 @@ async function warnUser(
     return false;
   }
 
+  const settings =
+    group.moderation.warningSettings ||
+    {
+      maxWarnings: 3,
+      punishment: "none"
+    };
+
+  const maxWarnings =
+    Number(
+      settings.maxWarnings || 3
+    );
+
+  const count =
+    Number(
+      record.count || 0
+    );
+
   saveModeration(group);
+
+  const userLabel =
+    getListUserLabel(target);
 
   await replyToTarget(
     ctx,
     `『𓆩 ★ اخطار ★ 𓆪』\n\n` +
-      `${mentionUser(target)}\n` +
-      `🆔 ${target.id}\n` +
-      `⚠️ تعداد اخطار: ${
-        record.count
-      }` +
-      (
-        reason
-          ? `\n📝 دلیل: ${reason}`
-          : ""
-      )
+    `کاربر ${userLabel} به لیست اخطار اضافه شد.\n` +
+    `⚠️ تعداد اخطار: ${count} از ${maxWarnings}`
   );
+
+  // ===================================
+  // اجرای تنبیه خودکار اخطار
+  // ===================================
+
+  if (
+    count >= maxWarnings &&
+    settings.punishment &&
+    settings.punishment !== "none"
+  ) {
+    if (
+      settings.punishment === "ban"
+    ) {
+      await banUser(
+        ctx,
+        target,
+        "رسیدن به حد مجاز اخطار"
+      );
+    }
+
+    if (
+      settings.punishment === "mute"
+    ) {
+      const duration = {
+        type: "hours",
+        value: 1,
+        minutes: 60
+      };
+
+      await muteUser(
+        ctx,
+        target,
+        duration,
+        "رسیدن به حد مجاز اخطار"
+      );
+    }
+
+    if (
+      settings.punishment === "khafe"
+    ) {
+      const duration = {
+        type: "hours",
+        value: 1,
+        minutes: 60
+      };
+
+      await khafeUser(
+        ctx,
+        target,
+        duration,
+        "رسیدن به حد مجاز اخطار"
+      );
+    }
+  }
 
   return true;
 }
@@ -3284,122 +2350,72 @@ async function unwarnUser(
   const group =
     getGroupData(ctx);
 
-  if (!group || !target) {
+  if (
+    !group ||
+    !target ||
+    !target.id
+  ) {
     return false;
   }
 
-  const result =
-    removeWarningRecord(
+  const record =
+    findWarningRecord(
       group,
-      target
+      target.id
     );
 
-  if (!result.found) {
+  if (!record) {
     await replyToTarget(
       ctx,
-      `『𓆩 ☆ اخطاری برای این کاربر ثبت نشده ☆ 𓆪』\n\n` +
-        `${mentionUser(target)}`
+      `『𓆩 ★ اخطار ★ 𓆪』\n\n` +
+      `برای کاربر ${getListUserLabel(target)} اخطاری ثبت نشده است.`
     );
 
     return false;
+  }
+
+  const count =
+    Number(record.count || 0);
+
+  if (count > 1) {
+    record.count = count - 1;
+    record.updatedAt = Date.now();
+  } else {
+    removeWarningRecord(
+      group,
+      target.id
+    );
   }
 
   saveModeration(group);
+
+  const userLabel =
+    getListUserLabel(target);
+
+  const newRecord =
+    findWarningRecord(
+      group,
+      target.id
+    );
+
+  const newCount =
+    newRecord
+      ? Number(newRecord.count || 0)
+      : 0;
 
   await replyToTarget(
     ctx,
     `『𓆩 ★ حذف اخطار ★ 𓆪』\n\n` +
-      `${mentionUser(target)}\n` +
-      `🆔 ${target.id}\n` +
-      `⚠️ اخطار باقی‌مانده: ${
-        result.count
-      }`
+    `یک اخطار از کاربر ${userLabel} حذف شد.\n` +
+    `⚠️ تعداد فعلی: ${newCount}`
   );
 
   return true;
-      }// =====================================
-// پاکسازی کامل یک لیست
-// =====================================
-
-async function clearModerationList(
-  ctx,
-  type
-) {
-  if (
-    !(await checkExecutor(ctx))
-  ) {
-    return;
-  }
-
-  const group =
-    getGroupData(ctx);
-
-  if (!group) {
-    return;
-  }
-
-  ensureModerationStorage(
-    group
-  );
-
-  let oldCount = 0;
-  let title = "";
-
-  if (type === "ban") {
-    oldCount =
-      group.moderation.bans.length;
-    title = "بن";
-    group.moderation.bans = [];
-  }
-
-  if (type === "mute") {
-    oldCount =
-      group.moderation.mutes.length;
-    title = "سکوت";
-    group.moderation.mutes = [];
-  }
-
-  if (type === "khafe") {
-    oldCount =
-      group.moderation.khafe.length;
-    title = "خفه";
-    group.moderation.khafe = [];
-  }
-
-  if (type === "warning") {
-    oldCount =
-      group.moderation.warnings.length;
-    title = "اخطار";
-    group.moderation.warnings = [];
-  }
-
-  if (type === "permission") {
-    oldCount =
-      group.moderation.permissions.length;
-    title = "اختیار";
-    group.moderation.permissions = [];
-  }
-
-  if (type === "kick") {
-    oldCount =
-      group.moderation.kicks.length;
-    title = "اخراج";
-    group.moderation.kicks = [];
-  }
-
-  saveModeration(group);
-
-  await replyToCommand(
-    ctx,
-    `『𓆩 ★ پاکسازی ${title} ★ 𓆪』\n\n` +
-      `تعداد رکوردهای پاک‌شده: ${oldCount}\n\n` +
-      `『𓆩 ★ لیست ${title} پاک شد ★ 𓆪』`
-  );
 }
 
 
 // =====================================
-// فرمان‌های مدیریتی
+// متن فرمان
 // =====================================
 
 function getCommandText(ctx) {
@@ -3411,678 +2427,1054 @@ function getCommandText(ctx) {
   }
 
   return String(
-    ctx.message.text || ""
+    ctx.message.text ||
+    ctx.message.caption ||
+    ""
   ).trim();
 }
 
+
+// =====================================
+// آرگومان‌های فرمان
+// =====================================
 
 function getCommandArgs(ctx) {
   const text =
     getCommandText(ctx);
 
-  if (!text) return [];
+  if (!text) {
+    return [];
+  }
 
   const parts =
     text.split(/\s+/);
 
-  return parts.slice(1);
+  parts.shift();
+
+  return parts;
 }
 
 
+// =====================================
+// دلیل فرمان
+// =====================================
+
 function getReasonFromArgs(
-  args,
-  durationUsed
+  args = [],
+  durationUsed = false
 ) {
   if (
-    !Array.isArray(args)
+    !Array.isArray(args) ||
+    !args.length
   ) {
     return "";
   }
 
-  let start = 0;
+  const items = [...args];
 
   if (durationUsed) {
     if (
-      args.length >= 1 &&
-      /^\d{1,2}$/.test(
-        args[0]
-      )
+      items.length &&
+      /^\d{1,2}$/.test(items[0])
     ) {
-      start = 1;
-    } else if (
-      args.length >= 2 &&
-      /^\d{1,2}$/.test(
-        args[0]
-      ) &&
-      /دقیقه|minute|min/i.test(
-        args[1]
-      )
-    ) {
-      start = 2;
+      items.shift();
+
+      if (
+        items.length &&
+        /^(دقیقه|دقیقه‌ای|دقیقه ای|min|minute|minutes)$/i.test(
+          items[0]
+        )
+      ) {
+        items.shift();
+      }
     }
   }
 
-  return args
-    .slice(start)
-    .join(" ")
-    .trim();
+  return items.join(" ").trim();
 }
 
 
 // =====================================
-// ثبت فرمان‌ها
+// تشخیص مدت در آرگومان‌ها
 // =====================================
 
-function registerModeration(
-  bot
-) {
+function getDurationArgs(args = []) {
+  if (!Array.isArray(args)) {
+    return [];
+  }
+
+  const result = [];
+
+  for (let i = 0; i < args.length; i++) {
+    const item =
+      String(args[i] || "").trim();
+
+    if (/^\d{1,2}$/.test(item)) {
+      result.push(item);
+
+      if (
+        args[i + 1] &&
+        /^(دقیقه|دقیقه‌ای|دقیقه ای|min|minute|minutes)$/i.test(
+          String(args[i + 1])
+        )
+      ) {
+        result.push(
+          String(args[i + 1])
+        );
+      }
+
+      continue;
+    }
+
+    if (
+      /^(دقیقه|دقیقه‌ای|دقیقه ای|min|minute|minutes)$/i.test(
+        item
+      )
+    ) {
+      continue;
+    }
+  }
+
+  return result;
+}
+
+
+// =====================================
+// ثبت فرمان‌های مدیریت
+// =====================================
+
+function registerModeration(bot) {
   if (!bot) return;
 
-  // -----------------------------------
+  // ادامه فرمان‌ها در قسمت ۵
+      }// =====================================
+// ادامه ثبت فرمان‌های مدیریت
+// =====================================
+
+function registerModeration(bot) {
+  if (!bot) return;
+
+
+  // ===================================
   // بن
-  // -----------------------------------
+  // ===================================
 
-  bot.hears(
-    /^بن(?:\s+(.+))?$/i,
-    async ctx => {
-      if (
-        !(await checkExecutor(ctx))
-      ) {
-        return;
-      }
+  bot.hears(/^بن(?:\s+(.+))?$/i, async ctx => {
+    if (!(await checkExecutor(ctx))) return;
 
-      const args =
-        getCommandArgs(ctx);
+    const args = getCommandArgs(ctx);
+    const target = resolveTarget(ctx, args);
 
-      const target =
-        resolveTarget(
-          ctx,
-          args
-        );
+    if (!(await checkTarget(ctx, target))) return;
 
-      if (
-        !(await checkTarget(
-          ctx,
-          target
-        ))
-      ) {
-        return;
-      }
+    const reason = getReasonFromArgs(args, false);
 
-      const reason =
-        args.length
-          ? args.join(" ")
-          : "";
-
-      await banUser(
-        ctx,
-        target,
-        reason
-      );
-    }
-  );
+    await banUser(
+      ctx,
+      target,
+      reason
+    );
+  });
 
 
-  // -----------------------------------
+  // ===================================
   // حذف بن
-  // -----------------------------------
+  // ===================================
 
-  bot.hears(
-    /^حذف\s*بن$/i,
-    async ctx => {
-      if (
-        !(await checkExecutor(ctx))
-      ) {
-        return;
-      }
+  bot.hears(/^حذف\s+بن(?:\s+(.+))?$/i, async ctx => {
+    if (!(await checkExecutor(ctx))) return;
 
-      const target =
-        resolveTarget(ctx);
+    const args = getCommandArgs(ctx);
+    const target = resolveTarget(ctx, args);
 
-      if (
-        !(await checkTarget(
-          ctx,
-          target
-        ))
-      ) {
-        return;
-      }
+    if (!(await checkTarget(ctx, target))) return;
 
-      await unbanUser(
-        ctx,
-        target
-      );
-    }
-  );
+    await unbanUser(
+      ctx,
+      target
+    );
+  });
 
 
-  // -----------------------------------
+  // ===================================
   // اخراج
-  // -----------------------------------
+  // ===================================
 
-  bot.hears(
-    /^اخراج(?:\s+(.+))?$/i,
-    async ctx => {
-      if (
-        !(await checkExecutor(ctx))
-      ) {
-        return;
-      }
+  bot.hears(/^اخراج(?:\s+(.+))?$/i, async ctx => {
+    if (!(await checkExecutor(ctx))) return;
 
-      const args =
-        getCommandArgs(ctx);
+    const args = getCommandArgs(ctx);
+    const target = resolveTarget(ctx, args);
 
-      const target =
-        resolveTarget(
-          ctx,
-          args
-        );
+    if (!(await checkTarget(ctx, target))) return;
 
-      if (
-        !(await checkTarget(
-          ctx,
-          target
-        ))
-      ) {
-        return;
-      }
+    const reason = getReasonFromArgs(args, false);
 
-      const reason =
-        args.length
-          ? args.join(" ")
-          : "";
-
-      await kickUser(
-        ctx,
-        target,
-        reason
-      );
-    }
-  );
+    await kickUser(
+      ctx,
+      target,
+      reason
+    );
+  });
 
 
-  // -----------------------------------
+  // ===================================
+  // سیک
+  // ===================================
+
+  bot.hears(/^سیک(?:\s+(.+))?$/i, async ctx => {
+    if (!(await checkExecutor(ctx))) return;
+
+    const args = getCommandArgs(ctx);
+    const target = resolveTarget(ctx, args);
+
+    if (!(await checkTarget(ctx, target))) return;
+
+    const reason = getReasonFromArgs(args, false);
+
+    await kickUser(
+      ctx,
+      target,
+      reason
+    );
+  });
+
+
+  // ===================================
   // سکوت
-  // -----------------------------------
+  // ===================================
 
-  bot.hears(
-    /^سکوت(?:\s+(.+))?$/i,
-    async ctx => {
-      if (
-        !(await checkExecutor(ctx))
-      ) {
-        return;
-      }
+  bot.hears(/^سکوت(?:\s+(.+))?$/i, async ctx => {
+    if (!(await checkExecutor(ctx))) return;
 
-      const args =
-        getCommandArgs(ctx);
+    const args = getCommandArgs(ctx);
 
-      const target =
-        resolveTarget(ctx);
+    const durationArgs =
+      getDurationArgs(args);
 
-      if (
-        !(await checkTarget(
-          ctx,
-          target
-        ))
-      ) {
-        return;
-      }
-
-      const durationArgs =
-        args.filter(
-          item =>
-            /^\d{1,2}$/.test(item) ||
-            /دقیقه|minute|min/i.test(
-              item
-            )
-        );
-
-      const duration =
-        parseMuteDuration(
-          durationArgs
-        );
-
-      if (!duration) {
-        await replyToCommand(
-          ctx,
-          "『𓆩 ★ مدت سکوت ★ 𓆪』\n\n" +
-            "ساعت: ۱ تا ۱۰\n" +
-            "دقیقه: ۱۰ تا ۴۵\n\n" +
-            "مثال:\n" +
-            "سکوت 1\n" +
-            "سکوت 5\n" +
-            "سکوت 10\n" +
-            "سکوت 15 دقیقه\n" +
-            "سکوت 30 دقیقه\n" +
-            "سکوت 45 دقیقه"
-        );
-
-        return;
-      }
-
-      const reason =
-        getReasonFromArgs(
-          args,
-          true
-        );
-
-      await muteUser(
-        ctx,
-        target,
-        duration,
-        reason
+    const duration =
+      parseMuteDuration(
+        durationArgs
       );
-    }
-  );
+
+    // سکوت بدون مدت کاملاً ساکت باشد
+    if (!duration) return;
+
+    const target =
+      resolveTarget(ctx);
+
+    if (!(await checkTarget(ctx, target))) return;
+
+    const reason =
+      getReasonFromArgs(
+        args,
+        true
+      );
+
+    await muteUser(
+      ctx,
+      target,
+      duration,
+      reason
+    );
+  });
 
 
-  // -----------------------------------
+  // ===================================
   // حذف سکوت
-  // -----------------------------------
+  // ===================================
 
-  bot.hears(
-    /^حذف\s*سکوت$/i,
-    async ctx => {
-      if (
-        !(await checkExecutor(ctx))
-      ) {
-        return;
-      }
+  bot.hears(/^حذف\s+سکوت(?:\s+(.+))?$/i, async ctx => {
+    if (!(await checkExecutor(ctx))) return;
 
-      const target =
-        resolveTarget(ctx);
+    const args = getCommandArgs(ctx);
+    const target = resolveTarget(ctx, args);
 
-      if (
-        !(await checkTarget(
-          ctx,
-          target
-        ))
-      ) {
-        return;
-      }
+    if (!(await checkTarget(ctx, target))) return;
 
-      await unmuteUser(
-        ctx,
-        target
-      );
-    }
-  );
+    await unmuteUser(
+      ctx,
+      target
+    );
+  });
 
 
-  // -----------------------------------
+  // ===================================
   // خفه
-  // -----------------------------------
+  // ===================================
 
-  bot.hears(
-    /^خفه(?:\s+(.+))?$/i,
-    async ctx => {
-      if (
-        !(await checkExecutor(ctx))
-      ) {
-        return;
-      }
+  bot.hears(/^خفه(?:\s+(.+))?$/i, async ctx => {
+    if (!(await checkExecutor(ctx))) return;
 
-      const args =
-        getCommandArgs(ctx);
+    const args = getCommandArgs(ctx);
 
-      const target =
-        resolveTarget(ctx);
+    const durationArgs =
+      getDurationArgs(args);
 
-      if (
-        !(await checkTarget(
-          ctx,
-          target
-        ))
-      ) {
-        return;
-      }
-
-      const durationArgs =
-        args.filter(
-          item =>
-            /^\d{1,2}$/.test(item) ||
-            /دقیقه|minute|min/i.test(
-              item
-            )
-        );
-
-      const duration =
-        parseMuteDuration(
-          durationArgs
-        );
-
-      if (!duration) {
-        await replyToCommand(
-          ctx,
-          "『𓆩 ★ مدت خفه ★ 𓆪』\n\n" +
-            "ساعت: ۱ تا ۱۰\n" +
-            "دقیقه: ۱۰ تا ۴۵"
-        );
-
-        return;
-      }
-
-      const reason =
-        getReasonFromArgs(
-          args,
-          true
-        );
-
-      await khafeUser(
-        ctx,
-        target,
-        duration,
-        reason
+    const duration =
+      parseMuteDuration(
+        durationArgs
       );
-    }
-  );
+
+    if (!duration) return;
+
+    const target =
+      resolveTarget(ctx);
+
+    if (!(await checkTarget(ctx, target))) return;
+
+    const reason =
+      getReasonFromArgs(
+        args,
+        true
+      );
+
+    await khafeUser(
+      ctx,
+      target,
+      duration,
+      reason
+    );
+  });
 
 
-  // -----------------------------------
+  // ===================================
   // حذف خفه
-  // -----------------------------------
+  // ===================================
 
-  bot.hears(
-    /^حذف\s*خفه$/i,
-    async ctx => {
-      if (
-        !(await checkExecutor(ctx))
-      ) {
-        return;
-      }
+  bot.hears(/^حذف\s+خفه(?:\s+(.+))?$/i, async ctx => {
+    if (!(await checkExecutor(ctx))) return;
 
-      const target =
-        resolveTarget(ctx);
+    const args = getCommandArgs(ctx);
+    const target = resolveTarget(ctx, args);
 
-      if (
-        !(await checkTarget(
-          ctx,
-          target
-        ))
-      ) {
-        return;
-      }
+    if (!(await checkTarget(ctx, target))) return;
 
-      await unkhafeUser(
-        ctx,
-        target
-      );
-    }
-  );
+    await unkhafeUser(
+      ctx,
+      target
+    );
+  });
 
 
-  // -----------------------------------
+  // ===================================
   // اخطار
-  // -----------------------------------
+  // ===================================
 
-  bot.hears(
-    /^اخطار(?:\s+(.+))?$/i,
-    async ctx => {
-      if (
-        !(await checkExecutor(ctx))
-      ) {
-        return;
-      }
+  bot.hears(/^اخطار(?:\s+(\d+))?(?:\s+(.+))?$/i, async ctx => {
+    if (!(await checkExecutor(ctx))) return;
 
-      const args =
-        getCommandArgs(ctx);
+    const args = getCommandArgs(ctx);
 
-      const target =
-        resolveTarget(ctx);
+    let count = 1;
 
-      if (
-        !(await checkTarget(
-          ctx,
-          target
-        ))
-      ) {
-        return;
-      }
-
-      const reason =
-        args.join(" ");
-
-      await warnUser(
-        ctx,
-        target,
-        reason
-      );
+    if (
+      args.length &&
+      /^\d+$/.test(args[0])
+    ) {
+      count = Number(args.shift());
     }
-  );
+
+    if (
+      !Number.isInteger(count) ||
+      count < 1
+    ) {
+      return;
+    }
+
+    const target =
+      resolveTarget(ctx);
+
+    if (!(await checkTarget(ctx, target))) return;
+
+    const reason =
+      args.join(" ").trim();
+
+    for (let i = 0; i < count; i++) {
+      const done =
+        await warnUser(
+          ctx,
+          target,
+          reason
+        );
+
+      if (!done) break;
+    }
+  });
 
 
-  // -----------------------------------
+  // ===================================
   // حذف اخطار
-  // -----------------------------------
+  // ===================================
 
-  bot.hears(
-    /^حذف\s*اخطار$/i,
-    async ctx => {
-      if (
-        !(await checkExecutor(ctx))
-      ) {
-        return;
-      }
+  bot.hears(/^حذف\s+اخطار(?:\s+(\d+))?$/i, async ctx => {
+    if (!(await checkExecutor(ctx))) return;
 
-      const target =
-        resolveTarget(ctx);
+    const args = getCommandArgs(ctx);
 
-      if (
-        !(await checkTarget(
+    let count = 1;
+
+    if (
+      args.length &&
+      /^\d+$/.test(args[0])
+    ) {
+      count = Number(args[0]);
+    }
+
+    if (
+      !Number.isInteger(count) ||
+      count < 1
+    ) {
+      return;
+    }
+
+    const target =
+      resolveTarget(ctx);
+
+    if (!(await checkTarget(ctx, target))) return;
+
+    for (let i = 0; i < count; i++) {
+      const done =
+        await unwarnUser(
           ctx,
           target
-        ))
-      ) {
-        return;
-      }
+        );
 
-      await unwarnUser(
-        ctx,
-        target
-      );
+      if (!done) break;
     }
-  );
+  });
 
 
-  // -----------------------------------
-  // لیست‌ها
-  // -----------------------------------
+  // ===================================
+  // تعداد اخطار
+  // ===================================
 
-  bot.hears(
-    /^لیست\s+بن$/i,
-    ctx =>
-      showModerationList(
-        ctx,
-        "ban"
-      )
-  );
+  bot.hears(/^تعداد\s+اخطار\s+(\d+)$/i, async ctx => {
+    if (!(await checkExecutor(ctx))) return;
 
-
-  bot.hears(
-    /^لیست\s+سکوت$/i,
-    ctx =>
-      showModerationList(
-        ctx,
-        "mute"
-      )
-  );
-
-
-  bot.hears(
-    /^لیست\s+خفه$/i,
-    ctx =>
-      showModerationList(
-        ctx,
-        "khafe"
-      )
-  );
-
-
-  bot.hears(
-    /^لیست\s+اخطار$/i,
-    ctx =>
-      showModerationList(
-        ctx,
-        "warning"
-      )
-  );
-
-
-  bot.hears(
-    /^لیست\s+اختیار$/i,
-    ctx =>
-      showModerationList(
-        ctx,
-        "permission"
-      )
-  );
-
-
-  bot.hears(
-    /^لیست\s+اخراج$/i,
-    ctx =>
-      showModerationList(
-        ctx,
-        "kick"
-      )
-  );
-
-
-  // -----------------------------------
-  // پاکسازی‌ها
-  // -----------------------------------
-
-  bot.hears(
-    /^پاکسازی\s+بن$/i,
-    ctx =>
-      clearModerationList(
-        ctx,
-        "ban"
-      )
-  );
-
-
-  bot.hears(
-    /^پاکسازی\s+سکوت$/i,
-    ctx =>
-      clearModerationList(
-        ctx,
-        "mute"
-      )
-  );
-
-
-  bot.hears(
-    /^پاکسازی\s+خفه$/i,
-    ctx =>
-      clearModerationList(
-        ctx,
-        "khafe"
-      )
-  );
-
-
-  bot.hears(
-    /^پاکسازی\s+اخطار$/i,
-    ctx =>
-      clearModerationList(
-        ctx,
-        "warning"
-      )
-  );
-
-
-  bot.hears(
-    /^پاکسازی\s+اختیار$/i,
-    ctx =>
-      clearModerationList(
-        ctx,
-        "permission"
-      )
-  );
-
-
-  bot.hears(
-    /^پاکسازی\s+اخراج$/i,
-    ctx =>
-      clearModerationList(
-        ctx,
-        "kick"
-      )
-  );
-
-
-  // -----------------------------------
-  // صفحه‌بندی
-  // -----------------------------------
-
-  bot.action(
-    /^mlist:(ban|mute|khafe|warning|permission|kick):(\d+):(\d+)$/,
-    async ctx => {
-      const type =
-        ctx.match[1];
-
-      const ownerId =
-        ctx.match[2];
-
-      const page =
-        Number(ctx.match[3]);
-
-      await changeModerationListPage(
-        ctx,
-        type,
-        ownerId,
-        page
+    const value =
+      Number(
+        ctx.match[1]
       );
+
+    if (
+      !Number.isInteger(value) ||
+      value < 1
+    ) {
+      return;
     }
-  );
+
+    const group =
+      getGroupData(ctx);
+
+    if (!group) return;
+
+    ensureModerationStorage(group);
+
+    group.moderation.warningSettings.maxWarnings =
+      value;
+
+    saveModeration(group);
+
+    await replyToCommand(
+      ctx,
+      `『𓆩 ★ تنظیم شد ★ 𓆪』\n\n` +
+      `حداکثر اخطار روی ${value} تنظیم شد.`
+    );
+  });
+
+
+  // ===================================
+  // تنظیم اخطار
+  // ===================================
+
+  bot.hears(/^تنظیم\s+اخطار\s+(بن|سکوت|خفه|هیچ)$/i, async ctx => {
+    if (!(await checkExecutor(ctx))) return;
+
+    const group =
+      getGroupData(ctx);
+
+    if (!group) return;
+
+    ensureModerationStorage(group);
+
+    const value =
+      String(ctx.match[1]);
+
+    let punishment = "none";
+
+    if (value === "بن") {
+      punishment = "ban";
+    }
+
+    if (value === "سکوت") {
+      punishment = "mute";
+    }
+
+    if (value === "خفه") {
+      punishment = "khafe";
+    }
+
+    group.moderation.warningSettings.punishment =
+      punishment;
+
+    saveModeration(group);
+
+    await replyToCommand(
+      ctx,
+      `『𓆩 ★ تنظیم اخطار ★ 𓆪』\n\n` +
+      `تنبیه اخطار روی «${value}» تنظیم شد.`
+    );
+  });
+
+
+  // ===================================
+  // لیست سکوت
+  // ===================================
+
+  bot.hears(/^لیست\s+سکوت$/i, async ctx => {
+    if (!(await checkExecutor(ctx))) return;
+
+    await showModerationList(
+      ctx,
+      "mutes",
+      "『𓆩 ★ لیست سکوت ★ 𓆪』"
+    );
+  });
+
+
+  // ===================================
+  // لیست خفه
+  // ===================================
+
+  bot.hears(/^لیست\s+خفه$/i, async ctx => {
+    if (!(await checkExecutor(ctx))) return;
+
+    await showModerationList(
+      ctx,
+      "khafe",
+      "『𓆩 ★ لیست خفه ★ 𓆪』"
+    );
+  });
+
+
+  // ===================================
+  // لیست بن
+  // ===================================
+
+  bot.hears(/^لیست\s+بن$/i, async ctx => {
+    if (!(await checkExecutor(ctx))) return;
+
+    await showModerationList(
+      ctx,
+      "bans",
+      "『𓆩 ★ لیست بن ★ 𓆪』"
+    );
+  });
+
+
+  // ===================================
+  // لیست اخطار
+  // ===================================
+
+  bot.hears(/^لیست\s+اخطار$/i, async ctx => {
+    if (!(await checkExecutor(ctx))) return;
+
+    await showModerationList(
+      ctx,
+      "warnings",
+      "『𓆩 ★ لیست اخطار ★ 𓆪』"
+    );
+  });
+
+
+  // ===================================
+  // پاکسازی سکوت
+  // ===================================
+
+  bot.hears(/^پاکسازی\s+سکوت$/i, async ctx => {
+    if (!(await checkExecutor(ctx))) return;
+
+    const group =
+      getGroupData(ctx);
+
+    if (!group) return;
+
+    ensureModerationStorage(group);
+
+    const removed =
+      cleanExpiredMutes(group);
+
+    saveModeration(group);
+
+    await replyToCommand(
+      ctx,
+      `『𓆩 ★ پاکسازی سکوت ★ 𓆪』\n\n` +
+      `تعداد ${removed} سکوت منقضی پاکسازی شد.`
+    );
+  });
+
+
+  // ===================================
+  // پاکسازی خفه
+  // ===================================
+
+  bot.hears(/^پاکسازی\s+خفه$/i, async ctx => {
+    if (!(await checkExecutor(ctx))) return;
+
+    const group =
+      getGroupData(ctx);
+
+    if (!group) return;
+
+    ensureModerationStorage(group);
+
+    const removed =
+      cleanExpiredKhafe(group);
+
+    saveModeration(group);
+
+    await replyToCommand(
+      ctx,
+      `『𓆩 ★ پاکسازی خفه ★ 𓆪』\n\n` +
+      `تعداد ${removed} خفه منقضی پاکسازی شد.`
+    );
+  });
+
+
+  // ===================================
+  // پاکسازی مدیریت
+  // ===================================
+
+  bot.hears(/^پاکسازی\s+(همه|مدیریت)$/i, async ctx => {
+    if (!(await checkExecutor(ctx))) return;
+
+    const group =
+      getGroupData(ctx);
+
+    if (!group) return;
+
+    ensureModerationStorage(group);
+
+    const mutes =
+      cleanExpiredMutes(group);
+
+    const khafe =
+      cleanExpiredKhafe(group);
+
+    saveModeration(group);
+
+    await replyToCommand(
+      ctx,
+      `『𓆩 ★ پاکسازی انجام شد ★ 𓆪』\n\n` +
+      `🔇 سکوت: ${mutes}\n` +
+      `🔕 خفه: ${khafe}`
+    );
+  });
 }
 
 
 // =====================================
-// ثبت اکشن‌های صفحه‌بندی جداگانه
+// گرفتن لیست مدیریت
 // =====================================
 
-function registerModerationActions(
-  bot
+function getModerationList(
+  group,
+  type
 ) {
+  if (!group) return [];
+
+  ensureModerationStorage(group);
+
+  if (
+    !Array.isArray(
+      group.moderation[type]
+    )
+  ) {
+    return [];
+  }
+
+  return group.moderation[type];
+}
+
+
+// =====================================
+// نمایش لیست مدیریت
+// =====================================
+
+async function showModerationList(
+  ctx,
+  type,
+  title,
+  page = 0
+) {
+  const group =
+    getGroupData(ctx);
+
+  if (!group) return;
+
+  ensureModerationStorage(group);
+
+  if (type === "mutes") {
+    cleanExpiredMutes(group);
+  }
+
+  if (type === "khafe") {
+    cleanExpiredKhafe(group);
+  }
+
+  saveModeration(group);
+
+  const list =
+    getModerationList(
+      group,
+      type
+    );
+
+  const total =
+    list.length;
+
+  const totalPages =
+    Math.max(
+      1,
+      Math.ceil(
+        total / LIST_PAGE_SIZE
+      )
+    );
+
+  if (page < 0) page = 0;
+
+  if (page >= totalPages) {
+    page = totalPages - 1;
+  }
+
+  const start =
+    page * LIST_PAGE_SIZE;
+
+  const items =
+    list.slice(
+      start,
+      start + LIST_PAGE_SIZE
+    );
+
+  let text =
+    `${title}\n\n`;
+
+  if (!items.length) {
+    text += "لیست خالی است.";
+  } else {
+    items.forEach(
+      (record, index) => {
+        const number =
+          start + index + 1;
+
+        const label =
+          record.username
+            ? `@${String(record.username).replace(/^@/, "")}`
+            : getUserName(record);
+
+        text +=
+          `${number}. ${label}\n`;
+
+        text +=
+          `🆔 ${record.userId}\n`;
+
+        if (record.until) {
+          text +=
+            `⏳ ${remainingDuration(record.until)}\n`;
+        }
+
+        if (
+          type === "warnings"
+        ) {
+          text +=
+            `⚠️ اخطار: ${record.count || 0}\n`;
+        }
+
+        text += "\n";
+      }
+    );
+  }
+
+  text +=
+    `صفحه ${page + 1} از ${totalPages}`;
+
+  const buttons = [];
+
+  if (page > 0) {
+    buttons.push({
+      text: "‹ قبلی",
+      callback_data:
+        `modlist:${type}:${page - 1}`
+    });
+  }
+
+  if (page < totalPages - 1) {
+    buttons.push({
+      text: "بعدی ›",
+      callback_data:
+        `modlist:${type}:${page + 1}`
+    });
+  }
+
+  const keyboard =
+    buttons.length
+      ? [buttons]
+      : [];
+
+  try {
+    await ctx.reply(
+      text,
+      {
+        parse_mode: "HTML",
+        reply_markup: {
+          inline_keyboard:
+            keyboard
+        }
+      }
+    );
+  } catch {
+    await ctx.reply(text);
+  }
+}
+
+
+// =====================================
+// اکشن‌های لیست
+// =====================================
+
+function registerModerationActions(bot) {
   if (!bot) return;
 
   bot.action(
-    /^mlist:(ban|mute|khafe|warning|permission|kick):(\d+):(\d+)$/,
+    /^modlist:(mutes|khafe|bans|warnings):(\d+)$/,
     async ctx => {
-      const type =
-        ctx.match[1];
+      try {
+        if (!(await checkExecutor(ctx))) {
+          try {
+            await ctx.answerCbQuery();
+          } catch {}
+          return;
+        }
 
-      const ownerId =
-        ctx.match[2];
+        const type =
+          ctx.match[1];
 
-      const page =
-        Number(ctx.match[3]);
+        const page =
+          Number(ctx.match[2]) || 0;
 
-      await changeModerationListPage(
-        ctx,
-        type,
-        ownerId,
-        page
-      );
+        const titles = {
+          mutes:
+            "『𓆩 ★ لیست سکوت ★ 𓆪』",
+          khafe:
+            "『𓆩 ★ لیست خفه ★ 𓆪』",
+          bans:
+            "『𓆩 ★ لیست بن ★ 𓆪』",
+          warnings:
+            "『𓆩 ★ لیست اخطار ★ 𓆪』"
+        };
+
+        const group =
+          getGroupData(ctx);
+
+        if (!group) {
+          try {
+            await ctx.answerCbQuery();
+          } catch {}
+          return;
+        }
+
+        ensureModerationStorage(group);
+
+        if (type === "mutes") {
+          cleanExpiredMutes(group);
+        }
+
+        if (type === "khafe") {
+          cleanExpiredKhafe(group);
+        }
+
+        saveModeration(group);
+
+        const list =
+          getModerationList(
+            group,
+            type
+          );
+
+        const totalPages =
+          Math.max(
+            1,
+            Math.ceil(
+              list.length /
+              LIST_PAGE_SIZE
+            )
+          );
+
+        let currentPage = page;
+
+        if (
+          currentPage < 0
+        ) {
+          currentPage = 0;
+        }
+
+        if (
+          currentPage >= totalPages
+        ) {
+          currentPage =
+            totalPages - 1;
+        }
+
+        const start =
+          currentPage *
+          LIST_PAGE_SIZE;
+
+        const items =
+          list.slice(
+            start,
+            start + LIST_PAGE_SIZE
+          );
+
+        let text =
+          `${titles[type]}\n\n`;
+
+        if (!items.length) {
+          text +=
+            "لیست خالی است.";
+        } else {
+          items.forEach(
+            (record, index) => {
+              const number =
+                start + index + 1;
+
+              const label =
+                record.username
+                  ? `@${String(record.username).replace(/^@/, "")}`
+                  : getUserName(record);
+
+              text +=
+                `${number}. ${label}\n`;
+
+              text +=
+                `🆔 ${record.userId}\n`;
+
+              if (record.until) {
+                text +=
+                  `⏳ ${remainingDuration(record.until)}\n`;
+              }
+
+              if (
+                type === "warnings"
+              ) {
+                text +=
+                  `⚠️ اخطار: ${record.count || 0}\n`;
+              }
+
+              text += "\n";
+            }
+          );
+        }
+
+        text +=
+          `صفحه ${currentPage + 1} از ${totalPages}`;
+
+        const buttons = [];
+
+        if (
+          currentPage > 0
+        ) {
+          buttons.push({
+            text: "‹ قبلی",
+            callback_data:
+              `modlist:${type}:${currentPage - 1}`
+          });
+        }
+
+        if (
+          currentPage <
+          totalPages - 1
+        ) {
+          buttons.push({
+            text: "بعدی ›",
+            callback_data:
+              `modlist:${type}:${currentPage + 1}`
+          });
+        }
+
+        try {
+          await ctx.editMessageText(
+            text,
+            {
+              parse_mode: "HTML",
+              reply_markup: {
+                inline_keyboard:
+                  buttons.length
+                    ? [buttons]
+                    : []
+              }
+            }
+          );
+        } catch {}
+
+        try {
+          await ctx.answerCbQuery();
+        } catch {}
+      } catch {
+        try {
+          await ctx.answerCbQuery();
+        } catch {}
+      }
     }
   );
 }
 
 
 // =====================================
-// خروجی‌ها
+// خروجی فایل
 // =====================================
 
 module.exports = {
   registerModeration,
   registerModerationActions,
 
+  isGroupChat,
+  getGroupData,
+
+  ensureModerationStorage,
+  saveModeration,
+
+  rememberUser,
+  rememberUserInGroup,
+  learnUserFromMessage,
+
+  getUserName,
+  mentionUser,
+  getListUserLabel,
+
+  getTargetMessage,
+  getReplyTarget,
+  getTargetReplyId,
+
+  resolveTarget,
+
+  getMemberRole,
+  isOwner,
+  isAdmin,
+
+  checkExecutor,
+  checkTarget,
+  checkBotPermissions,
+
+  parseMuteDuration,
+  durationText,
+  remainingDuration,
+
+  cleanExpiredMutes,
+  cleanExpiredKhafe,
+
   banUser,
   unbanUser,
-
   kickUser,
 
   muteUser,
@@ -4094,18 +3486,6 @@ module.exports = {
   warnUser,
   unwarnUser,
 
-  showModerationList,
-  clearModerationList,
-
-  resolveTarget,
-  getReplyTarget,
-
-  rememberUser,
-  rememberUserInGroup,
-
-  parseMuteDuration,
-  durationText,
-
-  ensureModerationStorage,
-  getModerationList
+  getModerationList,
+  showModerationList
 };
