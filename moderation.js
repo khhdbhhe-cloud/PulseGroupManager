@@ -43,12 +43,19 @@ function rememberUser(user) {
 
 // =====================================
 // نام کاربر
+// اول username
+// بعد اسم و فامیل
 // =====================================
 
 function getUserName(user) {
 
   if (!user) {
     return "کاربر";
+  }
+
+  // username اولویت اول
+  if (user.username) {
+    return `@${user.username}`;
   }
 
   const first =
@@ -60,12 +67,7 @@ function getUserName(user) {
   const full =
     `${first} ${last}`.trim();
 
-  return (
-    full ||
-    (user.username
-      ? `@${user.username}`
-      : "کاربر")
-  );
+  return full || "کاربر";
 }
 
 
@@ -119,7 +121,6 @@ function isGroupChat(ctx) {
 
 // =====================================
 // پیام هدف
-// مهم‌ترین قسمت Reply
 // =====================================
 
 function getTargetMessage(ctx) {
@@ -174,7 +175,7 @@ function getTargetReplyId(ctx) {
 
 
 // =====================================
-// پاسخ به پیام ریپلای‌شده
+// پاسخ به پیام هدف
 // =====================================
 
 async function replyToTarget(
@@ -205,7 +206,7 @@ async function replyToTarget(
 
 
 // =====================================
-// دریافت نقش واقعی کاربر از تلگرام
+// دریافت نقش واقعی کاربر
 // =====================================
 
 async function getMemberRole(
@@ -308,16 +309,7 @@ async function isAdmin(
 
 
 // =====================================
-// بررسی دسترسی مدیر اجراکننده
-//
-// کاربر عادی:
-// ❌ هیچ دسترسی مدیریتی ندارد
-//
-// مدیر:
-// ✅ اجازه اجرای دستورات مدیریتی دارد
-//
-// مالک:
-// ✅ اجازه کامل دارد
+// بررسی اجراکننده
 // =====================================
 
 async function checkExecutor(
@@ -332,7 +324,6 @@ async function checkExecutor(
     !ctx.from ||
     !ctx.from.id
   ) {
-
     return false;
   }
 
@@ -342,25 +333,13 @@ async function checkExecutor(
       ctx.from.id
     );
 
-  // -------------------------------
-  // مالک
-  // -------------------------------
-
   if (role === "owner") {
     return true;
   }
 
-  // -------------------------------
-  // مدیر
-  // -------------------------------
-
   if (role === "admin") {
     return true;
   }
-
-  // -------------------------------
-  // کاربر عادی
-  // -------------------------------
 
   await ctx.reply(
     "『𓆩 ★ شما دسترسی مدیریت این ربات را ندارید ★ 𓆪』"
@@ -551,13 +530,11 @@ function findKnownUserByName(
         .toLowerCase();
 
     const fullName =
-      getUserName(user)
-        .toLowerCase();
+      `${first} ${last}`.trim();
 
     if (
       fullName === search ||
-      first === search ||
-      `${first} ${last}`.trim() === search
+      first === search
     ) {
 
       return user;
@@ -606,7 +583,7 @@ function getTextMentionUser(
 
 
 // =====================================
-// پیدا کردن یوزرنیم داخل متن پیام
+// پیدا کردن یوزرنیم داخل متن
 // =====================================
 
 function getUsernameFromText(
@@ -619,7 +596,7 @@ function getUsernameFromText(
 
   const match =
     String(text).match(
-      /(^|\s)@([A-Za-z0-9_]{5,32})\b/
+      /(^|\s)@([A-Za-z0-9_]{5,32})(?=\s|$)/
     );
 
   if (!match) {
@@ -631,7 +608,7 @@ function getUsernameFromText(
 
 
 // =====================================
-// پیدا کردن ID داخل متن پیام
+// پیدا کردن ID داخل متن
 // =====================================
 
 function getIdFromText(
@@ -657,6 +634,13 @@ function getIdFromText(
 
 // =====================================
 // تشخیص هدف از محتوای Reply
+//
+// خیلی مهم:
+// اگر پیام Reply شده @username داشته باشد
+// و username شناخته شده باشد، همان کاربر هدف است.
+//
+// اگر username پیدا نشود:
+// ❌ هرگز فرستنده پیام هدف جایگزین نمی‌شود.
 // =====================================
 
 function resolveTargetFromReplyContent(
@@ -670,6 +654,11 @@ function resolveTargetFromReplyContent(
     return null;
   }
 
+
+  // -----------------------------------
+  // text_mention
+  // -----------------------------------
+
   const mentionedUser =
     getTextMentionUser(message);
 
@@ -678,13 +667,21 @@ function resolveTargetFromReplyContent(
     mentionedUser.id
   ) {
 
+    rememberUser(mentionedUser);
+
     return mentionedUser;
   }
+
 
   const text =
     message.text ||
     message.caption ||
     "";
+
+
+  // -----------------------------------
+  // username
+  // -----------------------------------
 
   const username =
     getUsernameFromText(text);
@@ -694,10 +691,28 @@ function resolveTargetFromReplyContent(
     const user =
       findKnownUserByUsername(username);
 
-    if (user) {
+    if (
+      user &&
+      user.id
+    ) {
+
+      rememberUser(user);
+
       return user;
     }
+
+    // خیلی مهم:
+    // username پیدا نشد.
+    // اینجا null برمی‌گردانیم تا
+    // resolveTarget دیگر به فرستنده
+    // پیام برنگردد.
+    return null;
   }
+
+
+  // -----------------------------------
+  // ID
+  // -----------------------------------
 
   const id =
     getIdFromText(text);
@@ -707,9 +722,17 @@ function resolveTargetFromReplyContent(
     const user =
       findKnownUserById(id);
 
-    if (user) {
+    if (
+      user &&
+      user.id
+    ) {
+
+      rememberUser(user);
+
       return user;
     }
+
+    return null;
   }
 
   return null;
@@ -720,16 +743,24 @@ function resolveTargetFromReplyContent(
 // تشخیص کاربر هدف
 //
 // اولویت:
-// 1. هدف صریح
-// 2. اطلاعات داخل Reply
+// 1. هدف صریح دستور
+// 2. username / ID داخل Reply
 // 3. خود کاربر Reply شده
 //
+// نکته:
+// اگر Reply شامل username باشد ولی
+// username شناخته نشود، دیگر به sender
+// برنمی‌گردیم.
 // =====================================
 
 function resolveTarget(
   ctx,
   args = []
 ) {
+
+  // -----------------------------------
+  // هدف صریح داخل دستور
+  // -----------------------------------
 
   if (
     args &&
@@ -738,6 +769,7 @@ function resolveTarget(
 
     const first =
       String(args[0]).trim();
+
 
     if (/^-?\d+$/.test(first)) {
 
@@ -749,6 +781,7 @@ function resolveTarget(
       }
     }
 
+
     if (
       first.startsWith("@")
     ) {
@@ -759,7 +792,12 @@ function resolveTarget(
       if (user) {
         return user;
       }
+
+      // username ناشناخته:
+      // نباید خود فرستنده انتخاب شود.
+      return null;
     }
+
 
     const byName =
       findKnownUserByName(
@@ -770,6 +808,14 @@ function resolveTarget(
       return byName;
     }
   }
+
+
+  // -----------------------------------
+  // هدف داخل محتوای Reply
+  // -----------------------------------
+
+  const targetMessage =
+    getTargetMessage(ctx);
 
   const contentTarget =
     resolveTargetFromReplyContent(ctx);
@@ -783,6 +829,44 @@ function resolveTarget(
 
     return contentTarget;
   }
+
+
+  // -----------------------------------
+  // اگر پیام Reply شده username/ID داشت
+  // ولی هدف پیدا نشد،
+  // نباید sender را هدف بگیریم.
+  // -----------------------------------
+
+  if (targetMessage) {
+
+    const text =
+      targetMessage.text ||
+      targetMessage.caption ||
+      "";
+
+    const username =
+      getUsernameFromText(text);
+
+    const id =
+      getIdFromText(text);
+
+    const textMention =
+      getTextMentionUser(targetMessage);
+
+    if (
+      username ||
+      id ||
+      textMention
+    ) {
+
+      return null;
+    }
+  }
+
+
+  // -----------------------------------
+  // Reply مستقیم روی پیام کاربر
+  // -----------------------------------
 
   const replyUser =
     getReplyTarget(ctx);
@@ -798,17 +882,24 @@ function resolveTarget(
   }
 
   return null;
-}// =====================================
+}
+
+
+// =====================================
 // بررسی کاربر هدف
 //
 // مالک → غیرقابل مدیریت
 // مدیر → غیرقابل مدیریت
 // کاربر عادی → قابل مدیریت
+//
+// allowRemoved = true
+// برای حذف بن / حذف سیک
 // =====================================
 
 async function checkTarget(
   ctx,
-  target
+  target,
+  allowRemoved = false
 ) {
 
   if (
@@ -816,8 +907,9 @@ async function checkTarget(
     !target.id
   ) {
 
-    await ctx.reply(
-      "『𓆩 ★ روی پیام کاربر Reply کن ★ 𓆪』"
+    await replyToTarget(
+      ctx,
+      "『𓆩 ★ کاربر هدف پیدا نشد؛ روی پیام کاربر یا پیام @username ریپلای کن ★ 𓆪』"
     );
 
     return false;
@@ -844,7 +936,7 @@ async function checkTarget(
 
 
   // -----------------------------------
-  // دریافت نقش واقعی هدف
+  // نقش واقعی هدف
   // -----------------------------------
 
   const role =
@@ -855,7 +947,7 @@ async function checkTarget(
 
 
   // -----------------------------------
-  // مالک گروه
+  // مالک
   // -----------------------------------
 
   if (role === "owner") {
@@ -870,7 +962,7 @@ async function checkTarget(
 
 
   // -----------------------------------
-  // مدیر گروه
+  // مدیر
   // -----------------------------------
 
   if (role === "admin") {
@@ -881,6 +973,20 @@ async function checkTarget(
     );
 
     return false;
+  }
+
+
+  // -----------------------------------
+  // حذف بن / حذف سیک
+  // کاربر kicked مجاز است
+  // -----------------------------------
+
+  if (
+    role === "kicked" &&
+    allowRemoved
+  ) {
+
+    return true;
   }
 
 
@@ -902,10 +1008,6 @@ async function checkTarget(
     return false;
   }
 
-
-  // -----------------------------------
-  // کاربر عادی
-  // -----------------------------------
 
   return true;
 }
@@ -968,10 +1070,7 @@ function durationText(
   }
 
   return `${hours} ساعت`;
-}
-
-
-// =====================================
+    }// =====================================
 // BAN
 // =====================================
 
@@ -980,14 +1079,12 @@ async function banUser(
   target
 ) {
 
-  // اول مدیر بودن اجراکننده
   if (
     !await checkExecutor(ctx)
   ) {
     return false;
   }
 
-  // بعد دسترسی ربات
   if (
     !await checkBotPermissions(
       ctx,
@@ -997,7 +1094,6 @@ async function banUser(
     return false;
   }
 
-  // بعد بررسی هدف
   if (
     !await checkTarget(
       ctx,
@@ -1016,7 +1112,10 @@ async function banUser(
 
     await replyToTarget(
       ctx,
-      `『𓆩 ★ کاربر ${mentionUser(target)} بن شد ★ 𓆪』`
+      `『𓆩 ★ کاربر ${mentionUser(target)} بن شد ★ 𓆪』`,
+      {
+        parse_mode: "HTML"
+      }
     );
 
     return true;
@@ -1065,7 +1164,8 @@ async function unbanUser(
   if (
     !await checkTarget(
       ctx,
-      target
+      target,
+      true
     )
   ) {
     return false;
@@ -1083,7 +1183,10 @@ async function unbanUser(
 
     await replyToTarget(
       ctx,
-      `『𓆩 ★ بن کاربر ${mentionUser(target)} حذف شد ★ 𓆪』`
+      `『𓆩 ★ بن کاربر ${mentionUser(target)} حذف شد ★ 𓆪』`,
+      {
+        parse_mode: "HTML"
+      }
     );
 
     return true;
@@ -1187,7 +1290,10 @@ async function kickUser(
 
     await replyToTarget(
       ctx,
-      `『𓆩 ★ کاربر ${mentionUser(target)} اخراج شد ★ 𓆪』`
+      `『𓆩 ★ کاربر ${mentionUser(target)} اخراج شد ★ 𓆪』`,
+      {
+        parse_mode: "HTML"
+      }
     );
 
     return true;
@@ -1282,7 +1388,10 @@ async function muteUser(
 
     await replyToTarget(
       ctx,
-      `『𓆩 ★ کاربر ${mentionUser(target)} ${durationText(hours)} سکوت شد ★ 𓆪』`
+      `『𓆩 ★ کاربر ${mentionUser(target)} ${durationText(hours)} سکوت شد ★ 𓆪』`,
+      {
+        parse_mode: "HTML"
+      }
     );
 
     return true;
@@ -1364,7 +1473,10 @@ async function unmuteUser(
 
     await replyToTarget(
       ctx,
-      `『𓆩 ★ سکوت کاربر ${mentionUser(target)} حذف شد ★ 𓆪』`
+      `『𓆩 ★ سکوت کاربر ${mentionUser(target)} حذف شد ★ 𓆪』`,
+      {
+        parse_mode: "HTML"
+      }
     );
 
     return true;
@@ -1771,7 +1883,7 @@ function registerModerationActions(
   registerMuteCommands(bot);
 
   registerKhafeCommands(bot);
-}// =====================================
+        }// =====================================
 // تنظیمات اخطار
 // =====================================
 
@@ -2070,7 +2182,6 @@ function registerWarningCommands(
         return;
       }
 
-      // فقط مدیر و مالک
       if (
         !await checkExecutor(ctx)
       ) {
@@ -2094,14 +2205,14 @@ function registerWarningCommands(
         !target.id
       ) {
 
-        await ctx.reply(
+        await replyToTarget(
+          ctx,
           "『𓆩 ★ روی پیام کاربر Reply کن و اخطار را بفرست ★ 𓆪』"
         );
 
         return;
       }
 
-      // مالک / مدیر / کاربر عادی
       if (
         !await checkTarget(
           ctx,
@@ -2136,10 +2247,12 @@ function registerWarningCommands(
 
       await replyToTarget(
         ctx,
-        `『𓆩 ⚠️ کاربر ${mentionUser(target)} اخطار گرفت\n\nتعداد اخطار: ${total} از ${settings.maxWarnings} 𓆪』`
+        `『𓆩 ⚠️ کاربر ${mentionUser(target)} اخطار گرفت\n\nتعداد اخطار: ${total} از ${settings.maxWarnings} 𓆪』`,
+        {
+          parse_mode: "HTML"
+        }
       );
 
-      // رسیدن به سقف اخطار
       if (
         total >=
         settings.maxWarnings
@@ -2174,7 +2287,6 @@ function registerWarningCommands(
         return;
       }
 
-      // فقط مدیر و مالک
       if (
         !await checkExecutor(ctx)
       ) {
@@ -2198,7 +2310,8 @@ function registerWarningCommands(
         !target.id
       ) {
 
-        await ctx.reply(
+        await replyToTarget(
+          ctx,
           "『𓆩 ★ روی پیام کاربر Reply کن و حذف اخطار را بفرست ★ 𓆪』"
         );
 
@@ -2227,7 +2340,10 @@ function registerWarningCommands(
 
         await replyToTarget(
           ctx,
-          `『𓆩 ★ ${mentionUser(target)} اخطاری ندارد ★ 𓆪』`
+          `『𓆩 ★ ${mentionUser(target)} اخطاری ندارد ★ 𓆪』`,
+          {
+            parse_mode: "HTML"
+          }
         );
 
         return;
@@ -2253,7 +2369,10 @@ function registerWarningCommands(
 
       await replyToTarget(
         ctx,
-        `『𓆩 ★ اخطار ${mentionUser(target)} حذف شد\n\nتعداد اخطار باقی‌مانده: ${remaining} 𓆪』`
+        `『𓆩 ★ اخطار ${mentionUser(target)} حذف شد\n\nتعداد اخطار باقی‌مانده: ${remaining} 𓆪』`,
+        {
+          parse_mode: "HTML"
+        }
       );
     }
   );
@@ -2370,7 +2489,7 @@ function registerWarningCommands(
       saveDB();
 
       await ctx.reply(
-        "『𓆩 ★ مجازات اخطار روی سکوت تنظیم شد ★ 𓆪』"
+        "『𓆩 ★ مجازات اخطار روی سکوت تنظیم شد ★ 𓆪"
       );
     }
   );
@@ -2378,8 +2497,6 @@ function registerWarningCommands(
 
   // ===================================
   // تنظیم مدت اخطار
-  // مثال:
-  // تنظیم مدت اخطار 60
   // ===================================
 
   bot.hears(
@@ -2454,7 +2571,8 @@ function registerWarningCommands(
         !target.id
       ) {
 
-        await ctx.reply(
+        await replyToTarget(
+          ctx,
           "『𓆩 ★ روی پیام کاربر Reply کن ★ 𓆪』"
         );
 
@@ -2484,7 +2602,10 @@ function registerWarningCommands(
 
       await replyToTarget(
         ctx,
-        `『𓆩 ⚠️ اخطارهای ${mentionUser(target)}\n\nتعداد: ${count} از ${settings.maxWarnings} 𓆪』`
+        `『𓆩 ⚠️ اخطارهای ${mentionUser(target)}\n\nتعداد: ${count} از ${settings.maxWarnings} 𓆪』`,
+        {
+          parse_mode: "HTML"
+        }
       );
     }
   );
@@ -2538,7 +2659,6 @@ function registerWarningCommands(
         return;
       }
 
-      // شناسه هم فقط برای مدیر و مالک
       if (
         !await checkExecutor(ctx)
       ) {
@@ -2556,7 +2676,8 @@ function registerWarningCommands(
         !target.id
       ) {
 
-        await ctx.reply(
+        await replyToTarget(
+          ctx,
           "『𓆩 ★ روی پیام کاربر Reply کن ★ 𓆪』"
         );
 
@@ -2592,6 +2713,10 @@ function registerModeration(
 
       try {
 
+        // ---------------------------------
+        // فرستنده هر پیام
+        // ---------------------------------
+
         if (
           ctx.from
         ) {
@@ -2600,6 +2725,11 @@ function registerModeration(
             ctx.from
           );
         }
+
+
+        // ---------------------------------
+        // فرستنده پیام Reply شده
+        // ---------------------------------
 
         if (
           ctx.message &&
@@ -2612,9 +2742,10 @@ function registerModeration(
           );
         }
 
-        // -------------------------------
-        // ذخیره کاربران text_mention
-        // -------------------------------
+
+        // ---------------------------------
+        // text_mention داخل پیام Reply
+        // ---------------------------------
 
         if (
           ctx.message &&
