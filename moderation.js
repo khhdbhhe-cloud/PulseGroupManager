@@ -67,7 +67,7 @@ function getUserName(user) {
 }
 
 // =====================================
-// تبدیل متن برای HTML
+// HTML
 // =====================================
 
 function escapeHtml(text) {
@@ -90,7 +90,9 @@ function mentionUser(user) {
   }
 
   const name =
-    escapeHtml(getUserName(user));
+    escapeHtml(
+      getUserName(user)
+    );
 
   return `<a href="tg://user?id=${user.id}">${name}</a>`;
 }
@@ -133,14 +135,14 @@ function getTargetMessage(ctx) {
 
 function getReplyTarget(ctx) {
 
-  const targetMessage =
+  const message =
     getTargetMessage(ctx);
 
   if (
-    targetMessage &&
-    targetMessage.from
+    message &&
+    message.from
   ) {
-    return targetMessage.from;
+    return message.from;
   }
 
   return null;
@@ -152,18 +154,18 @@ function getReplyTarget(ctx) {
 
 function getTargetReplyId(ctx) {
 
-  const targetMessage =
+  const message =
     getTargetMessage(ctx);
 
-  if (!targetMessage) {
+  if (!message) {
     return null;
   }
 
-  return targetMessage.message_id || null;
+  return message.message_id || null;
 }
 
 // =====================================
-// پاسخ حتماً Reply
+// جواب حتماً Reply
 // =====================================
 
 async function replyToTarget(
@@ -193,7 +195,8 @@ async function replyToTarget(
 }
 
 // =====================================
-// پاسخ عادی یا Reply
+// پاسخ عادی فقط برای پیام‌های خطایی
+// اگر Reply باشد، باز هم Reply می‌کند
 // =====================================
 
 async function replyOrNormal(
@@ -202,7 +205,10 @@ async function replyOrNormal(
   extra = {}
 ) {
 
-  if (getTargetReplyId(ctx)) {
+  if (
+    getTargetReplyId(ctx)
+  ) {
+
     return replyToTarget(
       ctx,
       text,
@@ -217,7 +223,7 @@ async function replyOrNormal(
 }
 
 // =====================================
-// دریافت نقش واقعی کاربر
+// نقش کاربر
 // =====================================
 
 async function getMemberRole(
@@ -241,11 +247,15 @@ async function getMemberRole(
       return "unknown";
     }
 
-    if (member.status === "creator") {
+    if (
+      member.status === "creator"
+    ) {
       return "owner";
     }
 
-    if (member.status === "administrator") {
+    if (
+      member.status === "administrator"
+    ) {
       return "admin";
     }
 
@@ -256,11 +266,15 @@ async function getMemberRole(
       return "member";
     }
 
-    if (member.status === "left") {
+    if (
+      member.status === "left"
+    ) {
       return "left";
     }
 
-    if (member.status === "kicked") {
+    if (
+      member.status === "kicked"
+    ) {
       return "kicked";
     }
 
@@ -278,7 +292,7 @@ async function getMemberRole(
 }
 
 // =====================================
-// مالک گروه
+// مالک
 // =====================================
 
 async function isOwner(
@@ -286,17 +300,16 @@ async function isOwner(
   userId
 ) {
 
-  const role =
+  return (
     await getMemberRole(
       ctx,
       userId
-    );
-
-  return role === "owner";
+    )
+  ) === "owner";
 }
 
 // =====================================
-// مدیر گروه
+// مدیر
 // =====================================
 
 async function isAdmin(
@@ -317,7 +330,8 @@ async function isAdmin(
 }
 
 // =====================================
-// بررسی دسترسی اجراکننده
+// بررسی اجراکننده
+// ممبر عادی کاملاً بی‌صدا
 // =====================================
 
 async function checkExecutor(
@@ -341,23 +355,23 @@ async function checkExecutor(
       ctx.from.id
     );
 
+  // =====================================
+  // ممبر عادی
+  // هیچ پاسخی نده
+  // =====================================
+
   if (
-    role === "owner" ||
-    role === "admin"
+    role !== "owner" &&
+    role !== "admin"
   ) {
-    return true;
+    return false;
   }
 
-  await replyOrNormal(
-    ctx,
-    "『𓆩 ★ شما دسترسی مدیریت این ربات را ندارید ★ 𓆪』"
-  );
-
-  return false;
+  return true;
 }
 
 // =====================================
-// بررسی دسترسی ربات
+// دسترسی ربات
 // =====================================
 
 async function checkBotPermissions(
@@ -411,7 +425,7 @@ async function checkBotPermissions(
 
       await replyOrNormal(
         ctx,
-        "『𓆩 ★ ربات دسترسی بن، سکوت یا اخراج ندارد ★ 𓆪』"
+        "『𓆩 ★ ربات دسترسی مدیریت کاربران را ندارد ★ 𓆪』"
       );
 
       return false;
@@ -436,7 +450,8 @@ async function checkBotPermissions(
 }
 
 // =====================================
-// پیدا کردن کاربر با یوزرنیم
+// پیدا کردن کاربر با username
+// فقط از حافظه کاربران شناخته‌شده
 // =====================================
 
 function findKnownUserByUsername(
@@ -461,7 +476,7 @@ function findKnownUserByUsername(
 
     if (
       user.username &&
-      user.username.toLowerCase() === clean
+      String(user.username).toLowerCase() === clean
     ) {
       return user;
     }
@@ -488,20 +503,19 @@ function findKnownUserById(
   const clean =
     String(id).trim();
 
-  if (!/^-?\d+$/.test(clean)) {
+  if (
+    !/^-?\d+$/.test(clean)
+  ) {
     return null;
   }
 
-  if (knownUsers[clean]) {
+  if (
+    knownUsers[clean]
+  ) {
     return knownUsers[clean];
   }
 
-  return {
-    id: Number(clean),
-    first_name: "کاربر",
-    last_name: "",
-    username: null
-  };
+  return null;
 }
 
 // =====================================
@@ -529,12 +543,14 @@ function findKnownUserByName(
       knownUsers[key];
 
     const first =
-      String(user.first_name || "")
-        .toLowerCase();
+      String(
+        user.first_name || ""
+      ).toLowerCase();
 
     const last =
-      String(user.last_name || "")
-        .toLowerCase();
+      String(
+        user.last_name || ""
+      ).toLowerCase();
 
     const fullName =
       `${first} ${last}`.trim();
@@ -551,23 +567,30 @@ function findKnownUserByName(
 }
 
 // =====================================
-// پیدا کردن User از text_mention
+// text_mention
 // =====================================
 
 function getTextMentionUser(
   message
 ) {
 
+  if (!message) {
+    return null;
+  }
+
+  const entities =
+    message.entities ||
+    message.caption_entities ||
+    [];
+
   if (
-    !message ||
-    !message.entities ||
-    !Array.isArray(message.entities)
+    !Array.isArray(entities)
   ) {
     return null;
   }
 
   for (
-    const entity of message.entities
+    const entity of entities
   ) {
 
     if (
@@ -577,7 +600,9 @@ function getTextMentionUser(
       entity.user.id
     ) {
 
-      rememberUser(entity.user);
+      rememberUser(
+        entity.user
+      );
 
       return entity.user;
     }
@@ -585,12 +610,10 @@ function getTextMentionUser(
 
   return null;
 }// =====================================
-// پیدا کردن یوزرنیم داخل متن
+// پیدا کردن username داخل متن
 // =====================================
 
-function getUsernameFromText(
-  text
-) {
+function getUsernameFromText(text) {
 
   if (!text) {
     return null;
@@ -612,9 +635,7 @@ function getUsernameFromText(
 // پیدا کردن ID داخل متن
 // =====================================
 
-function getIdFromText(
-  text
-) {
+function getIdFromText(text) {
 
   if (!text) {
     return null;
@@ -633,12 +654,10 @@ function getIdFromText(
 }
 
 // =====================================
-// تشخیص هدف از محتوای Reply
+// تشخیص هدف از پیام Reply
 // =====================================
 
-function resolveTargetFromReplyContent(
-  ctx
-) {
+function resolveTargetFromReplyContent(ctx) {
 
   const message =
     getTargetMessage(ctx);
@@ -647,6 +666,7 @@ function resolveTargetFromReplyContent(
     return null;
   }
 
+  // text_mention
   const mentionedUser =
     getTextMentionUser(message);
 
@@ -662,6 +682,10 @@ function resolveTargetFromReplyContent(
     message.caption ||
     "";
 
+  // =====================================
+  // اگر پیام فقط username باشد
+  // =====================================
+
   const username =
     getUsernameFromText(text);
 
@@ -672,12 +696,14 @@ function resolveTargetFromReplyContent(
         username
       );
 
-    if (user) {
-      return user;
-    }
-
-    return null;
+    // اگر username شناخته نشده،
+    // هرگز فرستنده پیام را هدف قرار نده
+    return user || null;
   }
+
+  // =====================================
+  // اگر پیام شامل ID باشد
+  // =====================================
 
   const id =
     getIdFromText(text);
@@ -687,23 +713,17 @@ function resolveTargetFromReplyContent(
     const user =
       findKnownUserById(id);
 
-    if (user) {
-      return user;
-    }
-
-    return null;
+    return user || null;
   }
 
   return null;
 }
 
 // =====================================
-// آیا Reply هدف مشخص دارد؟
+// آیا Reply شامل هدف مشخص است؟
 // =====================================
 
-function hasTargetReferenceInReply(
-  ctx
-) {
+function hasTargetReferenceInReply(ctx) {
 
   const message =
     getTargetMessage(ctx);
@@ -730,13 +750,17 @@ function hasTargetReferenceInReply(
 }
 
 // =====================================
-// تشخیص کاربر هدف
+// تشخیص نهایی کاربر هدف
 // =====================================
 
 function resolveTarget(
   ctx,
   args = []
 ) {
+
+  // =====================================
+  // هدف داخل خود دستور
+  // =====================================
 
   if (
     args &&
@@ -746,47 +770,35 @@ function resolveTarget(
     const first =
       String(args[0]).trim();
 
+    // ID
     if (
       /^-?\d+$/.test(first)
     ) {
 
-      const user =
-        findKnownUserById(first);
-
-      if (user) {
-        return user;
-      }
-
-      return null;
+      return findKnownUserById(
+        first
+      );
     }
 
+    // username
     if (
       first.startsWith("@")
     ) {
 
-      const user =
-        findKnownUserByUsername(
-          first
-        );
-
-      if (user) {
-        return user;
-      }
-
-      return null;
-    }
-
-    const byName =
-      findKnownUserByName(
-        args.join(" ")
+      return findKnownUserByUsername(
+        first
       );
-
-    if (byName) {
-      return byName;
     }
 
-    return null;
+    // اسم
+    return findKnownUserByName(
+      args.join(" ")
+    );
   }
+
+  // =====================================
+  // اول محتوای پیام Reply
+  // =====================================
 
   const contentTarget =
     resolveTargetFromReplyContent(ctx);
@@ -803,13 +815,20 @@ function resolveTarget(
     return contentTarget;
   }
 
-  // اگر Reply شامل username یا ID است
-  // هرگز فرستنده پیام را اشتباهی هدف نکن
+  // =====================================
+  // اگر Reply شامل username یا ID بود
+  // ولی پیدا نشد، فرستنده را هدف نکن
+  // =====================================
+
   if (
     hasTargetReferenceInReply(ctx)
   ) {
     return null;
   }
+
+  // =====================================
+  // Reply معمولی به خود کاربر
+  // =====================================
 
   const replyUser =
     getReplyTarget(ctx);
@@ -852,6 +871,10 @@ async function checkTarget(
     return false;
   }
 
+  // =====================================
+  // خود ربات
+  // =====================================
+
   if (
     ctx.botInfo &&
     Number(target.id) ===
@@ -873,10 +896,12 @@ async function checkTarget(
     );
 
   // =====================================
-  // مالک گروه
+  // مالک
   // =====================================
 
-  if (role === "owner") {
+  if (
+    role === "owner"
+  ) {
 
     await replyToTarget(
       ctx,
@@ -887,10 +912,12 @@ async function checkTarget(
   }
 
   // =====================================
-  // مدیر گروه
+  // مدیر
   // =====================================
 
-  if (role === "admin") {
+  if (
+    role === "admin"
+  ) {
 
     await replyToTarget(
       ctx,
@@ -925,7 +952,9 @@ async function checkTarget(
   // نقش نامشخص
   // =====================================
 
-  if (role === "unknown") {
+  if (
+    role === "unknown"
+  ) {
 
     await replyToTarget(
       ctx,
@@ -942,13 +971,16 @@ async function checkTarget(
 // مدت سکوت
 // =====================================
 
-function getDuration(args) {
+function parseMuteDuration(
+  args = []
+) {
 
-  if (
-    !args ||
-    !args.length
-  ) {
-    return 1;
+  if (!args.length) {
+
+    return {
+      hours: 1,
+      text: "یک ساعت"
+    };
   }
 
   const value =
@@ -958,35 +990,100 @@ function getDuration(args) {
     !Number.isFinite(value) ||
     value <= 0
   ) {
-    return 1;
+
+    return {
+      hours: 1,
+      text: "یک ساعت"
+    };
   }
 
-  return Math.min(
-    value,
-    168
-  );
+  const unit =
+    String(args[1] || "")
+      .toLowerCase();
+
+  // =====================================
+  // دقیقه
+  // 6 تا 60 دقیقه
+  // =====================================
+
+  if (
+    unit === "دقیقه" ||
+    unit === "دقیقه‌ای"
+  ) {
+
+    const minutes =
+      Math.min(
+        Math.max(
+          Math.floor(value),
+          1
+        ),
+        60
+      );
+
+    return {
+      hours: minutes / 60,
+      text: `${minutes} دقیقه`
+    };
+  }
+
+  // =====================================
+  // ساعت
+  // 1 تا 10 ساعت
+  // =====================================
+
+  if (
+    unit === "ساعت" ||
+    unit === "ساعته"
+  ) {
+
+    const hours =
+      Math.min(
+        Math.max(
+          Math.floor(value),
+          1
+        ),
+        10
+      );
+
+    return {
+      hours,
+      text:
+        hours === 1
+          ? "یک ساعت"
+          : `${hours} ساعت`
+    };
+  }
+
+  // =====================================
+  // فقط عدد = ساعت
+  // =====================================
+
+  const hours =
+    Math.min(
+      Math.max(
+        Math.floor(value),
+        1
+      ),
+      10
+    );
+
+  return {
+    hours,
+    text:
+      hours === 1
+        ? "یک ساعت"
+        : `${hours} ساعت`
+  };
 }
 
 // =====================================
-// متن مدت
+// متن مدت قدیمی
 // =====================================
 
 function durationText(hours) {
 
   if (hours === 1) {
     return "یک ساعت";
-  }
-
-  if (hours === 2) {
-    return "دو ساعت";
-  }
-
-  if (hours === 3) {
-    return "سه ساعت";
-  }
-
-  if (hours === 4) {
-    return "چهار ساعت";
   }
 
   return `${hours} ساعت`;
@@ -1001,27 +1098,21 @@ async function banUser(
   target
 ) {
 
-  if (
-    !await checkExecutor(ctx)
-  ) {
+  if (!await checkExecutor(ctx)) {
     return false;
   }
 
-  if (
-    !await checkBotPermissions(
-      ctx,
-      "restrict"
-    )
-  ) {
+  if (!await checkBotPermissions(
+    ctx,
+    "restrict"
+  )) {
     return false;
   }
 
-  if (
-    !await checkTarget(
-      ctx,
-      target
-    )
-  ) {
+  if (!await checkTarget(
+    ctx,
+    target
+  )) {
     return false;
   }
 
@@ -1064,28 +1155,22 @@ async function unbanUser(
   target
 ) {
 
-  if (
-    !await checkExecutor(ctx)
-  ) {
+  if (!await checkExecutor(ctx)) {
     return false;
   }
 
-  if (
-    !await checkBotPermissions(
-      ctx,
-      "restrict"
-    )
-  ) {
+  if (!await checkBotPermissions(
+    ctx,
+    "restrict"
+  )) {
     return false;
   }
 
-  if (
-    !await checkTarget(
-      ctx,
-      target,
-      true
-    )
-  ) {
+  if (!await checkTarget(
+    ctx,
+    target,
+    true
+  )) {
     return false;
   }
 
@@ -1161,27 +1246,21 @@ async function kickUser(
   target
 ) {
 
-  if (
-    !await checkExecutor(ctx)
-  ) {
+  if (!await checkExecutor(ctx)) {
     return false;
   }
 
-  if (
-    !await checkBotPermissions(
-      ctx,
-      "restrict"
-    )
-  ) {
+  if (!await checkBotPermissions(
+    ctx,
+    "restrict"
+  )) {
     return false;
   }
 
-  if (
-    !await checkTarget(
-      ctx,
-      target
-    )
-  ) {
+  if (!await checkTarget(
+    ctx,
+    target
+  )) {
     return false;
   }
 
@@ -1228,30 +1307,25 @@ async function kickUser(
 async function muteUser(
   ctx,
   target,
-  hours = 1
+  hours = 1,
+  customText = null
 ) {
 
-  if (
-    !await checkExecutor(ctx)
-  ) {
+  if (!await checkExecutor(ctx)) {
     return false;
   }
 
-  if (
-    !await checkBotPermissions(
-      ctx,
-      "restrict"
-    )
-  ) {
+  if (!await checkBotPermissions(
+    ctx,
+    "restrict"
+  )) {
     return false;
   }
 
-  if (
-    !await checkTarget(
-      ctx,
-      target
-    )
-  ) {
+  if (!await checkTarget(
+    ctx,
+    target
+  )) {
     return false;
   }
 
@@ -1261,10 +1335,8 @@ async function muteUser(
       Math.floor(
         Date.now() / 1000
       ) +
-      (
-        Number(hours) *
-        60 *
-        60
+      Math.floor(
+        Number(hours) * 60 * 60
       );
 
     await ctx.telegram.restrictChatMember(
@@ -1292,9 +1364,13 @@ async function muteUser(
       }
     );
 
+    const text =
+      customText ||
+      durationText(hours);
+
     await replyToTarget(
       ctx,
-      `『𓆩 ★ کاربر ${mentionUser(target)} ${durationText(hours)} سکوت شد ★ 𓆪』`
+      `『𓆩 ★ کاربر ${mentionUser(target)} ${text} سکوت شد ★ 𓆪』`
     );
 
     return true;
@@ -1324,27 +1400,21 @@ async function unmuteUser(
   target
 ) {
 
-  if (
-    !await checkExecutor(ctx)
-  ) {
+  if (!await checkExecutor(ctx)) {
     return false;
   }
 
-  if (
-    !await checkBotPermissions(
-      ctx,
-      "restrict"
-    )
-  ) {
+  if (!await checkBotPermissions(
+    ctx,
+    "restrict"
+  )) {
     return false;
   }
 
-  if (
-    !await checkTarget(
-      ctx,
-      target
-    )
-  ) {
+  if (!await checkTarget(
+    ctx,
+    target
+  )) {
     return false;
   }
 
@@ -1398,19 +1468,21 @@ async function unmuteUser(
 
 // =====================================
 // خفه
-// دقیقاً همان عملکرد سکوت
+// دقیقاً مثل سکوت
 // =====================================
 
 async function khafeUser(
   ctx,
   target,
-  hours = 1
+  hours = 1,
+  customText = null
 ) {
 
   return muteUser(
     ctx,
     target,
-    hours
+    hours,
+    customText
   );
 }
 
@@ -1436,25 +1508,21 @@ async function unkhafeUser(
 function registerBanCommands(bot) {
 
   bot.hears(
-    /^بن(?:\s+(.+))?$/i,
+    /^بن$/i,
     async ctx => {
 
       if (!isGroupChat(ctx)) {
         return;
       }
 
-      const args =
-        ctx.match &&
-        ctx.match[1]
-          ? ctx.match[1]
-              .trim()
-              .split(/\s+/)
-          : [];
+      if (!await checkExecutor(ctx)) {
+        return;
+      }
 
       const target =
         resolveTarget(
           ctx,
-          args
+          []
         );
 
       await banUser(
@@ -1469,6 +1537,10 @@ function registerBanCommands(bot) {
     async ctx => {
 
       if (!isGroupChat(ctx)) {
+        return;
+      }
+
+      if (!await checkExecutor(ctx)) {
         return;
       }
 
@@ -1493,25 +1565,21 @@ function registerBanCommands(bot) {
 function registerSikCommands(bot) {
 
   bot.hears(
-    /^سیک(?:\s+(.+))?$/i,
+    /^سیک$/i,
     async ctx => {
 
       if (!isGroupChat(ctx)) {
         return;
       }
 
-      const args =
-        ctx.match &&
-        ctx.match[1]
-          ? ctx.match[1]
-              .trim()
-              .split(/\s+/)
-          : [];
+      if (!await checkExecutor(ctx)) {
+        return;
+      }
 
       const target =
         resolveTarget(
           ctx,
-          args
+          []
         );
 
       await sikUser(
@@ -1526,6 +1594,10 @@ function registerSikCommands(bot) {
     async ctx => {
 
       if (!isGroupChat(ctx)) {
+        return;
+      }
+
+      if (!await checkExecutor(ctx)) {
         return;
       }
 
@@ -1550,25 +1622,21 @@ function registerSikCommands(bot) {
 function registerKickCommands(bot) {
 
   bot.hears(
-    /^اخراج(?:\s+(.+))?$/i,
+    /^اخراج$/i,
     async ctx => {
 
       if (!isGroupChat(ctx)) {
         return;
       }
 
-      const args =
-        ctx.match &&
-        ctx.match[1]
-          ? ctx.match[1]
-              .trim()
-              .split(/\s+/)
-          : [];
+      if (!await checkExecutor(ctx)) {
+        return;
+      }
 
       const target =
         resolveTarget(
           ctx,
-          args
+          []
         );
 
       await kickUser(
@@ -1586,47 +1654,48 @@ function registerKickCommands(bot) {
 function registerMuteCommands(bot) {
 
   bot.hears(
-    /^سکوت(?:\s+(.+))?$/i,
+    /^سکوت(?:\s+(\d+)\s*(دقیقه|دقیقه‌ای|ساعت|ساعته)?)?$/i,
     async ctx => {
 
       if (!isGroupChat(ctx)) {
         return;
       }
 
-      const text =
-        ctx.match &&
-        ctx.match[1]
-          ? ctx.match[1].trim()
-          : "";
+      if (!await checkExecutor(ctx)) {
+        return;
+      }
 
-      const args =
-        text
-          ? text.split(/\s+/)
-          : [];
-
-      let hours = 1;
+      const args = [];
 
       if (
-        args.length &&
-        /^\d+$/.test(args[0])
+        ctx.match &&
+        ctx.match[1]
       ) {
+        args.push(
+          ctx.match[1]
+        );
 
-        hours =
-          getDuration(args);
-
-        args.shift();
+        if (ctx.match[2]) {
+          args.push(
+            ctx.match[2]
+          );
+        }
       }
+
+      const duration =
+        parseMuteDuration(args);
 
       const target =
         resolveTarget(
           ctx,
-          args
+          []
         );
 
       await muteUser(
         ctx,
         target,
-        hours
+        duration.hours,
+        duration.text
       );
     }
   );
@@ -1636,6 +1705,10 @@ function registerMuteCommands(bot) {
     async ctx => {
 
       if (!isGroupChat(ctx)) {
+        return;
+      }
+
+      if (!await checkExecutor(ctx)) {
         return;
       }
 
@@ -1660,47 +1733,48 @@ function registerMuteCommands(bot) {
 function registerKhafeCommands(bot) {
 
   bot.hears(
-    /^خفه(?:\s+(.+))?$/i,
+    /^خفه(?:\s+(\d+)\s*(دقیقه|دقیقه‌ای|ساعت|ساعته)?)?$/i,
     async ctx => {
 
       if (!isGroupChat(ctx)) {
         return;
       }
 
-      const text =
-        ctx.match &&
-        ctx.match[1]
-          ? ctx.match[1].trim()
-          : "";
+      if (!await checkExecutor(ctx)) {
+        return;
+      }
 
-      const args =
-        text
-          ? text.split(/\s+/)
-          : [];
-
-      let hours = 1;
+      const args = [];
 
       if (
-        args.length &&
-        /^\d+$/.test(args[0])
+        ctx.match &&
+        ctx.match[1]
       ) {
+        args.push(
+          ctx.match[1]
+        );
 
-        hours =
-          getDuration(args);
-
-        args.shift();
+        if (ctx.match[2]) {
+          args.push(
+            ctx.match[2]
+          );
+        }
       }
+
+      const duration =
+        parseMuteDuration(args);
 
       const target =
         resolveTarget(
           ctx,
-          args
+          []
         );
 
       await khafeUser(
         ctx,
         target,
-        hours
+        duration.hours,
+        duration.text
       );
     }
   );
@@ -1710,6 +1784,10 @@ function registerKhafeCommands(bot) {
     async ctx => {
 
       if (!isGroupChat(ctx)) {
+        return;
+      }
+
+      if (!await checkExecutor(ctx)) {
         return;
       }
 
@@ -1728,7 +1806,7 @@ function registerKhafeCommands(bot) {
 }
 
 // =====================================
-// ثبت همه عملیات مدیریتی
+// ثبت همه عملیات
 // =====================================
 
 function registerModerationActions(bot) {
@@ -1762,14 +1840,12 @@ function getWarningSettings(group) {
       )
     )
   ) {
-
     group.warningSettings.maxWarnings = 3;
   }
 
   if (
     !group.warningSettings.punishment
   ) {
-
     group.warningSettings.punishment =
       "mute";
   }
@@ -1781,7 +1857,6 @@ function getWarningSettings(group) {
       )
     )
   ) {
-
     group.warningSettings.duration = 1;
   }
 
@@ -1789,7 +1864,7 @@ function getWarningSettings(group) {
 }
 
 // =====================================
-// اضافه کردن اخطار
+// اخطار
 // =====================================
 
 function addWarning(
@@ -1809,7 +1884,6 @@ function addWarning(
       Number(group.warns[id])
     )
   ) {
-
     group.warns[id] = 0;
   }
 
@@ -1817,10 +1891,6 @@ function addWarning(
 
   return group.warns[id];
 }
-
-// =====================================
-// حذف یک اخطار
-// =====================================
 
 function removeWarning(
   group,
@@ -1847,10 +1917,6 @@ function removeWarning(
   return group.warns[id];
 }
 
-// =====================================
-// پاک کردن همه اخطارها
-// =====================================
-
 function clearWarnings(
   group,
   userId
@@ -1864,10 +1930,6 @@ function clearWarnings(
 
   return 0;
 }
-
-// =====================================
-// دریافت تعداد اخطار
-// =====================================
 
 function getWarnings(
   group,
@@ -1884,7 +1946,7 @@ function getWarnings(
 }
 
 // =====================================
-// تنظیم تعداد اخطار
+// تنظیم سقف اخطار
 // =====================================
 
 function setMaxWarnings(
@@ -1941,7 +2003,7 @@ function setWarningPunishment(
 }
 
 // =====================================
-// تنظیم مدت مجازات اخطار
+// تنظیم مدت اخطار
 // =====================================
 
 function setWarningDuration(
@@ -1969,7 +2031,7 @@ function setWarningDuration(
 }
 
 // =====================================
-// اجرای مجازات اخطار
+// مجازات اخطار
 // =====================================
 
 async function executeWarningPunishment(
@@ -1994,15 +2056,13 @@ async function executeWarningPunishment(
     );
 
   const hours =
-    Math.max(
-      1,
-      Math.ceil(minutes / 60)
-    );
+    minutes / 60;
 
   return muteUser(
     ctx,
     target,
-    hours
+    hours,
+    `${minutes} دقیقه`
   );
 }
 
@@ -2011,6 +2071,10 @@ async function executeWarningPunishment(
 // =====================================
 
 function registerWarningCommands(bot) {
+
+  // =====================================
+  // اخطار
+  // =====================================
 
   bot.hears(
     /^اخطار(?:\s+(\d+))?$/i,
@@ -2049,10 +2113,12 @@ function registerWarningCommands(bot) {
         return;
       }
 
-      if (!await checkTarget(
-        ctx,
-        target
-      )) {
+      if (
+        !await checkTarget(
+          ctx,
+          target
+        )
+      ) {
         return;
       }
 
@@ -2062,7 +2128,11 @@ function registerWarningCommands(bot) {
       const settings =
         getWarningSettings(group);
 
-      let total = 0;
+      let total =
+        getWarnings(
+          group,
+          target.id
+        );
 
       for (
         let i = 0;
@@ -2105,6 +2175,10 @@ function registerWarningCommands(bot) {
     }
   );
 
+  // =====================================
+  // حذف اخطار
+  // =====================================
+
   bot.hears(
     /^حذف اخطار(?:\s+(\d+))?$/i,
     async ctx => {
@@ -2142,10 +2216,12 @@ function registerWarningCommands(bot) {
         return;
       }
 
-      if (!await checkTarget(
-        ctx,
-        target
-      )) {
+      if (
+        !await checkTarget(
+          ctx,
+          target
+        )
+      ) {
         return;
       }
 
@@ -2193,6 +2269,10 @@ function registerWarningCommands(bot) {
     }
   );
 
+  // =====================================
+  // تعداد اخطار
+  // =====================================
+
   bot.hears(
     /^تعداد اخطار\s+(\d+)$/i,
     async ctx => {
@@ -2211,10 +2291,12 @@ function registerWarningCommands(bot) {
       const group =
         getGroup(ctx.chat.id);
 
-      if (!setMaxWarnings(
-        group,
-        value
-      )) {
+      if (
+        !setMaxWarnings(
+          group,
+          value
+        )
+      ) {
 
         await replyOrNormal(
           ctx,
@@ -2232,6 +2314,10 @@ function registerWarningCommands(bot) {
       );
     }
   );
+
+  // =====================================
+  // اخطار بن
+  // =====================================
 
   bot.hears(
     /^تنظیم اخطار بن$/i,
@@ -2262,6 +2348,10 @@ function registerWarningCommands(bot) {
     }
   );
 
+  // =====================================
+  // اخطار سکوت
+  // =====================================
+
   bot.hears(
     /^تنظیم اخطار سکوت$/i,
     async ctx => {
@@ -2291,6 +2381,10 @@ function registerWarningCommands(bot) {
     }
   );
 
+  // =====================================
+  // مدت اخطار
+  // =====================================
+
   bot.hears(
     /^تنظیم مدت اخطار\s+(\d+)$/i,
     async ctx => {
@@ -2309,10 +2403,12 @@ function registerWarningCommands(bot) {
       const group =
         getGroup(ctx.chat.id);
 
-      if (!setWarningDuration(
-        group,
-        minutes
-      )) {
+      if (
+        !setWarningDuration(
+          group,
+          minutes
+        )
+      ) {
 
         await replyOrNormal(
           ctx,
@@ -2330,6 +2426,10 @@ function registerWarningCommands(bot) {
       );
     }
   );
+
+  // =====================================
+  // نمایش اخطارهای کاربر
+  // =====================================
 
   bot.hears(
     /^اخطارها$/i,
@@ -2362,10 +2462,12 @@ function registerWarningCommands(bot) {
         return;
       }
 
-      if (!await checkTarget(
-        ctx,
-        target
-      )) {
+      if (
+        !await checkTarget(
+          ctx,
+          target
+        )
+      ) {
         return;
       }
 
@@ -2387,6 +2489,10 @@ function registerWarningCommands(bot) {
       );
     }
   );
+
+  // =====================================
+  // وضعیت اخطار
+  // =====================================
 
   bot.hears(
     /^اخطار وضعیت$/i,
@@ -2417,6 +2523,10 @@ function registerWarningCommands(bot) {
       );
     }
   );
+
+  // =====================================
+  // شناسه
+  // =====================================
 
   bot.hears(
     /^شناسه$/i,
@@ -2471,7 +2581,7 @@ function registerModeration(bot) {
       ctx,
       next
     ) => {
-
+      
       try {
 
         if (ctx.from) {
@@ -2521,6 +2631,7 @@ function registerModeration(bot) {
       return next();
     }
   );
+
   registerModerationActions(bot);
 
   registerWarningCommands(bot);
