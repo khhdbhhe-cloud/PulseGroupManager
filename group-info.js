@@ -22,7 +22,7 @@ function ensureGroupInfo(group) {
     group.info = {};
   }
 
-  if (!group.info.rules) {
+  if (typeof group.info.rules !== "string") {
     group.info.rules = "";
   }
 
@@ -34,16 +34,16 @@ function ensureGroupInfo(group) {
     group.info.globalRoles = {};
   }
 
+  if (!group.info.waitingForRules) {
+    group.info.waitingForRules = {};
+  }
+
   if (!group.stats) {
     group.stats = {};
   }
 
   if (!group.stats.users) {
     group.stats.users = {};
-  }
-
-  if (!group.stats.daily) {
-    group.stats.daily = {};
   }
 
   return group;
@@ -75,9 +75,16 @@ function getDateKey() {
 
   const now = new Date();
 
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
+  const year =
+    now.getFullYear();
+
+  const month =
+    String(now.getMonth() + 1)
+      .padStart(2, "0");
+
+  const day =
+    String(now.getDate())
+      .padStart(2, "0");
 
   return `${year}-${month}-${day}`;
 }
@@ -89,9 +96,115 @@ function getDateKey() {
 
 function getCurrentTime() {
 
-  return new Date().toLocaleTimeString("fa-IR", {
-    hour12: false
-  });
+  return new Date().toLocaleTimeString(
+    "fa-IR",
+    {
+      hour12: false
+    }
+  );
+}
+
+
+// =====================================
+// تبدیل عدد به فارسی
+// =====================================
+
+function toPersianNumber(value) {
+
+  if (
+    value === undefined ||
+    value === null
+  ) {
+    return "۰";
+  }
+
+  return String(value)
+    .replace(/0/g, "۰")
+    .replace(/1/g, "۱")
+    .replace(/2/g, "۲")
+    .replace(/3/g, "۳")
+    .replace(/4/g, "۴")
+    .replace(/5/g, "۵")
+    .replace(/6/g, "۶")
+    .replace(/7/g, "۷")
+    .replace(/8/g, "۸")
+    .replace(/9/g, "۹");
+}
+
+
+// =====================================
+// محافظت از متن برای HTML
+// =====================================
+
+function escapeHtml(value) {
+
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+
+// =====================================
+// نام کامل کاربر
+// =====================================
+
+function getUserFullName(user) {
+
+  if (!user) {
+    return "کاربر";
+  }
+
+  const name = [
+    user.first_name || user.firstName || "",
+    user.last_name || user.lastName || ""
+  ]
+    .join(" ")
+    .trim();
+
+  return name || "کاربر";
+}
+
+
+// =====================================
+// نام نمایشی کاربر
+// =====================================
+
+function getDisplayName(user) {
+
+  if (!user) {
+    return "کاربر";
+  }
+
+  if (user.username) {
+    return `@${user.username}`;
+  }
+
+  return getUserFullName(user);
+}
+
+
+// =====================================
+// نام قابل کلیک کاربر
+// =====================================
+
+function getClickableName(user) {
+
+  if (!user || !user.id) {
+    return escapeHtml(
+      getDisplayName(user)
+    );
+  }
+
+  const name =
+    escapeHtml(
+      getDisplayName(user)
+    );
+
+  return (
+    `<a href="tg://user?id=${user.id}">${name}</a>`
+  );
 }
 
 
@@ -101,19 +214,29 @@ function getCurrentTime() {
 
 function ensureStatsUser(group, user) {
 
-  if (!group || !user) return null;
+  if (!group || !user) {
+    return null;
+  }
 
   ensureGroupInfo(group);
 
-  const userId = String(user.id);
+  const userId =
+    String(user.id);
 
   if (!group.stats.users[userId]) {
 
     group.stats.users[userId] = {
+
       id: user.id,
-      firstName: user.first_name || "",
-      lastName: user.last_name || "",
-      username: user.username || "",
+
+      firstName:
+        user.first_name || "",
+
+      lastName:
+        user.last_name || "",
+
+      username:
+        user.username || "",
 
       totalMessages: 0,
       totalAdds: 0,
@@ -133,25 +256,31 @@ function ensureStatsUser(group, user) {
       document: 0,
       forwarded: 0,
 
-      lastDate: getDateKey()
+      lastDate:
+        getDateKey()
     };
   }
 
-  const statsUser = group.stats.users[userId];
+  const statsUser =
+    group.stats.users[userId];
 
-  statsUser.id = user.id;
+  statsUser.id =
+    user.id;
 
-  if (user.first_name !== undefined) {
-    statsUser.firstName = user.first_name || "";
-  }
+  statsUser.firstName =
+    user.first_name !== undefined
+      ? user.first_name || ""
+      : statsUser.firstName || "";
 
-  if (user.last_name !== undefined) {
-    statsUser.lastName = user.last_name || "";
-  }
+  statsUser.lastName =
+    user.last_name !== undefined
+      ? user.last_name || ""
+      : statsUser.lastName || "";
 
-  if (user.username !== undefined) {
-    statsUser.username = user.username || "";
-  }
+  statsUser.username =
+    user.username !== undefined
+      ? user.username || ""
+      : statsUser.username || "";
 
   return statsUser;
 }
@@ -163,11 +292,16 @@ function ensureStatsUser(group, user) {
 
 function resetDailyStats(statsUser) {
 
-  if (!statsUser) return;
+  if (!statsUser) {
+    return;
+  }
 
-  const today = getDateKey();
+  const today =
+    getDateKey();
 
-  if (statsUser.lastDate !== today) {
+  if (
+    statsUser.lastDate !== today
+  ) {
 
     statsUser.dailyMessages = 0;
     statsUser.dailyAdds = 0;
@@ -235,9 +369,17 @@ function getMessageType(message) {
 // ثبت پیام کاربر
 // =====================================
 
-function recordMessage(group, message, user) {
+function recordMessage(
+  group,
+  message,
+  user
+) {
 
-  if (!group || !message || !user) {
+  if (
+    !group ||
+    !message ||
+    !user
+  ) {
     return;
   }
 
@@ -245,20 +387,29 @@ function recordMessage(group, message, user) {
     return;
   }
 
-  const statsUser = ensureStatsUser(group, user);
+  const statsUser =
+    ensureStatsUser(
+      group,
+      user
+    );
 
   if (!statsUser) {
     return;
   }
 
-  resetDailyStats(statsUser);
+  resetDailyStats(
+    statsUser
+  );
 
-  const type = getMessageType(message);
+  const type =
+    getMessageType(message);
 
   statsUser.totalMessages += 1;
   statsUser.dailyMessages += 1;
 
-  if (statsUser[type] !== undefined) {
+  if (
+    statsUser[type] !== undefined
+  ) {
     statsUser[type] += 1;
   }
 
@@ -278,19 +429,32 @@ function recordMessage(group, message, user) {
 // ثبت اضافه کردن عضو
 // =====================================
 
-function recordMemberAdd(group, adder) {
+function recordMemberAdd(
+  group,
+  adder
+) {
 
-  if (!group || !adder || adder.is_bot) {
+  if (
+    !group ||
+    !adder ||
+    adder.is_bot
+  ) {
     return;
   }
 
-  const statsUser = ensureStatsUser(group, adder);
+  const statsUser =
+    ensureStatsUser(
+      group,
+      adder
+    );
 
   if (!statsUser) {
     return;
   }
 
-  resetDailyStats(statsUser);
+  resetDailyStats(
+    statsUser
+  );
 
   statsUser.totalAdds += 1;
   statsUser.dailyAdds += 1;
@@ -300,58 +464,13 @@ function recordMemberAdd(group, adder) {
 
 
 // =====================================
-// نام نمایشی کاربر
+// گرفتن نقش واقعی کاربر
 // =====================================
 
-function getDisplayName(user) {
-
-  if (!user) {
-    return "کاربر";
-  }
-
-  if (user.username) {
-    return `@${user.username}`;
-  }
-
-  const fullName = [
-    user.first_name || "",
-    user.last_name || ""
-  ]
-    .join(" ")
-    .trim();
-
-  return fullName || "کاربر";
-}
-
-
-// =====================================
-// نام قابل کلیک کاربر
-// =====================================
-
-function getClickableName(user, fallbackName) {
-
-  const name =
-    fallbackName ||
-    getDisplayName(user);
-
-  const userId =
-    user && user.id
-      ? user.id
-      : null;
-
-  if (!userId) {
-    return name;
-  }
-
-  return `[${name}](tg://user?id=${userId})`;
-}
-
-
-// =====================================
-// نقش تلگرام
-// =====================================
-
-async function getTelegramRole(ctx, userId) {
+async function getTelegramRole(
+  ctx,
+  userId
+) {
 
   try {
 
@@ -383,40 +502,53 @@ async function getTelegramRole(ctx, userId) {
 
 
 // =====================================
-// لقب کاربر
+// گرفتن لقب
 // =====================================
 
-function getUserNickname(group, userId) {
+function getUserNickname(
+  group,
+  userId
+) {
 
   ensureGroupInfo(group);
 
-  const nickname =
-    group.info.nicknames[String(userId)];
-
-  return nickname || "بدون لقب";
+  return (
+    group.info.nicknames[
+      String(userId)
+    ] ||
+    "بدون لقب"
+  );
 }
 
 
 // =====================================
-// اصل سراسری کاربر
+// گرفتن اصل سراسری
 // =====================================
 
-function getGlobalRole(group, userId) {
+function getGlobalRole(
+  group,
+  userId
+) {
 
   ensureGroupInfo(group);
 
-  const role =
-    group.info.globalRoles[String(userId)];
-
-  return role || "ندارد";
+  return (
+    group.info.globalRoles[
+      String(userId)
+    ] ||
+    "ندارد"
+  );
 }
 
 
 // =====================================
-// گرفتن تعداد عکس پروفایل
+// تعداد تصاویر پروفایل
 // =====================================
 
-async function getProfilePhotoCount(ctx, userId) {
+async function getProfilePhotoCount(
+  ctx,
+  userId
+) {
 
   try {
 
@@ -439,52 +571,17 @@ async function getProfilePhotoCount(ctx, userId) {
 
 
 // =====================================
-// تبدیل عدد به فارسی
+// پایان قسمت ۱
 // =====================================
-
-function toPersianNumber(value) {
-
-  if (value === undefined || value === null) {
-    return "۰";
-  }
-
-  return String(value)
-    .replace(/0/g, "۰")
-    .replace(/1/g, "۱")
-    .replace(/2/g, "۲")
-    .replace(/3/g, "۳")
-    .replace(/4/g, "۴")
-    .replace(/5/g, "۵")
-    .replace(/6/g, "۶")
-    .replace(/7/g, "۷")
-    .replace(/8/g, "۸")
-    .replace(/9/g, "۹");
-}
-
-
 // =====================================
-// فرمت نام کاربر برای نمایش
-// =====================================
-
-function getUserFullName(user) {
-
-  if (!user) {
-    return "کاربر";
-  }
-
-  const name = [
-    user.first_name || "",
-    user.last_name || ""
-  ]
-    .join(" ")
-    .trim();
-
-  return name || "کاربر";
-}// =====================================
 // ساخت متن اطلاعات کاربر
 // =====================================
 
-async function buildUserInfo(ctx, group, user) {
+async function buildUserInfo(
+  ctx,
+  group,
+  user
+) {
 
   if (!user) {
     return "اطلاعات کاربر یافت نشد.";
@@ -493,21 +590,38 @@ async function buildUserInfo(ctx, group, user) {
   ensureGroupInfo(group);
 
   const nickname =
-    getUserNickname(group, user.id);
+    getUserNickname(
+      group,
+      user.id
+    );
 
   const globalRole =
-    getGlobalRole(group, user.id);
+    getGlobalRole(
+      group,
+      user.id
+    );
 
   const telegramRole =
-    await getTelegramRole(ctx, user.id);
+    await getTelegramRole(
+      ctx,
+      user.id
+    );
 
   const photoCount =
-    await getProfilePhotoCount(ctx, user.id);
+    await getProfilePhotoCount(
+      ctx,
+      user.id
+    );
 
   const statsUser =
-    ensureStatsUser(group, user);
+    ensureStatsUser(
+      group,
+      user
+    );
 
-  resetDailyStats(statsUser);
+  resetDailyStats(
+    statsUser
+  );
 
   const todayMessages =
     statsUser.dailyMessages || 0;
@@ -522,7 +636,9 @@ async function buildUserInfo(ctx, group, user) {
     statsUser.totalAdds || 0;
 
   const allUsers =
-    Object.values(group.stats.users || {});
+    Object.values(
+      group.stats.users || {}
+    );
 
   const sortedUsers =
     allUsers
@@ -545,29 +661,25 @@ async function buildUserInfo(ctx, group, user) {
       ? 0
       : rankIndex + 1;
 
-  let userName;
-
-  if (user.username) {
-    userName = `@${user.username}`;
-  } else {
-    userName = getUserFullName(user);
-  }
-
   const clickableName =
-    `[${userName}](tg://user?id=${user.id})`;
+    getClickableName(user);
 
   return (
 `◂ نام کاربر : 『𓆩 ${clickableName} 𓆪』
-◂ آیدی عددی : ${user.id}
-◂ یوزرنیم : ${user.username ? "@" + user.username : "ندارد"}
+◂ آیدی عددی : ${toPersianNumber(user.id)}
+◂ یوزرنیم : ${
+    user.username
+      ? escapeHtml("@" + user.username)
+      : "ندارد"
+  }
 ◂ تعداد تصاویر پروفایل : ${toPersianNumber(photoCount)} عدد
-◂ لقب کاربر : ${nickname}
-◂ اصل سراسری : ${globalRole}
-◂ مقام کاربر : ${telegramRole}
+◂ لقب کاربر : ${escapeHtml(nickname)}
+◂ اصل سراسری : ${escapeHtml(globalRole)}
+◂ مقام کاربر : ${escapeHtml(telegramRole)}
 
 ─┅━ آمار کاربر ━┅─
 ◂ پیام های امروز : ${toPersianNumber(todayMessages)} عدد
-◂ رتبه در تعداد پیام : ${toPersianNumber(rank)} 
+◂ رتبه در تعداد پیام : ${toPersianNumber(rank)}
 ◂ تعداد اد امروز : ${toPersianNumber(todayAdds)} نفر
 ◂ تعداد اد کل : ${toPersianNumber(totalAdds)} نفر
 
@@ -580,9 +692,17 @@ async function buildUserInfo(ctx, group, user) {
 // ارسال اطلاعات کاربر
 // =====================================
 
-async function sendUserInfo(ctx, group, user) {
+async function sendUserInfo(
+  ctx,
+  group,
+  user
+) {
 
-  if (!ctx || !group || !user) {
+  if (
+    !ctx ||
+    !group ||
+    !user
+  ) {
     return;
   }
 
@@ -618,7 +738,9 @@ async function sendUserInfo(ctx, group, user) {
         photo.file_id,
         {
           caption: text,
-          parse_mode: "Markdown"
+          parse_mode: "HTML",
+          reply_to_message_id:
+            ctx.message.message_id
         }
       );
 
@@ -630,32 +752,36 @@ async function sendUserInfo(ctx, group, user) {
   await ctx.reply(
     text,
     {
-      parse_mode: "Markdown"
+      parse_mode: "HTML",
+      reply_to_message_id:
+        ctx.message.message_id
     }
   );
 }
 
 
 // =====================================
-// ساخت آمار روزانه
+// ساخت رتبه بندی روزانه
 // =====================================
 
 function buildDailyRanking(group) {
 
   ensureGroupInfo(group);
 
+  const today =
+    getDateKey();
+
   const users =
     Object.values(
       group.stats.users || {}
     );
 
-  const today =
-    getDateKey();
-
   const activeUsers =
     users
       .filter(user => {
+
         resetDailyStats(user);
+
         return (
           user.lastDate === today &&
           (user.dailyMessages || 0) > 0
@@ -683,30 +809,35 @@ function buildDailyRanking(group) {
 
   activeUsers
     .slice(0, 20)
-    .forEach((user, index) => {
+    .forEach(
+      (user, index) => {
 
-      const name =
-        user.username
-          ? `@${user.username}`
-          : (
-              `${user.firstName || ""} ${user.lastName || ""}`
-            ).trim() || "کاربر";
+        const name =
+          user.username
+            ? `@${user.username}`
+            : (
+                `${user.firstName || ""} ${user.lastName || ""}`
+              ).trim() ||
+              "کاربر";
 
-      const clickable =
-        `[${name}](tg://user?id=${user.id})`;
+        const clickable =
+          `<a href="tg://user?id=${user.id}">${
+            escapeHtml(name)
+          }</a>`;
 
-      text +=
+        text +=
 `◂ رتبه ${toPersianNumber(index + 1)} : ${clickable} با ${toPersianNumber(user.dailyMessages || 0)} پیام.
 
 `;
-    });
+      }
+    );
 
   return text.trim();
 }
 
 
 // =====================================
-// ساخت آمار کل
+// ساخت رتبه بندی کل
 // =====================================
 
 function buildTotalRanking(group) {
@@ -746,30 +877,35 @@ function buildTotalRanking(group) {
 
   activeUsers
     .slice(0, 20)
-    .forEach((user, index) => {
+    .forEach(
+      (user, index) => {
 
-      const name =
-        user.username
-          ? `@${user.username}`
-          : (
-              `${user.firstName || ""} ${user.lastName || ""}`
-            ).trim() || "کاربر";
+        const name =
+          user.username
+            ? `@${user.username}`
+            : (
+                `${user.firstName || ""} ${user.lastName || ""}`
+              ).trim() ||
+              "کاربر";
 
-      const clickable =
-        `[${name}](tg://user?id=${user.id})`;
+        const clickable =
+          `<a href="tg://user?id=${user.id}">${
+            escapeHtml(name)
+          }</a>`;
 
-      text +=
+        text +=
 `◂ رتبه ${toPersianNumber(index + 1)} : ${clickable} با ${toPersianNumber(user.totalMessages || 0)} پیام.
 
 `;
-    });
+      }
+    );
 
   return text.trim();
 }
 
 
 // =====================================
-// ساخت آمار اد روزانه
+// آمار اد روزانه
 // =====================================
 
 function buildDailyAdds(group) {
@@ -787,6 +923,7 @@ function buildDailyAdds(group) {
   const adders =
     users
       .filter(user => {
+
         resetDailyStats(user);
 
         return (
@@ -814,30 +951,35 @@ function buildDailyAdds(group) {
 
   adders
     .slice(0, 20)
-    .forEach((user, index) => {
+    .forEach(
+      (user, index) => {
 
-      const name =
-        user.username
-          ? `@${user.username}`
-          : (
-              `${user.firstName || ""} ${user.lastName || ""}`
-            ).trim() || "کاربر";
+        const name =
+          user.username
+            ? `@${user.username}`
+            : (
+                `${user.firstName || ""} ${user.lastName || ""}`
+              ).trim() ||
+              "کاربر";
 
-      const clickable =
-        `[${name}](tg://user?id=${user.id})`;
+        const clickable =
+          `<a href="tg://user?id=${user.id}">${
+            escapeHtml(name)
+          }</a>`;
 
-      text +=
+        text +=
 `◂ رتبه ${toPersianNumber(index + 1)} : ${clickable} با ${toPersianNumber(user.dailyAdds || 0)} اد.
 
 `;
-    });
+      }
+    );
 
   return text.trim();
 }
 
 
 // =====================================
-// ساخت آمار اد کل
+// آمار اد کل
 // =====================================
 
 function buildTotalAdds(group) {
@@ -877,30 +1019,45 @@ function buildTotalAdds(group) {
 
   adders
     .slice(0, 20)
-    .forEach((user, index) => {
+    .forEach(
+      (user, index) => {
 
-      const name =
-        user.username
-          ? `@${user.username}`
-          : (
-              `${user.firstName || ""} ${user.lastName || ""}`
-            ).trim() || "کاربر";
+        const name =
+          user.username
+            ? `@${user.username}`
+            : (
+                `${user.firstName || ""} ${user.lastName || ""}`
+              ).trim() ||
+              "کاربر";
 
-      const clickable =
-        `[${name}](tg://user?id=${user.id})`;
+        const clickable =
+          `<a href="tg://user?id=${user.id}">${
+            escapeHtml(name)
+          }</a>`;
 
-      text +=
+        text +=
 `◂ رتبه ${toPersianNumber(index + 1)} : ${clickable} با ${toPersianNumber(user.totalAdds || 0)} اد.
 
 `;
-    });
+      }
+    );
 
   return text.trim();
-                    }// =====================================
+}
+
+
+// =====================================
+// پایان قسمت ۲
+// =====================================
+// =====================================
 // ساخت آمار مدیران
 // =====================================
 
-async function buildAdminRanking(ctx, group, daily = true) {
+async function buildAdminRanking(
+  ctx,
+  group,
+  daily = true
+) {
 
   ensureGroupInfo(group);
 
@@ -927,14 +1084,23 @@ async function buildAdminRanking(ctx, group, daily = true) {
       ) {
 
         const statsUser =
-          ensureStatsUser(group, user);
+          ensureStatsUser(
+            group,
+            user
+          );
 
-        resetDailyStats(statsUser);
+        resetDailyStats(
+          statsUser
+        );
 
         const count =
           daily
-            ? (statsUser.dailyMessages || 0)
-            : (statsUser.totalMessages || 0);
+            ? (
+                statsUser.dailyMessages || 0
+              )
+            : (
+                statsUser.totalMessages || 0
+              );
 
         if (count > 0) {
 
@@ -967,7 +1133,6 @@ async function buildAdminRanking(ctx, group, daily = true) {
 
 ◂ هنوز فعالیتی از مدیران ثبت نشده است.`
       );
-
     }
 
     return (
@@ -996,24 +1161,29 @@ async function buildAdminRanking(ctx, group, daily = true) {
 
   admins
     .slice(0, 20)
-    .forEach((user, index) => {
+    .forEach(
+      (user, index) => {
 
-      const name =
-        user.username
-          ? `@${user.username}`
-          : (
-              `${user.firstName || ""} ${user.lastName || ""}`
-            ).trim() || "کاربر";
+        const name =
+          user.username
+            ? `@${user.username}`
+            : (
+                `${user.firstName || ""} ${user.lastName || ""}`
+              ).trim() ||
+              "کاربر";
 
-      const clickable =
-        `[${name}](tg://user?id=${user.id})`;
+        const clickable =
+          `<a href="tg://user?id=${user.id}">${
+            escapeHtml(name)
+          }</a>`;
 
-      text +=
+        text +=
 `◂ رتبه ${toPersianNumber(index + 1)} : ${clickable} با ${toPersianNumber(user.count)} پیام.
-( ${user.role} )
+( ${escapeHtml(user.role)} )
 
 `;
-    });
+      }
+    );
 
   return text.trim();
 }
@@ -1023,17 +1193,20 @@ async function buildAdminRanking(ctx, group, daily = true) {
 // ساخت آمار فعالیت گروه
 // =====================================
 
-async function buildActivityStats(ctx, group) {
+async function buildActivityStats(
+  ctx,
+  group
+) {
 
   ensureGroupInfo(group);
+
+  const today =
+    getDateKey();
 
   const users =
     Object.values(
       group.stats.users || {}
     );
-
-  const today =
-    getDateKey();
 
   let total = 0;
   let forwarded = 0;
@@ -1049,29 +1222,54 @@ async function buildActivityStats(ctx, group) {
   let document = 0;
 
   const activeToday = [];
-
   const totalActive = [];
-
   const addersToday = [];
-
   const totalAdders = [];
 
   for (const user of users) {
 
     resetDailyStats(user);
 
-    total += user.dailyMessages || 0;
-    forwarded += user.forwarded || 0;
-    textCount += user.text || 0;
-    sticker += user.sticker || 0;
-    animatedSticker += user.animatedSticker || 0;
-    gif += user.gif || 0;
-    photo += user.photo || 0;
-    voice += user.voice || 0;
-    audio += user.audio || 0;
-    video += user.video || 0;
-    videoNote += user.videoNote || 0;
-    document += user.document || 0;
+    if (
+      user.lastDate === today
+    ) {
+
+      total +=
+        user.dailyMessages || 0;
+
+      forwarded +=
+        user.forwarded || 0;
+
+      textCount +=
+        user.text || 0;
+
+      sticker +=
+        user.sticker || 0;
+
+      animatedSticker +=
+        user.animatedSticker || 0;
+
+      gif +=
+        user.gif || 0;
+
+      photo +=
+        user.photo || 0;
+
+      voice +=
+        user.voice || 0;
+
+      audio +=
+        user.audio || 0;
+
+      video +=
+        user.video || 0;
+
+      videoNote +=
+        user.videoNote || 0;
+
+      document +=
+        user.document || 0;
+    }
 
     if (
       user.lastDate === today &&
@@ -1177,27 +1375,33 @@ async function buildActivityStats(ctx, group) {
 
     activeToday
       .slice(0, 10)
-      .forEach((user, index) => {
+      .forEach(
+        (user, index) => {
 
-        const name =
-          user.username
-            ? `@${user.username}`
-            : (
-                `${user.firstName || ""} ${user.lastName || ""}`
-              ).trim() || "کاربر";
+          const name =
+            user.username
+              ? `@${user.username}`
+              : (
+                  `${user.firstName || ""} ${user.lastName || ""}`
+                ).trim() ||
+                "کاربر";
 
-        const clickable =
-          `[${name}](tg://user?id=${user.id})`;
+          const clickable =
+            `<a href="tg://user?id=${user.id}">${
+              escapeHtml(name)
+            }</a>`;
 
-        output +=
+          output +=
 `\n◂ رتبه ${toPersianNumber(index + 1)} : ${clickable} با ${toPersianNumber(user.dailyMessages || 0)} پیام.`;
-      });
+        }
+      );
 
     output += "\n";
   }
 
   output +=
-`\n─━ بهترین عضو کننده های امروز ━─\n`;
+`\n─━ بهترین عضو کننده های امروز ━─
+`;
 
   if (!addersToday.length) {
 
@@ -1208,21 +1412,26 @@ async function buildActivityStats(ctx, group) {
 
     addersToday
       .slice(0, 10)
-      .forEach((user, index) => {
+      .forEach(
+        (user, index) => {
 
-        const name =
-          user.username
-            ? `@${user.username}`
-            : (
-                `${user.firstName || ""} ${user.lastName || ""}`
-              ).trim() || "کاربر";
+          const name =
+            user.username
+              ? `@${user.username}`
+              : (
+                  `${user.firstName || ""} ${user.lastName || ""}`
+                ).trim() ||
+                "کاربر";
 
-        const clickable =
-          `[${name}](tg://user?id=${user.id})`;
+          const clickable =
+            `<a href="tg://user?id=${user.id}">${
+              escapeHtml(name)
+            }</a>`;
 
-        output +=
+          output +=
 `\n◂ رتبه ${toPersianNumber(index + 1)} : ${clickable} با ${toPersianNumber(user.dailyAdds || 0)} اد.`;
-      });
+        }
+      );
 
     output += "\n";
   }
@@ -1230,17 +1439,23 @@ async function buildActivityStats(ctx, group) {
   output +=
 `\n─┅━ ورودی و خروجی عضو ━┅─
 
-◂ ورودی عضو امروز : ${toPersianNumber(addersToday.reduce(
-    (sum, user) =>
-      sum + (user.dailyAdds || 0),
-    0
-  ))}
+◂ ورودی عضو امروز : ${toPersianNumber(
+    addersToday.reduce(
+      (sum, user) =>
+        sum +
+        (user.dailyAdds || 0),
+      0
+    )
+  )}
 
-◂ ورودی عضو کل : ${toPersianNumber(totalAdders.reduce(
-    (sum, user) =>
-      sum + (user.totalAdds || 0),
-    0
-  ))}
+◂ ورودی عضو کل : ${toPersianNumber(
+    totalAdders.reduce(
+      (sum, user) =>
+        sum +
+        (user.totalAdds || 0),
+      0
+    )
+  )}
 
 ─┅━ فعال ترین های کل ━┅─
 `;
@@ -1254,21 +1469,26 @@ async function buildActivityStats(ctx, group) {
 
     totalActive
       .slice(0, 10)
-      .forEach((user, index) => {
+      .forEach(
+        (user, index) => {
 
-        const name =
-          user.username
-            ? `@${user.username}`
-            : (
-                `${user.firstName || ""} ${user.lastName || ""}`
-              ).trim() || "کاربر";
+          const name =
+            user.username
+              ? `@${user.username}`
+              : (
+                  `${user.firstName || ""} ${user.lastName || ""}`
+                ).trim() ||
+                "کاربر";
 
-        const clickable =
-          `[${name}](tg://user?id=${user.id})`;
+          const clickable =
+            `<a href="tg://user?id=${user.id}">${
+              escapeHtml(name)
+            }</a>`;
 
-        output +=
+          output +=
 `\n◂ رتبه ${toPersianNumber(index + 1)} : ${clickable} با ${toPersianNumber(user.totalMessages || 0)} پیام.`;
-      });
+        }
+      );
 
     output += "\n";
   }
@@ -1286,21 +1506,26 @@ async function buildActivityStats(ctx, group) {
 
     totalAdders
       .slice(0, 10)
-      .forEach((user, index) => {
+      .forEach(
+        (user, index) => {
 
-        const name =
-          user.username
-            ? `@${user.username}`
-            : (
-                `${user.firstName || ""} ${user.lastName || ""}`
-              ).trim() || "کاربر";
+          const name =
+            user.username
+              ? `@${user.username}`
+              : (
+                  `${user.firstName || ""} ${user.lastName || ""}`
+                ).trim() ||
+                "کاربر";
 
-        const clickable =
-          `[${name}](tg://user?id=${user.id})`;
+          const clickable =
+            `<a href="tg://user?id=${user.id}">${
+              escapeHtml(name)
+            }</a>`;
 
-        output +=
+          output +=
 `\n◂ رتبه ${toPersianNumber(index + 1)} : ${clickable} با ${toPersianNumber(user.totalAdds || 0)} اد.`;
-      });
+        }
+      );
   }
 
   return output.trim();
@@ -1318,78 +1543,97 @@ function statsKeyboard() {
 
       [
         {
-          text: "『𓆩 آمار اد روزانه 𓆪』",
-          callback_data: "ginfo_stats_daily_adds"
+          text:
+            "『𓆩 آمار اد روزانه 𓆪』",
+          callback_data:
+            "ginfo_stats_daily_adds"
         }
       ],
 
       [
         {
-          text: "『𓆩 آمار کل 𓆪』",
-          callback_data: "ginfo_stats_total"
+          text:
+            "『𓆩 آمار کل 𓆪』",
+          callback_data:
+            "ginfo_stats_total"
         }
       ],
 
       [
         {
-          text: "『𓆩 آمار فعالیت ها 𓆪』",
-          callback_data: "ginfo_stats_activity"
+          text:
+            "『𓆩 آمار فعالیت ها 𓆪』",
+          callback_data:
+            "ginfo_stats_activity"
         }
       ],
 
       [
         {
-          text: "『𓆩 آمار روزانه 𓆪』",
-          callback_data: "ginfo_stats_daily"
+          text:
+            "『𓆩 آمار روزانه 𓆪』",
+          callback_data:
+            "ginfo_stats_daily"
         }
       ],
 
       [
         {
-          text: "『𓆩 آمار های دیگر 𓆪』",
-          callback_data: "ginfo_stats_other"
+          text:
+            "『𓆩 آمار های دیگر 𓆪』",
+          callback_data:
+            "ginfo_stats_other"
         }
       ],
 
       [
         {
-          text: "『𓆩 آمار اد کل 𓆪』",
-          callback_data: "ginfo_stats_total_adds"
+          text:
+            "『𓆩 آمار اد کل 𓆪』",
+          callback_data:
+            "ginfo_stats_total_adds"
         }
       ],
 
       [
         {
-          text: "『𓆩 آمار روزانه مدیران 𓆪』",
-          callback_data: "ginfo_stats_daily_admins"
+          text:
+            "『𓆩 آمار روزانه مدیران 𓆪』",
+          callback_data:
+            "ginfo_stats_daily_admins"
         }
       ],
 
       [
         {
-          text: "『𓆩 آمار کل مدیران 𓆪』",
-          callback_data: "ginfo_stats_total_admins"
+          text:
+            "『𓆩 آمار کل مدیران 𓆪』",
+          callback_data:
+            "ginfo_stats_total_admins"
         }
       ],
 
       [
         {
-          text: "『𓆩 برگشت 𓆪』",
-          callback_data: "ginfo_stats_back"
+          text:
+            "『𓆩 برگشت 𓆪』",
+          callback_data:
+            "ginfo_stats_back"
         },
         {
-          text: "『𓆩 بستن 𓆪』",
-          callback_data: "ginfo_stats_close"
+          text:
+            "『𓆩 بستن 𓆪』",
+          callback_data:
+            "ginfo_stats_close"
         }
       ]
-
     ]
   };
 }
 
 
 // =====================================
-// متن پنل آمار
+// متن اصلی پنل آمار
 // =====================================
 
 function statsPanelText() {
@@ -1405,27 +1649,6 @@ function statsPanelText() {
 
 
 // =====================================
-// بررسی مالک پنل آمار
-// =====================================
-
-function isStatsPanelOwner(ctx) {
-
-  if (!ctx || !ctx.callbackQuery) {
-    return false;
-  }
-
-  const message =
-    ctx.callbackQuery.message;
-
-  if (!message) {
-    return false;
-  }
-
-  return true;
-}
-
-
-// =====================================
 // ارسال پنل آمار
 // =====================================
 
@@ -1435,7 +1658,11 @@ async function showStatsPanel(ctx) {
     statsPanelText(),
     {
       reply_markup:
-        statsKeyboard()
+        statsKeyboard(),
+
+      reply_to_message_id:
+        ctx.message &&
+        ctx.message.message_id
     }
   );
 }
@@ -1459,18 +1686,23 @@ async function statsClose(ctx) {
       await ctx.deleteMessage();
     } catch {}
   }
-       }// =====================================
-// ثبت تمام قابلیت های اطلاعات گروه
+}
+
+
+// =====================================
+// پایان قسمت ۳
+// =====================================
+// =====================================
+// PulseGroupManager
+// GROUP INFO - PART 4 / 4
+// Handlers + Register + Export
 // =====================================
 
 function registerGroupInfo(bot) {
 
-  if (!bot) return;
-
-
-  // ===================================
-  // ثبت آمار پیام ها
-  // ===================================
+  // =====================================
+  // ثبت آمار پیام‌ها
+  // =====================================
 
   bot.use(async (ctx, next) => {
 
@@ -1478,929 +1710,789 @@ function registerGroupInfo(bot) {
 
       if (
         ctx.chat &&
-        (
-          ctx.chat.type === "group" ||
-          ctx.chat.type === "supergroup"
-        ) &&
+        ctx.chat.type !== "private" &&
         ctx.from &&
         !ctx.from.is_bot &&
         ctx.message
       ) {
 
-        const group =
-          getGroup(ctx.chat.id);
+        const group = getGroup(ctx.chat.id);
 
         if (group) {
-
           ensureGroupInfo(group);
 
-          const message =
-            ctx.message;
-
-          const isJoin =
-            message.new_chat_members &&
-            message.new_chat_members.length > 0;
-
-          const isLeave =
-            message.left_chat_member;
-
-          if (!isJoin && !isLeave) {
-
-            recordMessage(
-              group,
-              message,
-              ctx.from
-            );
+          // پیام‌های معمولی
+          if (!ctx.message.new_chat_members) {
+            recordMessage(group, ctx.from, ctx.message);
+            saveGroupInfo(ctx.chat.id, group);
           }
 
-          // -------------------------------
-          // ثبت افرادی که عضو جدید اضافه کردند
-          // -------------------------------
+          // ورود اعضای جدید
+          if (ctx.message.new_chat_members) {
 
-          if (isJoin) {
+            for (const member of ctx.message.new_chat_members) {
 
-            recordMemberAdd(
-              group,
-              ctx.from
-            );
+              if (!member.is_bot) {
+                ensureStatsUser(group, member);
 
-            for (
-              const newUser
-              of message.new_chat_members
-            ) {
-
-              if (!newUser.is_bot) {
-
-                ensureStatsUser(
+                recordMemberAdd(
                   group,
-                  newUser
+                  ctx.from,
+                  member
                 );
               }
             }
 
-            saveGroupInfo();
+            saveGroupInfo(ctx.chat.id, group);
           }
         }
       }
 
-    } catch {}
+    } catch (error) {
+      console.error("GROUP INFO STATS ERROR:", error.message);
+    }
 
     return next();
   });
 
 
-  // ===================================
+  // =====================================
   // دستور آیدی
-  // فقط مدیر و مالک + Reply
-  // ===================================
+  // =====================================
 
-  bot.hears(
-    /^آیدی$/i,
-    async ctx => {
+  bot.hears(/^آیدی$/i, async (ctx) => {
 
-      if (
-        !ctx.chat ||
-        !ctx.from ||
-        !ctx.message
-      ) {
-        return;
-      }
+    try {
 
-      if (
-        ctx.chat.type !== "group" &&
-        ctx.chat.type !== "supergroup"
-      ) {
-        return;
-      }
+      if (!ctx.chat || ctx.chat.type === "private") return;
+      if (!ctx.from) return;
 
-      const replied =
-        ctx.message.reply_to_message;
+      const reply = ctx.message.reply_to_message;
 
-      // بدون ریپلای = سکوت کامل
-      if (!replied) {
-        return;
-      }
+      // بدون ریپلای = سکوت
+      if (!reply || !reply.from) return;
 
-      let member;
+      const group = getGroup(ctx.chat.id);
 
-      try {
+      if (!group) return;
 
-        member =
-          await ctx.telegram.getChatMember(
-            ctx.chat.id,
-            ctx.from.id
-          );
+      const member = await ctx.telegram.getChatMember(
+        ctx.chat.id,
+        ctx.from.id
+      );
 
-      } catch {
-        return;
-      }
+      const isOwner =
+        member.status === "creator";
 
-      if (
-        member.status !== "creator" &&
-        member.status !== "administrator"
-      ) {
-        return;
-      }
+      const isAdmin =
+        member.status === "administrator";
 
-      const target =
-        replied.from;
-
-      if (!target) {
-        return;
-      }
-
-      const group =
-        getGroup(ctx.chat.id);
-
-      if (!group) {
-        return;
-      }
-
-      ensureGroupInfo(group);
+      // کاربر عادی = سکوت
+      if (!isOwner && !isAdmin) return;
 
       await sendUserInfo(
         ctx,
-        group,
-        target
+        reply.from
       );
+
+    } catch (error) {
+
+      console.error(
+        "GROUP INFO ID ERROR:",
+        error.message
+      );
+
     }
-  );
+
+  });
 
 
-  // ===================================
-  // دستور قوانین
-  // همه کاربران + فقط Reply
-  // ===================================
+  // =====================================
+  // قوانین
+  // =====================================
 
   bot.hears(
     /^(قوانین|قوانین گروه)$/i,
-    async ctx => {
+    async (ctx) => {
 
-      if (
-        !ctx.chat ||
-        !ctx.message
-      ) {
-        return;
-      }
+      try {
 
-      if (
-        ctx.chat.type !== "group" &&
-        ctx.chat.type !== "supergroup"
-      ) {
-        return;
-      }
+        if (!ctx.chat || ctx.chat.type === "private") return;
 
-      const replied =
-        ctx.message.reply_to_message;
+        // قوانین هم فقط با Reply
+        if (!ctx.message.reply_to_message) return;
 
-      // بدون ریپلای = سکوت
-      if (!replied) {
-        return;
-      }
+        const group = getGroup(ctx.chat.id);
 
-      const group =
-        getGroup(ctx.chat.id);
+        if (!group) return;
 
-      if (!group) {
-        return;
-      }
+        ensureGroupInfo(group);
 
-      ensureGroupInfo(group);
+        const rules = group.groupInfo.rules;
 
-      if (
-        !group.info.rules ||
-        !String(group.info.rules).trim()
-      ) {
+        if (!rules || !rules.trim()) {
+
+          await ctx.reply(
+            "قوانین گروه هنوز تنظیم نشده است.",
+            {
+              reply_to_message_id:
+                ctx.message.message_id
+            }
+          );
+
+          return;
+        }
 
         await ctx.reply(
-          "قوانین گروه هنوز تنظیم نشده است.",
+          rules,
           {
             reply_to_message_id:
               ctx.message.message_id
           }
         );
 
-        return;
+      } catch (error) {
+
+        console.error(
+          "GROUP RULES ERROR:",
+          error.message
+        );
+
       }
 
-      await ctx.reply(
-        group.info.rules,
-        {
-          reply_to_message_id:
-            ctx.message.message_id
-        }
-      );
     }
   );
 
 
-  // ===================================
+  // =====================================
   // تنظیم قوانین
-  // فقط مالک + Reply
-  // ===================================
+  // فقط صاحب گروه
+  // =====================================
 
   bot.hears(
     /^تنظیم قوانین$/i,
-    async ctx => {
-
-      if (
-        !ctx.chat ||
-        !ctx.from ||
-        !ctx.message
-      ) {
-        return;
-      }
-
-      if (
-        ctx.chat.type !== "group" &&
-        ctx.chat.type !== "supergroup"
-      ) {
-        return;
-      }
-
-      const replied =
-        ctx.message.reply_to_message;
-
-      // بدون ریپلای = سکوت
-      if (!replied) {
-        return;
-      }
-
-      let member;
+    async (ctx) => {
 
       try {
 
-        member =
-          await ctx.telegram.getChatMember(
-            ctx.chat.id,
-            ctx.from.id
-          );
+        if (!ctx.chat || ctx.chat.type === "private") return;
 
-      } catch {
-        return;
-      }
+        // حتماً Reply
+        if (!ctx.message.reply_to_message) return;
 
-      // فقط صاحب گروه
-      if (member.status !== "creator") {
-        return;
-      }
+        const member = await ctx.telegram.getChatMember(
+          ctx.chat.id,
+          ctx.from.id
+        );
 
-      const group =
-        getGroup(ctx.chat.id);
+        // فقط Owner
+        if (member.status !== "creator") return;
 
-      if (!group) {
-        return;
-      }
+        const group = getGroup(ctx.chat.id);
 
-      ensureGroupInfo(group);
-
-      // علامت انتظار برای دریافت قوانین
-      if (!group.info.waitingForRules) {
-        group.info.waitingForRules = {};
-      }
-
-      group.info.waitingForRules[
-        String(ctx.from.id)
-      ] = true;
-
-      saveGroupInfo();
-
-      await ctx.reply(
-        "قوانین را ارسال کنید.",
-        {
-          reply_to_message_id:
-            ctx.message.message_id
-        }
-      );
-    }
-  );
-
-
-  // ===================================
-  // دریافت متن قوانین جدید
-  // ===================================
-
-  bot.on(
-    "text",
-    async ctx => {
-
-      try {
-
-        if (
-          !ctx.chat ||
-          !ctx.from ||
-          !ctx.message
-        ) {
-          return;
-        }
-
-        if (
-          ctx.chat.type !== "group" &&
-          ctx.chat.type !== "supergroup"
-        ) {
-          return;
-        }
-
-        const group =
-          getGroup(ctx.chat.id);
-
-        if (!group) {
-          return;
-        }
+        if (!group) return;
 
         ensureGroupInfo(group);
 
-        const waiting =
-          group.info.waitingForRules &&
-          group.info.waitingForRules[
-            String(ctx.from.id)
-          ];
+        group.groupInfo.waitingForRules =
+          ctx.from.id;
 
-        if (!waiting) {
-          return;
-        }
-
-        let member;
-
-        try {
-
-          member =
-            await ctx.telegram.getChatMember(
-              ctx.chat.id,
-              ctx.from.id
-            );
-
-        } catch {
-          return;
-        }
-
-        if (member.status !== "creator") {
-
-          delete group.info.waitingForRules[
-            String(ctx.from.id)
-          ];
-
-          saveGroupInfo();
-
-          return;
-        }
-
-        const text =
-          ctx.message.text;
-
-        if (
-          !text ||
-          !text.trim()
-        ) {
-          return;
-        }
-
-        group.info.rules =
-          text.trim();
-
-        delete group.info.waitingForRules[
-          String(ctx.from.id)
-        ];
-
-        saveGroupInfo();
+        saveGroupInfo(
+          ctx.chat.id,
+          group
+        );
 
         await ctx.reply(
-          "قوانین گروه ذخیره شد.",
+          "قوانین را ارسال کنید.",
           {
             reply_to_message_id:
               ctx.message.message_id
           }
         );
 
-      } catch {}
+      } catch (error) {
+
+        console.error(
+          "SET GROUP RULES ERROR:",
+          error.message
+        );
+
+      }
+
     }
   );
 
 
-  // ===================================
-  // حذف قوانین
-  // فقط مالک + Reply
-  // ===================================
+  // =====================================
+  // دریافت متن قوانین
+  // =====================================
 
-  bot.hears(
-    /^حذف قوانین$/i,
-    async ctx => {
+  bot.on("text", async (ctx, next) => {
 
-      if (
-        !ctx.chat ||
-        !ctx.from ||
-        !ctx.message
-      ) {
-        return;
+    try {
+
+      if (!ctx.chat || ctx.chat.type === "private") {
+        return next();
       }
 
-      if (
-        ctx.chat.type !== "group" &&
-        ctx.chat.type !== "supergroup"
-      ) {
-        return;
-      }
+      const group = getGroup(ctx.chat.id);
 
-      const replied =
-        ctx.message.reply_to_message;
-
-      if (!replied) {
-        return;
-      }
-
-      let member;
-
-      try {
-
-        member =
-          await ctx.telegram.getChatMember(
-            ctx.chat.id,
-            ctx.from.id
-          );
-
-      } catch {
-        return;
-      }
-
-      if (member.status !== "creator") {
-        return;
-      }
-
-      const group =
-        getGroup(ctx.chat.id);
-
-      if (!group) {
-        return;
-      }
+      if (!group) return next();
 
       ensureGroupInfo(group);
 
-      group.info.rules = "";
+      const waitingUser =
+        group.groupInfo.waitingForRules;
 
-      if (group.info.waitingForRules) {
+      // در انتظار دریافت قوانین نیست
+      if (!waitingUser) return next();
 
-        delete group.info.waitingForRules[
-          String(ctx.from.id)
-        ];
+      // فقط همان Owner
+      if (
+        !ctx.from ||
+        ctx.from.id !== waitingUser
+      ) {
+        return next();
       }
 
-      saveGroupInfo();
+      // خود فرمان‌ها را به عنوان قوانین ذخیره نکن
+      const text = ctx.message.text;
+
+      if (
+        /^(تنظیم قوانین|حذف قوانین|قوانین|قوانین گروه)$/i.test(
+          text.trim()
+        )
+      ) {
+        return next();
+      }
+
+      group.groupInfo.rules = text.trim();
+
+      group.groupInfo.waitingForRules = null;
+
+      saveGroupInfo(
+        ctx.chat.id,
+        group
+      );
 
       await ctx.reply(
-        "قوانین گروه حذف شد.",
+        "قوانین گروه ذخیره شد.",
         {
           reply_to_message_id:
             ctx.message.message_id
         }
       );
+
+      return;
+
+    } catch (error) {
+
+      console.error(
+        "SAVE GROUP RULES ERROR:",
+        error.message
+      );
+
+      return next();
+    }
+
+  });
+
+
+  // =====================================
+  // حذف قوانین
+  // فقط صاحب گروه
+  // =====================================
+
+  bot.hears(
+    /^حذف قوانین$/i,
+    async (ctx) => {
+
+      try {
+
+        if (!ctx.chat || ctx.chat.type === "private") return;
+
+        if (!ctx.message.reply_to_message) return;
+
+        const member = await ctx.telegram.getChatMember(
+          ctx.chat.id,
+          ctx.from.id
+        );
+
+        // فقط Owner
+        if (member.status !== "creator") return;
+
+        const group = getGroup(ctx.chat.id);
+
+        if (!group) return;
+
+        ensureGroupInfo(group);
+
+        group.groupInfo.rules = "";
+
+        group.groupInfo.waitingForRules = null;
+
+        saveGroupInfo(
+          ctx.chat.id,
+          group
+        );
+
+        await ctx.reply(
+          "قوانین گروه حذف شد.",
+          {
+            reply_to_message_id:
+              ctx.message.message_id
+          }
+        );
+
+      } catch (error) {
+
+        console.error(
+          "DELETE GROUP RULES ERROR:",
+          error.message
+        );
+
+      }
+
     }
   );
 
 
-  // ===================================
+  // =====================================
   // دستور آمار
-  // فقط مدیر و مالک + Reply
-  // ===================================
+  // فقط Owner / Admin
+  // =====================================
 
-  bot.hears(
-    /^آمار$/i,
-    async ctx => {
+  bot.hears(/^آمار$/i, async (ctx) => {
 
-      if (
-        !ctx.chat ||
-        !ctx.from ||
-        !ctx.message
-      ) {
+    try {
+
+      if (!ctx.chat || ctx.chat.type === "private") return;
+
+      // بدون Reply = سکوت
+      if (!ctx.message.reply_to_message) return;
+
+      const member = await ctx.telegram.getChatMember(
+        ctx.chat.id,
+        ctx.from.id
+      );
+
+      const isOwner =
+        member.status === "creator";
+
+      const isAdmin =
+        member.status === "administrator";
+
+      // کاربر عادی = سکوت
+      if (!isOwner && !isAdmin) return;
+
+      const group = getGroup(ctx.chat.id);
+
+      if (!group) return;
+
+      ensureGroupInfo(group);
+
+      saveGroupInfo(
+        ctx.chat.id,
+        group
+      );
+
+      await showStatsPanel(ctx);
+
+    } catch (error) {
+
+      console.error(
+        "GROUP STATS ERROR:",
+        error.message
+      );
+
+    }
+
+  });
+
+
+  // =====================================
+  // کنترل کامل دکمه‌های آمار
+  // =====================================
+
+  bot.action(/^ginfo_stats_/, async (ctx) => {
+
+    try {
+
+      if (!ctx.chat || ctx.chat.type === "private") {
+        await ctx.answerCbQuery();
         return;
       }
 
-      if (
-        ctx.chat.type !== "group" &&
-        ctx.chat.type !== "supergroup"
-      ) {
+      const member = await ctx.telegram.getChatMember(
+        ctx.chat.id,
+        ctx.from.id
+      );
+
+      const isOwner =
+        member.status === "creator";
+
+      const isAdmin =
+        member.status === "administrator";
+
+      // فقط Owner / Admin
+      if (!isOwner && !isAdmin) {
+        await ctx.answerCbQuery();
         return;
       }
 
-      const replied =
-        ctx.message.reply_to_message;
-
-      // بدون ریپلای = سکوت
-      if (!replied) {
-        return;
-      }
-
-      let member;
-
-      try {
-
-        member =
-          await ctx.telegram.getChatMember(
-            ctx.chat.id,
-            ctx.from.id
-          );
-
-      } catch {
-        return;
-      }
-
-      if (
-        member.status !== "creator" &&
-        member.status !== "administrator"
-      ) {
-        return;
-      }
-
-      const group =
-        getGroup(ctx.chat.id);
+      const group = getGroup(ctx.chat.id);
 
       if (!group) {
+        await ctx.answerCbQuery();
         return;
       }
 
       ensureGroupInfo(group);
 
-      await showStatsPanel(ctx);
-    }
-  );
+      const action =
+        ctx.callbackQuery.data;
 
+      // =====================================
+      // بستن
+      // =====================================
 
-  // ===================================
-  // دکمه های پنل آمار
-  // ===================================
-
-  bot.action(
-    /^ginfo_stats_/,
-    async ctx => {
-
-      try {
-
-        if (
-          !ctx.callbackQuery ||
-          !ctx.callbackQuery.message
-        ) {
-          return;
-        }
-
-        const chatId =
-          ctx.callbackQuery.message.chat.id;
-
-        const userId =
-          ctx.from.id;
-
-        let member;
-
-        try {
-
-          member =
-            await ctx.telegram.getChatMember(
-              chatId,
-              userId
-            );
-
-        } catch {
-
-          await ctx.answerCbQuery();
-          return;
-        }
-
-        if (
-          member.status !== "creator" &&
-          member.status !== "administrator"
-        ) {
-
-          await ctx.answerCbQuery();
-          return;
-        }
-
-        const data =
-          ctx.callbackQuery.data;
-
-        const group =
-          getGroup(chatId);
-
-        if (!group) {
-
-          await ctx.answerCbQuery();
-          return;
-        }
-
-        ensureGroupInfo(group);
-
-        // -------------------------------
-        // بستن
-        // -------------------------------
-
-        if (
-          data === "ginfo_stats_close"
-        ) {
-
-          await ctx.answerCbQuery();
-
-          await statsClose(ctx);
-
-          return;
-        }
-
-        // -------------------------------
-        // برگشت
-        // -------------------------------
-
-        if (
-          data === "ginfo_stats_back"
-        ) {
-
-          await ctx.answerCbQuery();
-
-          await ctx.editMessageText(
-            statsPanelText(),
-            {
-              reply_markup:
-                statsKeyboard()
-            }
-          );
-
-          return;
-        }
-
-        // -------------------------------
-        // آمار روزانه اد
-        // -------------------------------
-
-        if (
-          data === "ginfo_stats_daily_adds"
-        ) {
-
-          await ctx.answerCbQuery();
-
-          await ctx.editMessageText(
-            buildDailyAdds(group),
-            {
-              parse_mode: "Markdown",
-              reply_markup: statsKeyboard()
-            }
-          );
-
-          return;
-        }
-
-        // -------------------------------
-        // آمار کل
-        // -------------------------------
-
-        if (
-          data === "ginfo_stats_total"
-        ) {
-
-          await ctx.answerCbQuery();
-
-          await ctx.editMessageText(
-            buildTotalRanking(group),
-            {
-              parse_mode: "Markdown",
-              reply_markup: statsKeyboard()
-            }
-          );
-
-          return;
-        }
-
-        // -------------------------------
-        // آمار فعالیت ها
-        // -------------------------------
-
-        if (
-          data === "ginfo_stats_activity"
-        ) {
-
-          await ctx.answerCbQuery();
-
-          const text =
-            await buildActivityStats(
-              ctx,
-              group
-            );
-
-          await ctx.editMessageText(
-            text,
-            {
-              parse_mode: "Markdown",
-              reply_markup: statsKeyboard()
-            }
-          );
-
-          return;
-        }
-
-        // -------------------------------
-        // آمار روزانه
-        // -------------------------------
-
-        if (
-          data === "ginfo_stats_daily"
-        ) {
-
-          await ctx.answerCbQuery();
-
-          await ctx.editMessageText(
-            buildDailyRanking(group),
-            {
-              parse_mode: "Markdown",
-              reply_markup: statsKeyboard()
-            }
-          );
-
-          return;
-        }
-
-        // -------------------------------
-        // آمار اد کل
-        // -------------------------------
-
-        if (
-          data === "ginfo_stats_total_adds"
-        ) {
-
-          await ctx.answerCbQuery();
-
-          await ctx.editMessageText(
-            buildTotalAdds(group),
-            {
-              parse_mode: "Markdown",
-              reply_markup: statsKeyboard()
-            }
-          );
-
-          return;
-        }
-
-        // -------------------------------
-        // آمار روزانه مدیران
-        // -------------------------------
-
-        if (
-          data ===
-          "ginfo_stats_daily_admins"
-        ) {
-
-          await ctx.answerCbQuery();
-
-          const text =
-            await buildAdminRanking(
-              ctx,
-              group,
-              true
-            );
-
-          await ctx.editMessageText(
-            text,
-            {
-              parse_mode: "Markdown",
-              reply_markup: statsKeyboard()
-            }
-          );
-
-          return;
-        }
-
-        // -------------------------------
-        // آمار کل مدیران
-        // -------------------------------
-
-        if (
-          data ===
-          "ginfo_stats_total_admins"
-        ) {
-
-          await ctx.answerCbQuery();
-
-          const text =
-            await buildAdminRanking(
-              ctx,
-              group,
-              false
-            );
-
-          await ctx.editMessageText(
-            text,
-            {
-              parse_mode: "Markdown",
-              reply_markup: statsKeyboard()
-            }
-          );
-
-          return;
-        }
-
-        // -------------------------------
-        // آمار های دیگر
-        // -------------------------------
-
-        if (
-          data === "ginfo_stats_other"
-        ) {
-
-          await ctx.answerCbQuery();
-
-          const users =
-            Object.values(
-              group.stats.users || {}
-            );
-
-          const totalUsers =
-            users.length;
-
-          const totalAdds =
-            users.reduce(
-              (sum, user) =>
-                sum +
-                (user.totalAdds || 0),
-              0
-            );
-
-          const totalMessages =
-            users.reduce(
-              (sum, user) =>
-                sum +
-                (user.totalMessages || 0),
-              0
-            );
-
-          const text =
-`─┅━ آمار های دیگر ━┅─
-
-◂ کاربران ثبت شده : ${toPersianNumber(totalUsers)} نفر
-◂ مجموع پیام های ثبت شده : ${toPersianNumber(totalMessages)} عدد
-◂ مجموع اد های ثبت شده : ${toPersianNumber(totalAdds)} نفر`;
-
-          await ctx.editMessageText(
-            text,
-            {
-              reply_markup:
-                statsKeyboard()
-            }
-          );
-
-          return;
-        }
+      if (action === "ginfo_stats_close") {
 
         await ctx.answerCbQuery();
 
-      } catch {
-
         try {
-          await ctx.answerCbQuery();
-        } catch {}
+
+          await ctx.deleteMessage();
+
+        } catch (error) {
+
+          console.error(
+            "STATS CLOSE ERROR:",
+            error.message
+          );
+
+        }
+
+        return;
       }
+
+
+      // =====================================
+      // برگشت
+      // =====================================
+
+      if (action === "ginfo_stats_back") {
+
+        await ctx.answerCbQuery();
+
+        await ctx.editMessageText(
+          statsPanelText(),
+          {
+            reply_markup:
+              statsKeyboard().reply_markup
+          }
+        );
+
+        return;
+      }
+
+
+      // =====================================
+      // آمار اد روزانه
+      // =====================================
+
+      if (action === "ginfo_stats_daily_adds") {
+
+        await ctx.answerCbQuery();
+
+        const text =
+          buildDailyAdds(group);
+
+        await ctx.editMessageText(
+          text,
+          {
+            parse_mode: "HTML",
+            reply_markup:
+              statsKeyboard().reply_markup
+          }
+        );
+
+        return;
+      }
+
+
+      // =====================================
+      // آمار کل
+      // =====================================
+
+      if (action === "ginfo_stats_total") {
+
+        await ctx.answerCbQuery();
+
+        const text =
+          buildTotalRanking(group);
+
+        await ctx.editMessageText(
+          text,
+          {
+            parse_mode: "HTML",
+            reply_markup:
+              statsKeyboard().reply_markup
+          }
+        );
+
+        return;
+      }
+
+
+      // =====================================
+      // آمار فعالیت‌ها
+      // =====================================
+
+      if (action === "ginfo_stats_activity") {
+
+        await ctx.answerCbQuery();
+
+        const text =
+          buildActivityStats(
+            ctx,
+            group
+          );
+
+        await ctx.editMessageText(
+          text,
+          {
+            parse_mode: "HTML",
+            reply_markup:
+              statsKeyboard().reply_markup
+          }
+        );
+
+        return;
+      }
+
+
+      // =====================================
+      // آمار روزانه
+      // =====================================
+
+      if (action === "ginfo_stats_daily") {
+
+        await ctx.answerCbQuery();
+
+        const text =
+          buildDailyRanking(group);
+
+        await ctx.editMessageText(
+          text,
+          {
+            parse_mode: "HTML",
+            reply_markup:
+              statsKeyboard().reply_markup
+          }
+        );
+
+        return;
+      }
+
+
+      // =====================================
+      // آمار های دیگر
+      // =====================================
+
+      if (action === "ginfo_stats_other") {
+
+        await ctx.answerCbQuery();
+
+        const info =
+          group.groupInfo;
+
+        const users =
+          Object.values(info.users || {});
+
+        let totalMessages = 0;
+        let totalAdds = 0;
+
+        for (const user of users) {
+
+          totalMessages +=
+            Number(user.totalMessages || 0);
+
+          totalAdds +=
+            Number(user.totalAdds || 0);
+        }
+
+        const text = [
+          "• آمار های دیگر گروه",
+          "",
+          `◂ تعداد کاربران ثبت شده : ${toPersianNumber(users.length)} نفر`,
+          `◂ کل پیام های ثبت شده : ${toPersianNumber(totalMessages)} پیام`,
+          `◂ کل اد های ثبت شده : ${toPersianNumber(totalAdds)} نفر`
+        ].join("\n");
+
+        await ctx.editMessageText(
+          text,
+          {
+            reply_markup:
+              statsKeyboard().reply_markup
+          }
+        );
+
+        return;
+      }
+
+
+      // =====================================
+      // آمار اد کل
+      // =====================================
+
+      if (action === "ginfo_stats_total_adds") {
+
+        await ctx.answerCbQuery();
+
+        const text =
+          buildTotalAdds(group);
+
+        await ctx.editMessageText(
+          text,
+          {
+            parse_mode: "HTML",
+            reply_markup:
+              statsKeyboard().reply_markup
+          }
+        );
+
+        return;
+      }
+
+
+      // =====================================
+      // آمار روزانه مدیران
+      // =====================================
+
+      if (action === "ginfo_stats_daily_admins") {
+
+        await ctx.answerCbQuery();
+
+        const text =
+          await buildAdminRanking(
+            ctx,
+            group,
+            true
+          );
+
+        await ctx.editMessageText(
+          text,
+          {
+            parse_mode: "HTML",
+            reply_markup:
+              statsKeyboard().reply_markup
+          }
+        );
+
+        return;
+      }
+
+
+      // =====================================
+      // آمار کل مدیران
+      // =====================================
+
+      if (action === "ginfo_stats_total_admins") {
+
+        await ctx.answerCbQuery();
+
+        const text =
+          await buildAdminRanking(
+            ctx,
+            group,
+            false
+          );
+
+        await ctx.editMessageText(
+          text,
+          {
+            parse_mode: "HTML",
+            reply_markup:
+              statsKeyboard().reply_markup
+          }
+        );
+
+        return;
+      }
+
+
+      await ctx.answerCbQuery();
+
+    } catch (error) {
+
+      console.error(
+        "GROUP STATS BUTTON ERROR:",
+        error.message
+      );
+
+      try {
+        await ctx.answerCbQuery(
+          "خطایی رخ داد."
+        );
+      } catch (_) {}
+
     }
+
+  });
+
+}
+
+
+// =====================================
+// راه‌اندازی اطلاعات گروه
+// =====================================
+
+function initGroupInfo(chatId) {
+
+  const group = getGroup(chatId);
+
+  if (!group) return null;
+
+  ensureGroupInfo(group);
+
+  resetDailyStats(group);
+
+  saveGroupInfo(
+    chatId,
+    group
   );
+
+  return group;
 }
 
 
 // =====================================
-// اطمینان از وجود اطلاعات گروه
-// =====================================
-
-function initGroupInfo(group) {
-
-  return ensureGroupInfo(group);
-}
-
-
-// =====================================
-// خروجی فایل
+// EXPORT
 // =====================================
 
 module.exports = {
-
   registerGroupInfo,
 
   ensureGroupInfo,
-
   initGroupInfo,
 
   ensureStatsUser,
-
   recordMessage,
-
   recordMemberAdd,
 
   buildUserInfo,
-
   sendUserInfo,
 
   buildDailyRanking,
-
   buildTotalRanking,
 
   buildDailyAdds,
-
   buildTotalAdds,
 
   buildAdminRanking,
-
   buildActivityStats,
 
   statsKeyboard,
-
   statsPanelText
 };
