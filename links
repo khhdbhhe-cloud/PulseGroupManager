@@ -11,14 +11,14 @@ const {
 
 
 // =====================================
-// حافظه پنل‌های باز
+// حافظه پنل‌ها
 // =====================================
 
 const openedPanels = {};
 
 
 // =====================================
-// بررسی گروه بودن چت
+// بررسی گروه
 // =====================================
 
 function isGroupChat(ctx) {
@@ -37,10 +37,11 @@ function isGroupChat(ctx) {
 
 async function getMemberRole(ctx, userId) {
   try {
-    const member = await ctx.telegram.getChatMember(
-      ctx.chat.id,
-      userId
-    );
+    const member =
+      await ctx.telegram.getChatMember(
+        ctx.chat.id,
+        userId
+      );
 
     return member.status;
   } catch (error) {
@@ -50,7 +51,7 @@ async function getMemberRole(ctx, userId) {
 
 
 // =====================================
-// گرفتن اطلاعات لینک گروه
+// اطلاعات لینک گروه
 // =====================================
 
 function getLinkData(group) {
@@ -61,7 +62,6 @@ function getLinkData(group) {
       oneTime: null,
       timed: [],
       location: null,
-
       approval: null,
       request: null,
 
@@ -79,24 +79,42 @@ function getLinkData(group) {
     group.links.managers = {};
   }
 
-  if (typeof group.links.receiveEnabled !== "boolean") {
+  if (!Array.isArray(group.links.timed)) {
+    group.links.timed = [];
+  }
+
+  if (
+    typeof group.links.receiveEnabled !==
+    "boolean"
+  ) {
     group.links.receiveEnabled = false;
   }
 
-  if (!group.links.receiveDuration) {
+  if (
+    !Number.isInteger(
+      Number(group.links.receiveDuration)
+    ) ||
+    Number(group.links.receiveDuration) < 1 ||
+    Number(group.links.receiveDuration) > 24
+  ) {
     group.links.receiveDuration = 1;
   }
 
-  if (!group.links.timedDuration) {
+  if (
+    !Number.isInteger(
+      Number(group.links.timedDuration)
+    ) ||
+    Number(group.links.timedDuration) < 1 ||
+    Number(group.links.timedDuration) > 24
+  ) {
     group.links.timedDuration = 24;
   }
 
-  if (typeof group.links.allManagersAccess !== "boolean") {
+  if (
+    typeof group.links.allManagersAccess !==
+    "boolean"
+  ) {
     group.links.allManagersAccess = false;
-  }
-
-  if (!Array.isArray(group.links.timed)) {
-    group.links.timed = [];
   }
 
   return group.links;
@@ -104,7 +122,7 @@ function getLinkData(group) {
 
 
 // =====================================
-// بررسی مالک
+// بررسی مالک گروه
 // =====================================
 
 async function isOwner(ctx, userId = null) {
@@ -113,16 +131,16 @@ async function isOwner(ctx, userId = null) {
     return false;
   }
 
-  const id = userId || ctx.from.id;
+  const id =
+    userId || ctx.from.id;
 
-  const role = await getMemberRole(
-    ctx,
-    id
-  );
+  const role =
+    await getMemberRole(
+      ctx,
+      id
+    );
 
-  return (
-    role === "creator"
-  );
+  return role === "creator";
 }
 
 
@@ -139,39 +157,37 @@ async function hasLinkManagementAccess(
     return false;
   }
 
-  const id = userId || ctx.from.id;
+  const id =
+    userId || ctx.from.id;
 
-  const role = await getMemberRole(
-    ctx,
-    id
-  );
+  const role =
+    await getMemberRole(
+      ctx,
+      id
+    );
 
-  // مالک همیشه دسترسی دارد
+  // مالک همیشه دسترسی کامل دارد
   if (role === "creator") {
     return true;
   }
 
-  // فقط مدیر می‌تواند دسترسی لینک داشته باشد
-  if (
-    role !== "administrator"
-  ) {
+  // فقط مدیر می‌تواند دسترسی داشته باشد
+  if (role !== "administrator") {
     return false;
   }
 
-  const group = getGroup(
-    ctx.chat.id
-  );
+  const group =
+    getGroup(ctx.chat.id);
 
-  const links = getLinkData(
-    group
-  );
+  const links =
+    getLinkData(group);
 
-  // دسترسی همه مدیران
+  // دسترسی عمومی مدیران
   if (links.allManagersAccess) {
     return true;
   }
 
-  // دسترسی اختصاصی مدیر
+  // دسترسی اختصاصی
   return (
     links.managers[id] === true
   );
@@ -179,140 +195,14 @@ async function hasLinkManagementAccess(
 
 
 // =====================================
-// بررسی مدیر لینک
+// بررسی مدیر مجاز لینک
 // =====================================
 
 async function checkLinkManager(ctx) {
 
-  if (!isGroupChat(ctx)) {
-    return false;
-  }
-
   return await hasLinkManagementAccess(
     ctx,
     ctx.from.id
-  );
-}
-
-
-// =====================================
-// بررسی مالک پنل
-// =====================================
-
-function isPanelOwner(
-  ctx,
-  ownerId
-) {
-
-  if (!ctx || !ctx.from) {
-    return false;
-  }
-
-  return String(ctx.from.id) ===
-    String(ownerId);
-}
-
-
-// =====================================
-// ثبت پنل باز شده
-// =====================================
-
-function rememberPanel(
-  chatId,
-  messageId,
-  ownerId,
-  type
-) {
-
-  const key =
-    `${chatId}:${messageId}`;
-
-  openedPanels[key] = {
-    ownerId: String(ownerId),
-    type: type || "owner",
-    createdAt: Date.now()
-  };
-}
-
-
-// =====================================
-// گرفتن پنل
-// =====================================
-
-function getPanel(
-  chatId,
-  messageId
-) {
-
-  const key =
-    `${chatId}:${messageId}`;
-
-  return openedPanels[key] || null;
-}
-
-
-// =====================================
-// حذف پنل
-// =====================================
-
-function removePanel(
-  chatId,
-  messageId
-) {
-
-  const key =
-    `${chatId}:${messageId}`;
-
-  delete openedPanels[key];
-}
-
-
-// =====================================
-// پاک کردن پنل‌های قدیمی
-// =====================================
-
-function cleanOldPanels() {
-
-  const now = Date.now();
-
-  for (
-    const key of Object.keys(openedPanels)
-  ) {
-
-    if (
-      now -
-      openedPanels[key].createdAt >
-      30 * 60 * 1000
-    ) {
-      delete openedPanels[key];
-    }
-  }
-}
-
-
-// =====================================
-// پاسخ به فرمان
-// همیشه Reply
-// =====================================
-
-async function replyToCommand(
-  ctx,
-  text,
-  extra = {}
-) {
-
-  if (!ctx.message) {
-    return null;
-  }
-
-  return await ctx.reply(
-    text,
-    {
-      ...extra,
-      reply_parameters: {
-        message_id: ctx.message.message_id
-      }
-    }
   );
 }
 
@@ -327,17 +217,15 @@ function getUserName(user) {
     return "کاربر";
   }
 
-  const first =
-    user.first_name || "";
-
-  const last =
-    user.last_name || "";
-
-  const full =
-    `${first} ${last}`.trim();
+  const name = [
+    user.first_name || "",
+    user.last_name || ""
+  ]
+    .join(" ")
+    .trim();
 
   return (
-    full ||
+    name ||
     user.username ||
     "کاربر"
   );
@@ -345,7 +233,119 @@ function getUserName(user) {
 
 
 // =====================================
-// ساخت متن پنل اصلی
+// Reply واقعی به پیام فرمان
+// =====================================
+
+async function replyToCommand(
+  ctx,
+  text,
+  extra = {}
+) {
+
+  if (
+    !ctx ||
+    !ctx.message ||
+    !ctx.message.message_id
+  ) {
+    return null;
+  }
+
+  return await ctx.telegram.sendMessage(
+    ctx.chat.id,
+    text,
+    {
+      ...extra,
+
+      reply_parameters: {
+        message_id:
+          ctx.message.message_id
+      }
+    }
+  );
+}
+
+
+// =====================================
+// ذخیره پنل
+// =====================================
+
+function rememberPanel(
+  chatId,
+  messageId,
+  ownerId,
+  type
+) {
+
+  openedPanels[
+    `${chatId}:${messageId}`
+  ] = {
+    ownerId: String(ownerId),
+    type: type,
+    createdAt: Date.now()
+  };
+}
+
+
+// =====================================
+// گرفتن پنل
+// =====================================
+
+function getPanel(
+  chatId,
+  messageId
+) {
+
+  return (
+    openedPanels[
+      `${chatId}:${messageId}`
+    ] || null
+  );
+}
+
+
+// =====================================
+// حذف پنل
+// =====================================
+
+function removePanel(
+  chatId,
+  messageId
+) {
+
+  delete openedPanels[
+    `${chatId}:${messageId}`
+  ];
+}
+
+
+// =====================================
+// پاکسازی پنل‌های قدیمی
+// =====================================
+
+function cleanOldPanels() {
+
+  const now =
+    Date.now();
+
+  for (
+    const key of Object.keys(
+      openedPanels
+    )
+  ) {
+
+    if (
+      now -
+      openedPanels[key].createdAt >
+      30 * 60 * 1000
+    ) {
+      delete openedPanels[key];
+    }
+  }
+}
+
+
+// =====================================
+// متن پنل
 // =====================================
 
 function mainPanelText() {
@@ -367,57 +367,54 @@ function pageOneKeyboard(ownerId) {
   return {
     inline_keyboard: [
 
-      [
-        {
-          text: "『𓆩 لینک اصلی گروه 𓆪』",
-          callback_data:
-            `lnk_main:${ownerId}`
-        }
-      ],
+      [{
+        text:
+          "『𓆩 لینک اصلی گروه 𓆪』",
+        callback_data:
+          `lnk_main:${ownerId}`
+      }],
 
-      [
-        {
-          text: "『𓆩 لینک یک‌بار مصرف 𓆪』",
-          callback_data:
-            `lnk_one:${ownerId}`
-        }
-      ],
+      [{
+        text:
+          "『𓆩 لینک یک‌بار مصرف 𓆪』",
+        callback_data:
+          `lnk_one:${ownerId}`
+      }],
 
-      [
-        {
-          text: "『𓆩 لینک زمان‌دار 𓆪』",
-          callback_data:
-            `lnk_time:${ownerId}`
-        }
-      ],
+      [{
+        text:
+          "『𓆩 لینک زمان‌دار 𓆪』",
+        callback_data:
+          `lnk_time:${ownerId}`
+      }],
 
-      [
-        {
-          text: "『𓆩 لینک موقعیت 𓆪』",
-          callback_data:
-            `lnk_location:${ownerId}`
-        }
-      ],
+      [{
+        text:
+          "『𓆩 لینک موقعیت 𓆪』",
+        callback_data:
+          `lnk_location:${ownerId}`
+      }],
 
-      [
-        {
-          text: "『𓆩 صفحه بعد 𓆪』",
-          callback_data:
-            `lnk_page2:${ownerId}`
-        }
-      ],
+      [{
+        text:
+          "『𓆩 صفحه بعد 𓆪』",
+        callback_data:
+          `lnk_page2:${ownerId}`
+      }],
 
-      [
-        {
-          text: "『𓆩 بستن 𓆪』",
-          callback_data:
-            `lnk_close:${ownerId}`
-        }
-      ]
+      [{
+        text:
+          "『𓆩 بستن 𓆪』",
+        callback_data:
+          `lnk_close:${ownerId}`
+      }]
 
     ]
   };
-}// =====================================
+}
+
+
+// =====================================
 // صفحه دوم مالک
 // =====================================
 
@@ -437,77 +434,59 @@ function pageTwoKeyboard(
   return {
     inline_keyboard: [
 
-      [
-        {
-          text:
-            "『𓆩 لینک تأییدی عضویت 𓆪』",
-          callback_data:
-            `lnk_approval:${ownerId}`
-        }
-      ],
+      [{
+        text:
+          "『𓆩 لینک تأییدی عضویت 𓆪』",
+        callback_data:
+          `lnk_approval:${ownerId}`
+      }],
 
-      [
-        {
-          text:
-            "『𓆩 لینک عضویت درخواستی 𓆪』",
-          callback_data:
-            `lnk_request:${ownerId}`
-        }
-      ],
+      [{
+        text:
+          "『𓆩 لینک عضویت درخواستی 𓆪』",
+        callback_data:
+          `lnk_request:${ownerId}`
+      }],
 
-      [
-        {
-          text:
-            `『𓆩 دریافت لینک ${receive} 𓆪』`,
-          callback_data:
-            `lnk_receive:${ownerId}`
-        }
-      ],
+      [{
+        text:
+          `『𓆩 دریافت لینک ${receive} 𓆪』`,
+        callback_data:
+          `lnk_receive:${ownerId}`
+      }],
 
-      [
-        {
-          text:
-            "『𓆩 مدت دریافت لینک 𓆪』",
-          callback_data:
-            `lnk_duration:${ownerId}`
-        }
-      ],
+      [{
+        text:
+          "『𓆩 مدت دریافت لینک 𓆪』",
+        callback_data:
+          `lnk_duration:${ownerId}`
+      }],
 
-      [
-        {
-          text:
-            "『𓆩 مدیریت دسترسی لینک 𓆪』",
-          callback_data:
-            `lnk_access:${ownerId}`
-        }
-      ],
+      [{
+        text:
+          "『𓆩 مدیریت دسترسی لینک 𓆪』",
+        callback_data:
+          `lnk_access:${ownerId}`
+      }],
 
-      [
-        {
-          text:
-            "『𓆩 صفحه قبل 𓆪』",
-          callback_data:
-            `lnk_page1:${ownerId}`
-        }
-      ],
+      [{
+        text:
+          "『𓆩 صفحه قبل 𓆪』",
+        callback_data:
+          `lnk_page1:${ownerId}`
+      }],
 
-      [
-        {
-          text:
-            "『𓆩 بستن 𓆩』",
-          callback_data:
-            `lnk_close:${ownerId}`
-        }
-      ]
+      [{
+        text:
+          "『𓆩 بستن 𓆪』",
+        callback_data:
+          `lnk_close:${ownerId}`
+      }]
 
     ]
   };
-}
-
-
-// =====================================
+}// =====================================
 // پنل مدیر
-// فقط امکانات مجاز مدیر
 // =====================================
 
 function managerPanelKeyboard(
@@ -526,41 +505,33 @@ function managerPanelKeyboard(
   return {
     inline_keyboard: [
 
-      [
-        {
-          text:
-            "『𓆩 لینک یک‌بار مصرف 𓆪』",
-          callback_data:
-            `lnk_mgr_one:${ownerId}`
-        }
-      ],
+      [{
+        text:
+          "『𓆩 لینک یک‌بار مصرف 𓆪』",
+        callback_data:
+          `lnk_mgr_one:${ownerId}`
+      }],
 
-      [
-        {
-          text:
-            `『𓆩 لینک زمان‌دار ${links.timedDuration} ساعت 𓆪』`,
-          callback_data:
-            `lnk_mgr_time:${ownerId}`
-        }
-      ],
+      [{
+        text:
+          `『𓆩 لینک زمان‌دار ${links.timedDuration} ساعت 𓆪』`,
+        callback_data:
+          `lnk_mgr_time:${ownerId}`
+      }],
 
-      [
-        {
-          text:
-            `『𓆩 دریافت لینک ${receive} 𓆪』`,
-          callback_data:
-            `lnk_mgr_receive:${ownerId}`
-        }
-      ],
+      [{
+        text:
+          `『𓆩 دریافت لینک ${receive} 𓆪』`,
+        callback_data:
+          `lnk_mgr_receive:${ownerId}`
+      }],
 
-      [
-        {
-          text:
-            "『𓆩 بستن 𓆪』",
-          callback_data:
-            `lnk_close:${ownerId}`
-        }
-      ]
+      [{
+        text:
+          "『𓆩 بستن 𓆪』",
+        callback_data:
+          `lnk_close:${ownerId}`
+      }]
 
     ]
   };
@@ -568,7 +539,7 @@ function managerPanelKeyboard(
 
 
 // =====================================
-// منوی مدت دریافت لینک
+// انتخاب مدت دریافت
 // 1 تا 24 ساعت
 // =====================================
 
@@ -577,7 +548,6 @@ function receiveDurationKeyboard(
 ) {
 
   const rows = [];
-
   let row = [];
 
   for (
@@ -587,14 +557,13 @@ function receiveDurationKeyboard(
   ) {
 
     row.push({
-      text: `${hour} ساعت`,
+      text:
+        `${hour} ساعت`,
       callback_data:
         `lnk_setduration:${ownerId}:${hour}`
     });
 
-    if (
-      row.length === 4
-    ) {
+    if (row.length === 4) {
       rows.push(row);
       row = [];
     }
@@ -614,13 +583,14 @@ function receiveDurationKeyboard(
   ]);
 
   return {
-    inline_keyboard: rows
+    inline_keyboard:
+      rows
   };
 }
 
 
 // =====================================
-// منوی مدت لینک زمان‌دار
+// انتخاب مدت لینک زمان‌دار
 // 1 تا 24 ساعت
 // =====================================
 
@@ -629,7 +599,6 @@ function timedDurationKeyboard(
 ) {
 
   const rows = [];
-
   let row = [];
 
   for (
@@ -639,14 +608,13 @@ function timedDurationKeyboard(
   ) {
 
     row.push({
-      text: `${hour} ساعت`,
+      text:
+        `${hour} ساعت`,
       callback_data:
         `lnk_settimed:${ownerId}:${hour}`
     });
 
-    if (
-      row.length === 4
-    ) {
+    if (row.length === 4) {
       rows.push(row);
       row = [];
     }
@@ -659,14 +627,15 @@ function timedDurationKeyboard(
   rows.push([
     {
       text:
-        "『𓆩 بازگشت 𓆪",
+        "『𓆩 بازگشت 𓆪』",
       callback_data:
         `lnk_page1:${ownerId}`
     }
   ]);
 
   return {
-    inline_keyboard: rows
+    inline_keyboard:
+      rows
   };
 }
 
@@ -675,35 +644,32 @@ function timedDurationKeyboard(
 // ساخت لینک اصلی
 // =====================================
 
-async function createMainLink(
-  ctx
-) {
+async function createMainLink(ctx) {
 
-  const link =
-    await ctx.telegram
-      .exportChatInviteLink(
-        ctx.chat.id
-      );
-
-  return link;
+  return await ctx.telegram
+    .exportChatInviteLink(
+      ctx.chat.id
+    );
 }
 
 
 // =====================================
-// ساخت لینک یک‌بار مصرف
+// ساخت لینک یک‌بار مصرف واقعی
+// member_limit = 1
 // =====================================
 
-async function createOneTimeLink(
-  ctx
-) {
+async function createOneTimeLink(ctx) {
 
   const result =
     await ctx.telegram
       .createChatInviteLink(
         ctx.chat.id,
         {
-          name: "یک‌بار مصرف",
-          member_limit: 1
+          name:
+            "یک‌بار مصرف",
+
+          member_limit:
+            1
         }
       );
 
@@ -712,7 +678,7 @@ async function createOneTimeLink(
 
 
 // =====================================
-// ساخت لینک زمان‌دار
+// ساخت لینک زمان‌دار واقعی
 // =====================================
 
 async function createTimedLink(
@@ -720,10 +686,21 @@ async function createTimedLink(
   hours
 ) {
 
+  const validHours =
+    Math.min(
+      24,
+      Math.max(
+        1,
+        Number(hours) || 1
+      )
+    );
+
   const expireDate =
-    Math.floor(Date.now() / 1000) +
+    Math.floor(
+      Date.now() / 1000
+    ) +
     (
-      Number(hours) *
+      validHours *
       60 *
       60
     );
@@ -734,7 +711,8 @@ async function createTimedLink(
         ctx.chat.id,
         {
           name:
-            `${hours} ساعت`,
+            `${validHours} ساعت`,
+
           expire_date:
             expireDate
         }
@@ -745,19 +723,43 @@ async function createTimedLink(
 
 
 // =====================================
-// ساخت لینک موقعیت
+// ساخت لینک موقعیت زمان‌دار
 // =====================================
 
 async function createLocationLink(
-  ctx
+  ctx,
+  hours
 ) {
+
+  const validHours =
+    Math.min(
+      24,
+      Math.max(
+        1,
+        Number(hours) || 1
+      )
+    );
+
+  const expireDate =
+    Math.floor(
+      Date.now() / 1000
+    ) +
+    (
+      validHours *
+      60 *
+      60
+    );
 
   const result =
     await ctx.telegram
       .createChatInviteLink(
         ctx.chat.id,
         {
-          name: "موقعیت"
+          name:
+            `موقعیت ${validHours} ساعت`,
+
+          expire_date:
+            expireDate
         }
       );
 
@@ -766,12 +768,10 @@ async function createLocationLink(
 
 
 // =====================================
-// ساخت لینک تأییدی
+// لینک تأییدی عضویت
 // =====================================
 
-async function createApprovalLink(
-  ctx
-) {
+async function createApprovalLink(ctx) {
 
   const result =
     await ctx.telegram
@@ -780,7 +780,9 @@ async function createApprovalLink(
         {
           name:
             "تأییدی عضویت",
-          creates_join_request: true
+
+          creates_join_request:
+            true
         }
       );
 
@@ -789,12 +791,10 @@ async function createApprovalLink(
 
 
 // =====================================
-// ساخت لینک عضویت درخواستی
+// لینک عضویت درخواستی
 // =====================================
 
-async function createRequestLink(
-  ctx
-) {
+async function createRequestLink(ctx) {
 
   const result =
     await ctx.telegram
@@ -803,7 +803,9 @@ async function createRequestLink(
         {
           name:
             "عضویت درخواستی",
-          creates_join_request: true
+
+          creates_join_request:
+            true
         }
       );
 
@@ -812,7 +814,7 @@ async function createRequestLink(
 
 
 // =====================================
-// ساخت لینک دریافت
+// لینک دریافت
 // =====================================
 
 async function createReceiveLink(
@@ -828,8 +830,7 @@ async function createReceiveLink(
 
 
 // =====================================
-// ارسال امن خطا
-// فقط به مدیر مجاز
+// خطای لینک
 // =====================================
 
 async function sendLinkError(
@@ -846,7 +847,7 @@ async function sendLinkError(
 
     await replyToCommand(
       ctx,
-      "خطا در ساخت لینک. مطمئن شوید ربات دسترسی ساخت لینک دعوت را دارد."
+      "خطا در ساخت لینک. دسترسی ساخت لینک دعوت ربات را بررسی کنید."
     );
 
   } catch (_) {}
@@ -854,7 +855,7 @@ async function sendLinkError(
 
 
 // =====================================
-// بررسی پنل خصوصی
+// بررسی امنیت پنل
 // =====================================
 
 async function validatePanel(
@@ -868,10 +869,8 @@ async function validatePanel(
   }
 
   if (
-    !isPanelOwner(
-      ctx,
-      ownerId
-    )
+    String(ctx.from.id) !==
+    String(ownerId)
   ) {
     return false;
   }
@@ -907,9 +906,7 @@ async function validatePanel(
     return false;
   }
 
-  if (
-    panel.type === "manager"
-  ) {
+  if (panel.type === "manager") {
 
     const access =
       await hasLinkManagementAccess(
@@ -923,15 +920,18 @@ async function validatePanel(
   }
 
   return true;
-}// =====================================
-// ثبت قابلیت‌های لینک
+}
+
+
+// =====================================
+// ثبت لینک‌ها
 // =====================================
 
 function registerLinks(bot) {
 
   // ===================================
-  // فرمان «لینک»
-  // فقط مالک یا مدیر دارای دسترسی
+  // فرمان لینک
+  // پنل حتماً Reply می‌شود
   // ===================================
 
   bot.hears(
@@ -947,7 +947,8 @@ function registerLinks(bot) {
           ctx
         );
 
-      // کاربر عادی کاملاً ساکت
+      // کاربر عادی:
+      // هیچ پیام
       if (!allowed) {
         return;
       }
@@ -958,7 +959,6 @@ function registerLinks(bot) {
         );
 
       getLinkData(group);
-
       saveDB();
 
       const owner =
@@ -979,8 +979,10 @@ function registerLinks(bot) {
               group
             );
 
+      // پنل Reply به خود فرمان لینک
       const panel =
-        await ctx.reply(
+        await replyToCommand(
+          ctx,
           mainPanelText(),
           {
             reply_markup:
@@ -988,20 +990,22 @@ function registerLinks(bot) {
           }
         );
 
-      rememberPanel(
-        ctx.chat.id,
-        panel.message_id,
-        ctx.from.id,
-        type
-      );
+      if (panel) {
+
+        rememberPanel(
+          ctx.chat.id,
+          panel.message_id,
+          ctx.from.id,
+          type
+        );
+      }
     }
   );
 
 
   // ===================================
-  // فرمان دریافت لینک
-  // اعضا، مدیران و مالک
-  // فقط وقتی دریافت لینک باز باشد
+  // دریافت لینک
+  // برای استفاده عمومی
   // ===================================
 
   bot.hears(
@@ -1020,24 +1024,31 @@ function registerLinks(bot) {
       const links =
         getLinkData(group);
 
-      // اگر بسته باشد هیچ جوابی
+      // بسته باشد = سکوت
       if (!links.receiveEnabled) {
         return;
       }
 
-      const requested =
+      let hours =
+        links.receiveDuration;
+
+      if (
         ctx.match &&
         ctx.match[1]
-          ? Number(ctx.match[1])
-          : links.receiveDuration;
+      ) {
 
-      const hours =
+        hours =
+          Number(
+            ctx.match[1]
+          );
+      }
+
+      hours =
         Math.min(
           24,
           Math.max(
             1,
-            Number(requested) ||
-              links.receiveDuration
+            Number(hours) || 1
           )
         );
 
@@ -1062,27 +1073,15 @@ function registerLinks(bot) {
 
       } catch (error) {
 
-        console.error(
-          "RECEIVE LINK ERROR:",
+        await sendLinkError(
+          ctx,
           error
         );
-
-        // اینجا هم چون فرمان عمومی است
-        // فقط در صورت خطای واقعی پاسخ می‌دهیم
-        try {
-          await replyToCommand(
-            ctx,
-            "خطا در ساخت لینک دریافت."
-          );
-        } catch (_) {}
       }
     }
-  );
-
-
-  // ===================================
-  // دسترسی اختصاصی مدیر
-  // فقط مالک + فقط Reply
+  );  // ===================================
+  // دسترسی لینک
+  // فقط مالک + حتماً Reply
   // ===================================
 
   bot.hears(
@@ -1093,14 +1092,13 @@ function registerLinks(bot) {
         return;
       }
 
-      const owner =
-        await isOwner(ctx);
-
-      if (!owner) {
+      if (
+        !(await isOwner(ctx))
+      ) {
         return;
       }
 
-      // بدون Reply = سکوت کامل
+      // بدون Reply = هیچ پیام
       if (
         !ctx.message.reply_to_message
       ) {
@@ -1121,7 +1119,6 @@ function registerLinks(bot) {
           target.id
         );
 
-      // فقط مدیر می‌تواند مدیر لینک شود
       if (
         role !== "administrator"
       ) {
@@ -1151,8 +1148,8 @@ function registerLinks(bot) {
 
 
   // ===================================
-  // حذف دسترسی اختصاصی مدیر
-  // فقط مالک + فقط Reply
+  // حذف دسترسی لینک
+  // فقط مالک + حتماً Reply
   // ===================================
 
   bot.hears(
@@ -1163,14 +1160,12 @@ function registerLinks(bot) {
         return;
       }
 
-      const owner =
-        await isOwner(ctx);
-
-      if (!owner) {
+      if (
+        !(await isOwner(ctx))
+      ) {
         return;
       }
 
-      // بدون Reply = سکوت کامل
       if (
         !ctx.message.reply_to_message
       ) {
@@ -1220,8 +1215,8 @@ function registerLinks(bot) {
 
 
   // ===================================
-  // دسترسی همه مدیران
-  // فقط مالک + فقط Reply
+  // دسترسی لینک مدیران
+  // فقط مالک + Reply
   // ===================================
 
   bot.hears(
@@ -1232,14 +1227,13 @@ function registerLinks(bot) {
         return;
       }
 
-      const owner =
-        await isOwner(ctx);
-
-      if (!owner) {
+      if (
+        !(await isOwner(ctx))
+      ) {
         return;
       }
 
-      // تأکید: این فرمان هم Reply لازم دارد
+      // حتی این فرمان هم Reply اجباری است
       if (
         !ctx.message.reply_to_message
       ) {
@@ -1289,7 +1283,7 @@ function registerLinks(bot) {
 
   // ===================================
   // حذف دسترسی همه مدیران
-  // فقط مالک + فقط Reply
+  // فقط مالک + Reply
   // ===================================
 
   bot.hears(
@@ -1300,10 +1294,9 @@ function registerLinks(bot) {
         return;
       }
 
-      const owner =
-        await isOwner(ctx);
-
-      if (!owner) {
+      if (
+        !(await isOwner(ctx))
+      ) {
         return;
       }
 
@@ -1356,7 +1349,7 @@ function registerLinks(bot) {
 
 
   // ===================================
-  // Callback صفحه اول مالک
+  // صفحه اول
   // ===================================
 
   bot.action(
@@ -1366,23 +1359,17 @@ function registerLinks(bot) {
       const ownerId =
         ctx.match[1];
 
-      const valid =
-        await validatePanel(
+      if (
+        !(await validatePanel(
           ctx,
           ownerId,
           "owner"
-        );
-
-      if (!valid) {
+        ))
+      ) {
         return;
       }
 
       await ctx.answerCbQuery();
-
-      const group =
-        getGroup(
-          ctx.chat.id
-        );
 
       await ctx.editMessageText(
         mainPanelText(),
@@ -1398,7 +1385,7 @@ function registerLinks(bot) {
 
 
   // ===================================
-  // Callback صفحه دوم مالک
+  // صفحه دوم
   // ===================================
 
   bot.action(
@@ -1408,14 +1395,13 @@ function registerLinks(bot) {
       const ownerId =
         ctx.match[1];
 
-      const valid =
-        await validatePanel(
+      if (
+        !(await validatePanel(
           ctx,
           ownerId,
           "owner"
-        );
-
-      if (!valid) {
+        ))
+      ) {
         return;
       }
 
@@ -1451,13 +1437,12 @@ function registerLinks(bot) {
       const ownerId =
         ctx.match[1];
 
-      const valid =
-        await validatePanel(
+      if (
+        !(await validatePanel(
           ctx,
           ownerId
-        );
-
-      if (!valid) {
+        ))
+      ) {
         return;
       }
 
@@ -1484,9 +1469,11 @@ function registerLinks(bot) {
         } catch (_) {}
       }
     }
-  );  // ===================================
+  );
+
+
+  // ===================================
   // لینک اصلی
-  // فقط مالک
   // ===================================
 
   bot.action(
@@ -1496,14 +1483,13 @@ function registerLinks(bot) {
       const ownerId =
         ctx.match[1];
 
-      const valid =
-        await validatePanel(
+      if (
+        !(await validatePanel(
           ctx,
           ownerId,
           "owner"
-        );
-
-      if (!valid) {
+        ))
+      ) {
         return;
       }
 
@@ -1522,11 +1508,13 @@ function registerLinks(bot) {
         const links =
           getLinkData(group);
 
-        links.main = link;
+        links.main =
+          link;
 
         saveDB();
 
-        await ctx.reply(
+        await ctx.telegram.sendMessage(
+          ctx.chat.id,
           [
             "『𓆩 لینک اصلی گروه 𓆪』",
             "",
@@ -1536,8 +1524,8 @@ function registerLinks(bot) {
 
       } catch (error) {
 
-        await sendLinkError(
-          ctx,
+        console.error(
+          "MAIN LINK ERROR:",
           error
         );
       }
@@ -1556,14 +1544,13 @@ function registerLinks(bot) {
       const ownerId =
         ctx.match[1];
 
-      const valid =
-        await validatePanel(
+      if (
+        !(await validatePanel(
           ctx,
           ownerId,
           "owner"
-        );
-
-      if (!valid) {
+        ))
+      ) {
         return;
       }
 
@@ -1572,9 +1559,7 @@ function registerLinks(bot) {
       try {
 
         const link =
-          await createOneTimeLink(
-            ctx
-          );
+          await createOneTimeLink(ctx);
 
         const group =
           getGroup(
@@ -1584,22 +1569,26 @@ function registerLinks(bot) {
         const links =
           getLinkData(group);
 
-        links.oneTime = link;
+        links.oneTime =
+          link;
 
         saveDB();
 
-        await ctx.reply(
+        await ctx.telegram.sendMessage(
+          ctx.chat.id,
           [
             "『𓆩 لینک یک‌بار مصرف 𓆪』",
             "",
-            link
+            link,
+            "",
+            "این لینک فقط برای ورود یک کاربر قابل استفاده است."
           ].join("\n")
         );
 
       } catch (error) {
 
-        await sendLinkError(
-          ctx,
+        console.error(
+          "ONE TIME LINK ERROR:",
           error
         );
       }
@@ -1609,7 +1598,6 @@ function registerLinks(bot) {
 
   // ===================================
   // انتخاب مدت لینک زمان‌دار
-  // فقط مالک
   // ===================================
 
   bot.action(
@@ -1619,21 +1607,20 @@ function registerLinks(bot) {
       const ownerId =
         ctx.match[1];
 
-      const valid =
-        await validatePanel(
+      if (
+        !(await validatePanel(
           ctx,
           ownerId,
           "owner"
-        );
-
-      if (!valid) {
+        ))
+      ) {
         return;
       }
 
       await ctx.answerCbQuery();
 
       await ctx.editMessageText(
-        "『𓆩 مدت لینک زمان‌دار 𓆪』\n\nمدت موردنظر را انتخاب کنید:",
+        "『𓆩 مدت لینک زمان‌دار 𓆪』\n\nمدت را از ۱ تا ۲۴ ساعت انتخاب کنید:",
         {
           reply_markup:
             timedDurationKeyboard(
@@ -1646,8 +1633,7 @@ function registerLinks(bot) {
 
 
   // ===================================
-  // ذخیره مدت لینک زمان‌دار
-  // و ساخت لینک
+  // تنظیم مدت و ساخت لینک زمان‌دار
   // ===================================
 
   bot.action(
@@ -1660,17 +1646,19 @@ function registerLinks(bot) {
       const hours =
         Number(ctx.match[2]);
 
-      const valid =
-        await validatePanel(
+      if (
+        hours < 1 ||
+        hours > 24
+      ) {
+        return;
+      }
+
+      if (
+        !(await validatePanel(
           ctx,
           ownerId,
           "owner"
-        );
-
-      if (
-        !valid ||
-        hours < 1 ||
-        hours > 24
+        ))
       ) {
         return;
       }
@@ -1697,9 +1685,10 @@ function registerLinks(bot) {
           );
 
         links.timed.unshift({
-          link,
-          hours,
-          createdAt: Date.now()
+          link: link,
+          hours: hours,
+          createdAt:
+            Date.now()
         });
 
         if (
@@ -1714,20 +1703,21 @@ function registerLinks(bot) {
 
         saveDB();
 
-        await ctx.reply(
+        await ctx.telegram.sendMessage(
+          ctx.chat.id,
           [
             "『𓆩 لینک زمان‌دار 𓆪』",
             "",
             link,
             "",
-            `مدت اعتبار: ${hours} ساعت`
+            `مدت اعتبار واقعی: ${hours} ساعت`
           ].join("\n")
         );
 
       } catch (error) {
 
-        await sendLinkError(
-          ctx,
+        console.error(
+          "TIMED LINK ERROR:",
           error
         );
       }
@@ -1737,7 +1727,7 @@ function registerLinks(bot) {
 
   // ===================================
   // لینک موقعیت
-  // فقط مالک
+  // با مدت واقعی 1 تا 24 ساعت
   // ===================================
 
   bot.action(
@@ -1747,25 +1737,19 @@ function registerLinks(bot) {
       const ownerId =
         ctx.match[1];
 
-      const valid =
-        await validatePanel(
+      if (
+        !(await validatePanel(
           ctx,
           ownerId,
           "owner"
-        );
-
-      if (!valid) {
+        ))
+      ) {
         return;
       }
 
       await ctx.answerCbQuery();
 
       try {
-
-        const link =
-          await createLocationLink(
-            ctx
-          );
 
         const group =
           getGroup(
@@ -1775,32 +1759,41 @@ function registerLinks(bot) {
         const links =
           getLinkData(group);
 
-        links.location = link;
+        const hours =
+          links.timedDuration || 24;
+
+        const link =
+          await createLocationLink(
+            ctx,
+            hours
+          );
+
+        links.location =
+          link;
 
         saveDB();
 
-        await ctx.reply(
+        await ctx.telegram.sendMessage(
+          ctx.chat.id,
           [
             "『𓆩 لینک موقعیت 𓆪』",
             "",
-            link
+            link,
+            "",
+            `مدت اعتبار واقعی: ${hours} ساعت`
           ].join("\n")
         );
 
       } catch (error) {
 
-        await sendLinkError(
-          ctx,
+        console.error(
+          "LOCATION LINK ERROR:",
           error
         );
       }
     }
-  );
-
-
-  // ===================================
+  );  // ===================================
   // لینک تأییدی عضویت
-  // فقط مالک
   // ===================================
 
   bot.action(
@@ -1810,14 +1803,13 @@ function registerLinks(bot) {
       const ownerId =
         ctx.match[1];
 
-      const valid =
-        await validatePanel(
+      if (
+        !(await validatePanel(
           ctx,
           ownerId,
           "owner"
-        );
-
-      if (!valid) {
+        ))
+      ) {
         return;
       }
 
@@ -1826,9 +1818,7 @@ function registerLinks(bot) {
       try {
 
         const link =
-          await createApprovalLink(
-            ctx
-          );
+          await createApprovalLink(ctx);
 
         const group =
           getGroup(
@@ -1838,11 +1828,13 @@ function registerLinks(bot) {
         const links =
           getLinkData(group);
 
-        links.approval = link;
+        links.approval =
+          link;
 
         saveDB();
 
-        await ctx.reply(
+        await ctx.telegram.sendMessage(
+          ctx.chat.id,
           [
             "『𓆩 لینک تأییدی عضویت 𓆪』",
             "",
@@ -1852,8 +1844,8 @@ function registerLinks(bot) {
 
       } catch (error) {
 
-        await sendLinkError(
-          ctx,
+        console.error(
+          "APPROVAL LINK ERROR:",
           error
         );
       }
@@ -1863,7 +1855,6 @@ function registerLinks(bot) {
 
   // ===================================
   // لینک عضویت درخواستی
-  // فقط مالک
   // ===================================
 
   bot.action(
@@ -1873,14 +1864,13 @@ function registerLinks(bot) {
       const ownerId =
         ctx.match[1];
 
-      const valid =
-        await validatePanel(
+      if (
+        !(await validatePanel(
           ctx,
           ownerId,
           "owner"
-        );
-
-      if (!valid) {
+        ))
+      ) {
         return;
       }
 
@@ -1889,9 +1879,7 @@ function registerLinks(bot) {
       try {
 
         const link =
-          await createRequestLink(
-            ctx
-          );
+          await createRequestLink(ctx);
 
         const group =
           getGroup(
@@ -1901,11 +1889,13 @@ function registerLinks(bot) {
         const links =
           getLinkData(group);
 
-        links.request = link;
+        links.request =
+          link;
 
         saveDB();
 
-        await ctx.reply(
+        await ctx.telegram.sendMessage(
+          ctx.chat.id,
           [
             "『𓆩 لینک عضویت درخواستی 𓆪』",
             "",
@@ -1915,8 +1905,8 @@ function registerLinks(bot) {
 
       } catch (error) {
 
-        await sendLinkError(
-          ctx,
+        console.error(
+          "REQUEST LINK ERROR:",
           error
         );
       }
@@ -1925,7 +1915,7 @@ function registerLinks(bot) {
 
 
   // ===================================
-  // باز/بسته کردن دریافت لینک
+  // باز / بسته کردن دریافت لینک
   // فقط مالک
   // ===================================
 
@@ -1936,14 +1926,13 @@ function registerLinks(bot) {
       const ownerId =
         ctx.match[1];
 
-      const valid =
-        await validatePanel(
+      if (
+        !(await validatePanel(
           ctx,
           ownerId,
           "owner"
-        );
-
-      if (!valid) {
+        ))
+      ) {
         return;
       }
 
@@ -1978,7 +1967,6 @@ function registerLinks(bot) {
 
   // ===================================
   // مدت دریافت لینک
-  // فقط مالک
   // ===================================
 
   bot.action(
@@ -1988,14 +1976,13 @@ function registerLinks(bot) {
       const ownerId =
         ctx.match[1];
 
-      const valid =
-        await validatePanel(
+      if (
+        !(await validatePanel(
           ctx,
           ownerId,
           "owner"
-        );
-
-      if (!valid) {
+        ))
+      ) {
         return;
       }
 
@@ -2015,7 +2002,7 @@ function registerLinks(bot) {
 
 
   // ===================================
-  // تنظیم مدت دریافت
+  // ذخیره مدت دریافت
   // ===================================
 
   bot.action(
@@ -2028,17 +2015,19 @@ function registerLinks(bot) {
       const hours =
         Number(ctx.match[2]);
 
-      const valid =
-        await validatePanel(
+      if (
+        hours < 1 ||
+        hours > 24
+      ) {
+        return;
+      }
+
+      if (
+        !(await validatePanel(
           ctx,
           ownerId,
           "owner"
-        );
-
-      if (
-        !valid ||
-        hours < 1 ||
-        hours > 24
+        ))
       ) {
         return;
       }
@@ -2075,8 +2064,7 @@ function registerLinks(bot) {
 
 
   // ===================================
-  // مدیریت دسترسی لینک
-  // فقط مالک
+  // مدیریت دسترسی
   // ===================================
 
   bot.action(
@@ -2086,14 +2074,13 @@ function registerLinks(bot) {
       const ownerId =
         ctx.match[1];
 
-      const valid =
-        await validatePanel(
+      if (
+        !(await validatePanel(
           ctx,
           ownerId,
           "owner"
-        );
-
-      if (!valid) {
+        ))
+      ) {
         return;
       }
 
@@ -2118,14 +2105,17 @@ function registerLinks(bot) {
           "",
           `دسترسی همه مدیران: ${state}`,
           "",
-          "برای دسترسی اختصاصی:",
+          "تمام دسترسی‌ها فقط با Reply انجام می‌شود.",
+          "",
+          "برای دادن دسترسی به یک مدیر:",
           "روی پیام مدیر Reply کنید و بنویسید:",
           "دسترسی لینک",
           "",
-          "برای حذف دسترسی:",
+          "برای حذف دسترسی یک مدیر:",
+          "روی پیام مدیر Reply کنید و بنویسید:",
           "حذف دسترسی لینک",
           "",
-          "برای فعال کردن دسترسی همه مدیران:",
+          "برای باز کردن دسترسی همه مدیران:",
           "روی پیام یک مدیر Reply کنید و بنویسید:",
           "دسترسی لینک مدیران",
           "",
@@ -2136,22 +2126,18 @@ function registerLinks(bot) {
         {
           reply_markup: {
             inline_keyboard: [
-              [
-                {
-                  text:
-                    "『𓆩 بازگشت 𓆪』",
-                  callback_data:
-                    `lnk_page2:${ownerId}`
-                }
-              ],
-              [
-                {
-                  text:
-                    "『𓆩 بستن 𓆪』",
-                  callback_data:
-                    `lnk_close:${ownerId}`
-                }
-              ]
+              [{
+                text:
+                  "『𓆩 بازگشت 𓆪』",
+                callback_data:
+                  `lnk_page2:${ownerId}`
+              }],
+              [{
+                text:
+                  "『𓆩 بستن 𓆪』",
+                callback_data:
+                  `lnk_close:${ownerId}`
+              }]
             ]
           }
         }
@@ -2171,14 +2157,13 @@ function registerLinks(bot) {
       const ownerId =
         ctx.match[1];
 
-      const valid =
-        await validatePanel(
+      if (
+        !(await validatePanel(
           ctx,
           ownerId,
           "manager"
-        );
-
-      if (!valid) {
+        ))
+      ) {
         return;
       }
 
@@ -2187,22 +2172,23 @@ function registerLinks(bot) {
       try {
 
         const link =
-          await createOneTimeLink(
-            ctx
-          );
+          await createOneTimeLink(ctx);
 
-        await ctx.reply(
+        await ctx.telegram.sendMessage(
+          ctx.chat.id,
           [
             "『𓆩 لینک یک‌بار مصرف 𓆪』",
             "",
-            link
+            link,
+            "",
+            "این لینک فقط برای ورود یک کاربر قابل استفاده است."
           ].join("\n")
         );
 
       } catch (error) {
 
-        await sendLinkError(
-          ctx,
+        console.error(
+          "MANAGER ONE TIME LINK ERROR:",
           error
         );
       }
@@ -2212,7 +2198,7 @@ function registerLinks(bot) {
 
   // ===================================
   // لینک زمان‌دار مدیر
-  // از تنظیم مالک استفاده می‌کند
+  // مدت تنظیم‌شده توسط مالک
   // ===================================
 
   bot.action(
@@ -2222,18 +2208,15 @@ function registerLinks(bot) {
       const ownerId =
         ctx.match[1];
 
-      const valid =
-        await validatePanel(
+      if (
+        !(await validatePanel(
           ctx,
           ownerId,
           "manager"
-        );
-
-      if (!valid) {
+        ))
+      ) {
         return;
       }
-
-      await ctx.answerCbQuery();
 
       const group =
         getGroup(
@@ -2254,6 +2237,8 @@ function registerLinks(bot) {
           )
         );
 
+      await ctx.answerCbQuery();
+
       try {
 
         const link =
@@ -2263,9 +2248,10 @@ function registerLinks(bot) {
           );
 
         links.timed.unshift({
-          link,
-          hours,
-          createdAt: Date.now()
+          link: link,
+          hours: hours,
+          createdAt:
+            Date.now()
         });
 
         if (
@@ -2280,20 +2266,21 @@ function registerLinks(bot) {
 
         saveDB();
 
-        await ctx.reply(
+        await ctx.telegram.sendMessage(
+          ctx.chat.id,
           [
             "『𓆩 لینک زمان‌دار 𓆪』",
             "",
             link,
             "",
-            `مدت اعتبار: ${hours} ساعت`
+            `مدت اعتبار واقعی: ${hours} ساعت`
           ].join("\n")
         );
 
       } catch (error) {
 
-        await sendLinkError(
-          ctx,
+        console.error(
+          "MANAGER TIMED LINK ERROR:",
           error
         );
       }
@@ -2303,7 +2290,6 @@ function registerLinks(bot) {
 
   // ===================================
   // دریافت لینک از پنل مدیر
-  // فقط استفاده، بدون امکان تغییر ★/☆
   // ===================================
 
   bot.action(
@@ -2313,14 +2299,13 @@ function registerLinks(bot) {
       const ownerId =
         ctx.match[1];
 
-      const valid =
-        await validatePanel(
+      if (
+        !(await validatePanel(
           ctx,
           ownerId,
           "manager"
-        );
-
-      if (!valid) {
+        ))
+      ) {
         return;
       }
 
@@ -2332,7 +2317,7 @@ function registerLinks(bot) {
       const links =
         getLinkData(group);
 
-      // بسته بودن = هیچ لینک مدیریتی
+      // ☆ = واقعاً بسته
       if (!links.receiveEnabled) {
 
         await ctx.answerCbQuery(
@@ -2363,20 +2348,21 @@ function registerLinks(bot) {
             hours
           );
 
-        await ctx.reply(
+        await ctx.telegram.sendMessage(
+          ctx.chat.id,
           [
             "『𓆩 لینک دریافت 𓆪』",
             "",
             link,
             "",
-            `مدت اعتبار: ${hours} ساعت`
+            `مدت اعتبار واقعی: ${hours} ساعت`
           ].join("\n")
         );
 
       } catch (error) {
 
-        await sendLinkError(
-          ctx,
+        console.error(
+          "MANAGER RECEIVE LINK ERROR:",
           error
         );
       }
@@ -2385,7 +2371,7 @@ function registerLinks(bot) {
 
 
   // ===================================
-  // پاکسازی پنل‌های قدیمی
+  // پاکسازی حافظه پنل‌ها
   // ===================================
 
   setInterval(
