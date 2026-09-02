@@ -14,7 +14,7 @@
 const {
   getGroup,
   saveDB
-} = require("../database");
+} = require("./database");
 
 
 // =====================================
@@ -176,12 +176,6 @@ async function isOwner(ctx) {
 
 // =====================================
 // آیا کاربر مدیر دارای دسترسی لینک است؟
-/*
-  مالک همیشه دسترسی کامل دارد.
-
-  مدیر عادی فقط زمانی دسترسی دارد
-  که مالک آن را فعال کرده باشد.
-*/
 // =====================================
 
 async function hasLinkManagementAccess(
@@ -702,10 +696,6 @@ async function createTimedLink(
 // =====================================
 // ساخت لینک موقعیت
 // =====================================
-// تلگرام نوع مستقل «لینک موقعیت» ندارد.
-// اینجا یک لینک دعوت اختصاصی با نام موقعیت
-// ساخته می‌شود.
-// =====================================
 
 async function createLocationLink(ctx) {
 
@@ -1013,7 +1003,6 @@ function accessPanelText() {
 
 function registerLinks(bot) {
 
-
   // ===================================
   // دستور اصلی «لینک»
   // ===================================
@@ -1028,33 +1017,37 @@ function registerLinks(bot) {
 
       cleanOldPanels();
 
-      const ownerId =
-        ctx.from.id;
-
       try {
 
-        const message =
-          await replyToCommand(
-            ctx,
+        const ownerId =
+          ctx.from.id;
+
+        const sent =
+          await ctx.reply(
             mainPanelText(),
             {
               reply_markup:
                 pageOneKeyboard(
                   ownerId
-                )
+                ),
+
+              reply_parameters: {
+                message_id:
+                  ctx.message.message_id
+              }
             }
           );
 
         rememberPanel(
           ctx.chat.id,
-          message.message_id,
+          sent.message_id,
           ownerId
         );
 
       } catch (error) {
 
         console.error(
-          "links command:",
+          "links open:",
           error.message
         );
       }
@@ -1215,7 +1208,6 @@ function registerLinks(bot) {
           await createMainLink(ctx);
 
         if (!link) {
-
           return;
         }
 
@@ -1287,7 +1279,7 @@ function registerLinks(bot) {
         );
 
         await ctx.reply(
-          `『𓆩 لینک یک‌بار مصرف 𓆪』\n\n${result.invite_link}\n\n★ فقط یک بار قابل استفاده است.`
+          `『𓆩 لینک یک‌بار مصرف 𓆪』\n\n${result.invite_link}`
         );
 
       } catch (error) {
@@ -1298,132 +1290,8 @@ function registerLinks(bot) {
         );
       }
     }
-  );
-
-
-  // ===================================
-  // صفحه لینک زمان‌دار
-  // ===================================
-
-  bot.action(
-    /^lnk_time:(\d+)$/,
-    async ctx => {
-
-      const ownerId =
-        Number(ctx.match[1]);
-
-      if (
-        !isPanelOwner(
-          ctx,
-          ownerId
-        )
-      ) {
-        return;
-      }
-
-      if (
-        !await checkLinkManager(ctx)
-      ) {
-        return;
-      }
-      try {
-
-        await ctx.answerCbQuery();
-
-        const group =
-          getGroup(ctx.chat.id);
-
-        const link =
-          await createMainLink(ctx);
-
-        if (!link) {
-          return;
-        }
-
-        saveLink(
-          group,
-          "main",
-          link
-        );
-
-        await ctx.reply(
-          `『𓆩 لینک اصلی گروه 𓆪』\n\n${link}`
-        );
-
-      } catch (error) {
-
-        console.error(
-          "links main:",
-          error.message
-        );
-      }
-    }
-  );
-
-
-  // ===================================
-  // لینک یک‌بار مصرف
-  // ===================================
-
-  bot.action(
-    /^lnk_one:(\d+)$/,
-    async ctx => {
-
-      const ownerId =
-        Number(ctx.match[1]);
-
-      if (
-        !isPanelOwner(
-          ctx,
-          ownerId
-        )
-      ) {
-        return;
-      }
-
-      if (
-        !await checkLinkManager(ctx)
-      ) {
-        return;
-      }
-
-      try {
-
-        await ctx.answerCbQuery();
-
-        const group =
-          getGroup(ctx.chat.id);
-
-        const result =
-          await createOneTimeLink(ctx);
-
-        if (!result) {
-          return;
-        }
-
-        saveLink(
-          group,
-          "oneTime",
-          result.invite_link
-        );
-
-        await ctx.reply(
-          `『𓆩 لینک یک‌بار مصرف 𓆪』\n\n${result.invite_link}\n\n★ فقط یک بار قابل استفاده است.`
-        );
-
-      } catch (error) {
-
-        console.error(
-          "links one:",
-          error.message
-        );
-      }
-    }
-  );
-
-
-  // ===================================
-  // صفحه لینک زمان‌دار
+  );  // ===================================
+  // لینک زمان‌دار
   // ===================================
 
   bot.action(
@@ -1452,52 +1320,54 @@ function registerLinks(bot) {
 
         await ctx.answerCbQuery();
 
-        await ctx.reply(
-          "『𓆩 لینک زمان‌دار 𓆪』\n\nمدت لینک را انتخاب کن:",
+        await ctx.editMessageText(
+          "『𓆩 لینک زمان‌دار 𓆪』\n\nمدت زمان لینک را انتخاب کن:",
           {
             reply_markup: {
-
               inline_keyboard: [
-
                 [
                   {
-                    text: "『𓆩 ۱ ساعت 𓆪』",
+                    text: "۱ ساعت",
                     callback_data:
-                      `lnk_make_time:1:${ownerId}`
+                      `lnk_time_set:${ownerId}:1`
                   },
                   {
-                    text: "『𓆩 ۳ ساعت 𓆪』",
+                    text: "۲ ساعت",
                     callback_data:
-                      `lnk_make_time:3:${ownerId}`
+                      `lnk_time_set:${ownerId}:2`
                   }
                 ],
-
                 [
                   {
-                    text: "『𓆩 ۴ ساعت 𓆪』",
+                    text: "۳ ساعت",
                     callback_data:
-                      `lnk_make_time:4:${ownerId}`
+                      `lnk_time_set:${ownerId}:3`
                   },
                   {
-                    text: "『𓆩 ۶ ساعت 𓆪』",
+                    text: "۴ ساعت",
                     callback_data:
-                      `lnk_make_time:6:${ownerId}`
+                      `lnk_time_set:${ownerId}:4`
                   }
                 ],
-
                 [
                   {
-                    text: "『𓆩 ۱۲ ساعت 𓆪』",
+                    text: "۶ ساعت",
                     callback_data:
-                      `lnk_make_time:12:${ownerId}`
+                      `lnk_time_set:${ownerId}:6`
                   },
                   {
-                    text: "『𓆩 ۲۴ ساعت 𓆪』",
+                    text: "۱۲ ساعت",
                     callback_data:
-                      `lnk_make_time:24:${ownerId}`
+                      `lnk_time_set:${ownerId}:12`
                   }
                 ],
-
+                [
+                  {
+                    text: "۲۴ ساعت",
+                    callback_data:
+                      `lnk_time_set:${ownerId}:24`
+                  }
+                ],
                 [
                   {
                     text: "『𓆩 بازگشت 𓆪』",
@@ -1505,7 +1375,6 @@ function registerLinks(bot) {
                       `lnk_page1:${ownerId}`
                   }
                 ]
-
               ]
             }
           }
@@ -1527,13 +1396,13 @@ function registerLinks(bot) {
   // ===================================
 
   bot.action(
-    /^lnk_make_time:(\d+):(\d+)$/,
+    /^lnk_time_set:(\d+):(1|2|3|4|6|12|24)$/,
     async ctx => {
 
-      const hours =
+      const ownerId =
         Number(ctx.match[1]);
 
-      const ownerId =
+      const hours =
         Number(ctx.match[2]);
 
       if (
@@ -1572,30 +1441,26 @@ function registerLinks(bot) {
           getLinkData(group);
 
         links.timed.push({
-          link:
+          invite_link:
             result.invite_link,
-          hours,
+
+          hours:
+            hours,
+
           createdAt:
             Date.now()
         });
 
-        if (
-          links.timed.length > 20
-        ) {
-          links.timed =
-            links.timed.slice(-20);
-        }
-
         saveDB();
 
         await ctx.reply(
-          `『𓆩 لینک ${hours} ساعته 𓆪』\n\n${result.invite_link}\n\n★ بعد از ${hours} ساعت منقضی می‌شود.`
+          `『𓆩 لینک ${hours} ساعته 𓆪』\n\n${result.invite_link}`
         );
 
       } catch (error) {
 
         console.error(
-          "links make time:",
+          "links time set:",
           error.message
         );
       }
@@ -1636,21 +1501,21 @@ function registerLinks(bot) {
         const group =
           getGroup(ctx.chat.id);
 
-        const result =
+        const link =
           await createLocationLink(ctx);
 
-        if (!result) {
+        if (!link) {
           return;
         }
 
         saveLink(
           group,
           "location",
-          result.invite_link
+          link
         );
 
         await ctx.reply(
-          `『𓆩 لینک موقعیت 𓆪』\n\n${result.invite_link}`
+          `『𓆩 لینک موقعیت 𓆪』\n\n${link}`
         );
 
       } catch (error) {
@@ -1697,21 +1562,21 @@ function registerLinks(bot) {
         const group =
           getGroup(ctx.chat.id);
 
-        const result =
+        const link =
           await createApprovalLink(ctx);
 
-        if (!result) {
+        if (!link) {
           return;
         }
 
         saveLink(
           group,
           "approval",
-          result.invite_link
+          link
         );
 
         await ctx.reply(
-          `『𓆩 لینک تأییدی عضویت 𓆪』\n\n${result.invite_link}\n\n★ ورود با این لینک نیاز به تأیید مدیر دارد.`
+          `『𓆩 لینک تأییدی عضویت 𓆪』\n\n${link}`
         );
 
       } catch (error) {
@@ -1758,21 +1623,21 @@ function registerLinks(bot) {
         const group =
           getGroup(ctx.chat.id);
 
-        const result =
+        const link =
           await createRequestLink(ctx);
 
-        if (!result) {
+        if (!link) {
           return;
         }
 
         saveLink(
           group,
           "request",
-          result.invite_link
+          link
         );
 
         await ctx.reply(
-          `『𓆩 لینک عضویت درخواستی 𓆪』\n\n${result.invite_link}\n\n★ درخواست عضویت برای مدیران ارسال می‌شود.`
+          `『𓆩 لینک عضویت درخواستی 𓆪』\n\n${link}`
         );
 
       } catch (error) {
@@ -1787,7 +1652,7 @@ function registerLinks(bot) {
 
 
   // ===================================
-  // وضعیت دریافت لینک
+  // دریافت لینک
   // ===================================
 
   bot.action(
@@ -1822,31 +1687,37 @@ function registerLinks(bot) {
         const links =
           getLinkData(group);
 
-        const state =
+        const status =
           links.receiveEnabled
-            ? "★"
-            : "☆";
+            ? "★ فعال"
+            : "☆ غیرفعال";
 
-        await ctx.reply(
-          `『𓆩 دریافت لینک ${state} 𓆪』\n\nوضعیت دریافت لینک را انتخاب کن:`,
+        await ctx.editMessageText(
+          `『𓆩 دریافت لینک 𓆪』\n\nوضعیت: ${status}\n\nاز گزینه‌های زیر استفاده کن:`,
           {
             reply_markup: {
-
               inline_keyboard: [
-
                 [
                   {
-                    text: "『𓆩 باز کردن ★ 𓆪』",
+                    text: "『𓆩 فعال کردن 𓆪』",
                     callback_data:
                       `lnk_receive_on:${ownerId}`
-                  },
+                  }
+                ],
+                [
                   {
-                    text: "『𓆩 بستن ☆ 𓆪』",
+                    text: "『𓆩 غیرفعال کردن 𓆪』",
                     callback_data:
                       `lnk_receive_off:${ownerId}`
                   }
                 ],
-
+                [
+                  {
+                    text: "『𓆩 تعیین مدت 𓆪』",
+                    callback_data:
+                      `lnk_duration:${ownerId}`
+                  }
+                ],
                 [
                   {
                     text: "『𓆩 بازگشت 𓆪』",
@@ -1854,7 +1725,6 @@ function registerLinks(bot) {
                       `lnk_page2:${ownerId}`
                   }
                 ]
-
               ]
             }
           }
@@ -1863,7 +1733,7 @@ function registerLinks(bot) {
       } catch (error) {
 
         console.error(
-          "links receive panel:",
+          "links receive:",
           error.message
         );
       }
@@ -1872,7 +1742,7 @@ function registerLinks(bot) {
 
 
   // ===================================
-  // باز کردن دریافت لینک
+  // فعال کردن دریافت لینک
   // ===================================
 
   bot.action(
@@ -1897,25 +1767,38 @@ function registerLinks(bot) {
         return;
       }
 
-      const group =
-        getGroup(ctx.chat.id);
-
-      enableReceiveLink(group);
-
-      await ctx.answerCbQuery(
-        "دریافت لینک باز شد"
-      );
-
       try {
 
-        await ctx.reply(
-          "『𓆩 ★ قفل دریافت لینک باز شد ★ 𓆪』"
+        await ctx.answerCbQuery();
+
+        const group =
+          getGroup(ctx.chat.id);
+
+        enableReceiveLink(
+          group
+        );
+
+        await ctx.editMessageText(
+          "『𓆩 دریافت لینک 𓆪』\n\n★ دریافت لینک فعال شد.",
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: "『𓆩 بازگشت 𓆪』",
+                    callback_data:
+                      `lnk_receive:${ownerId}`
+                  }
+                ]
+              ]
+            }
+          }
         );
 
       } catch (error) {
 
         console.error(
-          "receive on:",
+          "links receive on:",
           error.message
         );
       }
@@ -1924,7 +1807,7 @@ function registerLinks(bot) {
 
 
   // ===================================
-  // بستن دریافت لینک
+  // غیرفعال کردن دریافت لینک
   // ===================================
 
   bot.action(
@@ -1949,25 +1832,38 @@ function registerLinks(bot) {
         return;
       }
 
-      const group =
-        getGroup(ctx.chat.id);
-
-      disableReceiveLink(group);
-
-      await ctx.answerCbQuery(
-        "دریافت لینک بسته شد"
-      );
-
       try {
 
-        await ctx.reply(
-          "『𓆩 ★ قفل دریافت لینک بسته شد ★ 𓆪』"
+        await ctx.answerCbQuery();
+
+        const group =
+          getGroup(ctx.chat.id);
+
+        disableReceiveLink(
+          group
+        );
+
+        await ctx.editMessageText(
+          "『𓆩 دریافت لینک 𓆪』\n\n☆ دریافت لینک غیرفعال شد.",
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: "『𓆩 بازگشت 𓆪』",
+                    callback_data:
+                      `lnk_receive:${ownerId}`
+                  }
+                ]
+              ]
+            }
+          }
         );
 
       } catch (error) {
 
         console.error(
-          "receive off:",
+          "links receive off:",
           error.message
         );
       }
@@ -1976,7 +1872,7 @@ function registerLinks(bot) {
 
 
   // ===================================
-  // مدت دریافت لینک
+  // انتخاب مدت دریافت لینک
   // ===================================
 
   bot.action(
@@ -2005,68 +1901,61 @@ function registerLinks(bot) {
 
         await ctx.answerCbQuery();
 
-        await ctx.reply(
-          "『𓆩 مدت دریافت لینک 𓆪』",
+        await ctx.editMessageText(
+          "『𓆩 مدت دریافت لینک 𓆪』\n\nمدت زمان را انتخاب کن:",
           {
             reply_markup: {
-
               inline_keyboard: [
-
                 [
                   {
-                    text: "『𓆩 ۱ ساعت 𓆪』",
+                    text: "۱ ساعت",
                     callback_data:
-                      `lnk_receive_time:1:${ownerId}`
+                      `lnk_receive_time:${ownerId}:1`
                   },
                   {
-                    text: "『𓆩 ۲ ساعت 𓆪』",
+                    text: "۲ ساعت",
                     callback_data:
-                      `lnk_receive_time:2:${ownerId}`
+                      `lnk_receive_time:${ownerId}:2`
                   }
                 ],
-
                 [
                   {
-                    text: "『𓆩 ۳ ساعت 𓆪』",
+                    text: "۳ ساعت",
                     callback_data:
-                      `lnk_receive_time:3:${ownerId}`
+                      `lnk_receive_time:${ownerId}:3`
                   },
                   {
-                    text: "『𓆩 ۴ ساعت 𓆪』",
+                    text: "۴ ساعت",
                     callback_data:
-                      `lnk_receive_time:4:${ownerId}`
+                      `lnk_receive_time:${ownerId}:4`
                   }
                 ],
-
                 [
                   {
-                    text: "『𓆩 ۶ ساعت 𓆪』",
+                    text: "۶ ساعت",
                     callback_data:
-                      `lnk_receive_time:6:${ownerId}`
+                      `lnk_receive_time:${ownerId}:6`
                   },
                   {
-                    text: "『𓆩 ۱۲ ساعت 𓆪』",
+                    text: "۱۲ ساعت",
                     callback_data:
-                      `lnk_receive_time:12:${ownerId}`
+                      `lnk_receive_time:${ownerId}:12`
                   }
                 ],
-
                 [
                   {
-                    text: "『𓆩 ۲۴ ساعت 𓆪』",
+                    text: "۲۴ ساعت",
                     callback_data:
-                      `lnk_receive_time:24:${ownerId}`
+                      `lnk_receive_time:${ownerId}:24`
                   }
                 ],
-
                 [
                   {
-                    text: "『𓆩 بازگشت 𓆪』",
+                    text: "『𓆩 بازگشت 𓆪`",
                     callback_data:
-                      `lnk_page2:${ownerId}`
+                      `lnk_receive:${ownerId}`
                   }
                 ]
-
               ]
             }
           }
@@ -2075,7 +1964,7 @@ function registerLinks(bot) {
       } catch (error) {
 
         console.error(
-          "receive duration:",
+          "links duration:",
           error.message
         );
       }
@@ -2084,17 +1973,17 @@ function registerLinks(bot) {
 
 
   // ===================================
-  // ذخیره مدت دریافت لینک
+  // ثبت مدت دریافت لینک
   // ===================================
 
   bot.action(
-    /^lnk_receive_time:(\d+):(\d+)$/,
+    /^lnk_receive_time:(\d+):(1|2|3|4|6|12|24)$/,
     async ctx => {
 
-      const hours =
+      const ownerId =
         Number(ctx.match[1]);
 
-      const ownerId =
+      const hours =
         Number(ctx.match[2]);
 
       if (
@@ -2112,28 +2001,78 @@ function registerLinks(bot) {
         return;
       }
 
-      const group =
-        getGroup(ctx.chat.id);
-
-      setReceiveDuration(
-        group,
-        hours
-      );
-
-      await ctx.answerCbQuery(
-        `مدت ${hours} ساعت تنظیم شد`
-      );
-
       try {
 
-        await ctx.reply(
-          `『𓆩 ★ مدت دریافت لینک روی ${hours} ساعت تنظیم شد ★ 𓆪』`
+        await ctx.answerCbQuery();
+
+        const group =
+          getGroup(ctx.chat.id);
+
+        setReceiveDuration(
+          group,
+          hours
+        );
+
+        await ctx.editMessageText(
+          `『𓆩 مدت دریافت لینک 𓆪』\n\nمدت دریافت لینک روی ${hours} ساعت تنظیم شد.`,
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: "『𓆩 بازگشت 𓆪』",
+                    callback_data:
+                      `lnk_receive:${ownerId}`
+                  }
+                ]
+              ]
+            }
+          }
         );
 
       } catch (error) {
 
         console.error(
-          "save receive duration:",
+          "links receive time:",
+          error.message
+        );
+      }
+    }
+  );  // ===================================
+  // بستن پنل لینک
+  // ===================================
+
+  bot.action(
+    /^lnk_close:(\d+)$/,
+    async ctx => {
+
+      const ownerId =
+        Number(ctx.match[1]);
+
+      if (
+        !isPanelOwner(
+          ctx,
+          ownerId
+        )
+      ) {
+        return;
+      }
+
+      try {
+
+        await ctx.answerCbQuery();
+
+        removePanel(
+          ctx.chat.id,
+          ctx.callbackQuery.message.message_id
+        );
+
+        await ctx.deleteMessage();
+
+      } catch (error) {
+
+        console.error(
+          "links close:",
           error.message
         );
       }
@@ -2142,11 +2081,11 @@ function registerLinks(bot) {
 
 
   // ===================================
-  // بستن پنل
+  // مدیریت دسترسی لینک
   // ===================================
 
   bot.action(
-    /^lnk_close:(\d+)$/,
+    /^lnk_access:(\d+)$/,
     async ctx => {
 
       const ownerId =
@@ -2171,20 +2110,34 @@ function registerLinks(bot) {
 
         await ctx.answerCbQuery();
 
-        const message =
-          ctx.callbackQuery.message;
-
-        removePanel(
-          ctx.chat.id,
-          message.message_id
+        await ctx.editMessageText(
+          accessPanelText(),
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: "『𓆩 صفحه قبل 𓆪』",
+                    callback_data:
+                      `lnk_page2:${ownerId}`
+                  }
+                ],
+                [
+                  {
+                    text: "『𓆩 بستن 𓆪』",
+                    callback_data:
+                      `lnk_close:${ownerId}`
+                  }
+                ]
+              ]
+            }
+          }
         );
-
-        await ctx.deleteMessage();
 
       } catch (error) {
 
         console.error(
-          "links close:",
+          "links access:",
           error.message
         );
       }
@@ -2193,7 +2146,7 @@ function registerLinks(bot) {
 
 
   // ===================================
-  // دادن دسترسی لینک به مدیر
+  // دادن دسترسی مدیریت لینک
   // فقط مالک
   // ===================================
 
@@ -2201,16 +2154,19 @@ function registerLinks(bot) {
     /^دسترسی لینک$/i,
     async ctx => {
 
-      if (!isGroupChat(ctx)) {
+      if (
+        !isGroupChat(ctx)
+      ) {
         return;
       }
 
-      if (!await isOwner(ctx)) {
+      if (
+        !await isOwner(ctx)
+      ) {
         return;
       }
 
       const replied =
-        ctx.message &&
         ctx.message.reply_to_message;
 
       if (
@@ -2220,21 +2176,22 @@ function registerLinks(bot) {
         return;
       }
 
-      const target =
-        replied.from;
+      const targetId =
+        replied.from.id;
 
       const targetRole =
         await getMemberRole(
           ctx,
-          target.id
+          targetId
         );
 
       if (
         targetRole !== "admin"
       ) {
+
         await replyToCommand(
           ctx,
-          "『𓆩 ★ این دسترسی فقط به مدیر گروه داده می‌شود ★ 𓆪"
+          "『𓆩 دسترسی لینک 𓆪』\n\nفقط می‌توانی به مدیر گروه دسترسی بدهی."
         );
 
         return;
@@ -2245,20 +2202,20 @@ function registerLinks(bot) {
 
       setManagerAccess(
         group,
-        target.id,
+        targetId,
         true
       );
 
       await replyToCommand(
         ctx,
-        `『𓆩 ★ ${getUserName(target)} مدیریت پنل لینک را دریافت کرد ★ 𓆪』`
+        `『𓆩 دسترسی لینک 𓆪』\n\nدسترسی لینک برای ${getUserName(replied.from)} فعال شد.`
       );
     }
   );
 
 
   // ===================================
-  // حذف دسترسی لینک
+  // حذف دسترسی مدیریت لینک
   // فقط مالک
   // ===================================
 
@@ -2266,16 +2223,19 @@ function registerLinks(bot) {
     /^حذف دسترسی لینک$/i,
     async ctx => {
 
-      if (!isGroupChat(ctx)) {
+      if (
+        !isGroupChat(ctx)
+      ) {
         return;
       }
 
-      if (!await isOwner(ctx)) {
+      if (
+        !await isOwner(ctx)
+      ) {
         return;
       }
 
       const replied =
-        ctx.message &&
         ctx.message.reply_to_message;
 
       if (
@@ -2285,21 +2245,39 @@ function registerLinks(bot) {
         return;
       }
 
-      const target =
-        replied.from;
+      const targetId =
+        replied.from.id;
+
+      const targetRole =
+        await getMemberRole(
+          ctx,
+          targetId
+        );
+
+      if (
+        targetRole !== "admin"
+      ) {
+
+        await replyToCommand(
+          ctx,
+          "『𓆩 دسترسی لینک 𓆪』\n\nاین کاربر مدیر گروه نیست."
+        );
+
+        return;
+      }
 
       const group =
         getGroup(ctx.chat.id);
 
       setManagerAccess(
         group,
-        target.id,
+        targetId,
         false
       );
 
       await replyToCommand(
         ctx,
-        `『𓆩 ★ دسترسی مدیریت پنل لینک از ${getUserName(target)} حذف شد ★ 𓆪』`
+        `『𓆩 دسترسی لینک 𓆪』\n\nدسترسی لینک برای ${getUserName(replied.from)} حذف شد.`
       );
     }
   );
@@ -2307,6 +2285,7 @@ function registerLinks(bot) {
 
   // ===================================
   // باز کردن دریافت لینک
+  // فقط مالک و مدیر دارای دسترسی
   // ===================================
 
   bot.hears(
@@ -2322,11 +2301,13 @@ function registerLinks(bot) {
       const group =
         getGroup(ctx.chat.id);
 
-      enableReceiveLink(group);
+      enableReceiveLink(
+        group
+      );
 
       await replyToCommand(
         ctx,
-        "『𓆩 ★ قفل دریافت لینک باز شد ★ 𓆪』"
+        "『𓆩 دریافت لینک 𓆪』\n\n★ دریافت لینک فعال شد."
       );
     }
   );
@@ -2334,6 +2315,7 @@ function registerLinks(bot) {
 
   // ===================================
   // قفل دریافت لینک
+  // فقط مالک و مدیر دارای دسترسی
   // ===================================
 
   bot.hears(
@@ -2349,25 +2331,32 @@ function registerLinks(bot) {
       const group =
         getGroup(ctx.chat.id);
 
-      disableReceiveLink(group);
+      disableReceiveLink(
+        group
+      );
 
       await replyToCommand(
         ctx,
-        "『𓆩 ★ قفل دریافت لینک بسته شد ★ 𓆪』"
+        "『𓆩 دریافت لینک 𓆪』\n\n☆ دریافت لینک غیرفعال شد."
       );
     }
   );
 
 
   // ===================================
-  // دریافت لینک توسط کاربر
+  // دریافت لینک توسط اعضا
+  // مثال:
+  // دریافت لینک
+  // دریافت لینک ۲
   // ===================================
 
   bot.hears(
     /^دریافت لینک(?:\s+(\d+))?$/i,
     async ctx => {
 
-      if (!isGroupChat(ctx)) {
+      if (
+        !isGroupChat(ctx)
+      ) {
         return;
       }
 
@@ -2377,32 +2366,47 @@ function registerLinks(bot) {
       const links =
         getLinkData(group);
 
-      // اگر دریافت لینک بسته باشد
-      // کاربران عادی هیچ پاسخی نمی‌گیرند
-      if (!links.receiveEnabled) {
+      if (
+        !links.receiveEnabled
+      ) {
         return;
       }
 
-      const requested =
-        ctx.match &&
+      const requestedHours =
         ctx.match[1]
           ? Number(ctx.match[1])
           : Number(
-              links.receiveDuration || 1
+              links.receiveDuration
             );
 
+      const allowedHours = [
+        1,
+        2,
+        3,
+        4,
+        6,
+        12,
+        24
+      ];
+
       if (
-        !Number.isFinite(requested) ||
-        requested <= 0 ||
-        requested > 24
+        !allowedHours.includes(
+          requestedHours
+        )
       ) {
+
+        await replyToCommand(
+          ctx,
+          "『𓆩 دریافت لینک 𓆪』\n\nمدت معتبر:\n۱، ۲، ۳، ۴، ۶، ۱۲ یا ۲۴ ساعت"
+        );
+
         return;
       }
 
       const result =
         await createReceiveLink(
           ctx,
-          requested
+          requestedHours
         );
 
       if (!result) {
@@ -2411,51 +2415,24 @@ function registerLinks(bot) {
 
       await replyToCommand(
         ctx,
-        `『𓆩 ★ دریافت لینک برای ${requested} ساعت فعال شد ★ 𓆪』\n\n${result.invite_link}`
+        `『𓆩 لینک عضویت 𓆪』\n\nمدت اعتبار: ${requestedHours} ساعت\n\n${result.invite_link}`
       );
     }
   );
+
+
+  // ===================================
+  // خروجی فایل
+  // ===================================
+
+  return;
 }
 
 
 // =====================================
-// خروجی فایل
+// EXPORT
 // =====================================
 
 module.exports = {
-
-  registerLinks,
-
-  getLinkData,
-
-  getMemberRole,
-
-  hasLinkManagementAccess,
-
-  checkLinkManager,
-
-  createMainLink,
-
-  createOneTimeLink,
-
-  createTimedLink,
-
-  createLocationLink,
-
-  createApprovalLink,
-
-  createRequestLink,
-
-  createReceiveLink,
-
-  setManagerAccess,
-
-  getManagerAccess,
-
-  setReceiveDuration,
-
-  enableReceiveLink,
-
-  disableReceiveLink
-
+  registerLinks
 };
