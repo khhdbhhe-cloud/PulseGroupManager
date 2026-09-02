@@ -1923,79 +1923,87 @@ function registerGroupInfo(bot) {
   );
 
 
-  // =====================================
-  // دریافت متن قوانین
-  // =====================================
+// =====================================
+// دریافت متن قوانین
+// =====================================
 
-  bot.on("text", async (ctx, next) => {
+bot.on("text", async (ctx, next) => {
 
-    try {
+  try {
 
-      if (!ctx.chat || ctx.chat.type === "private") {
-        return next();
-      }
-
-      const group = getGroup(ctx.chat.id);
-
-      if (!group) return next();
-
-      ensureGroupInfo(group);
-
-      const waitingUser =
-        group.groupInfo.waitingForRules;
-
-      // در انتظار دریافت قوانین نیست
-      if (!waitingUser) return next();
-
-      // فقط همان Owner
-      if (
-        !ctx.from ||
-        ctx.from.id !== waitingUser
-      ) {
-        return next();
-      }
-
-      // خود فرمان‌ها را به عنوان قوانین ذخیره نکن
-      const text = ctx.message.text;
-
-      if (
-        /^(تنظیم قوانین|حذف قوانین|قوانین|قوانین گروه)$/i.test(
-          text.trim()
-        )
-      ) {
-        return next();
-      }
-
-      group.groupInfo.rules = text.trim();
-
-      group.groupInfo.waitingForRules = null;
-
-      saveGroupInfo(
-        ctx.chat.id,
-        group
-      );
-
-      await ctx.reply(
-        "قوانین گروه ذخیره شد.",
-        {
-          reply_to_message_id:
-            ctx.message.message_id
-        }
-      );
-
-      return;
-
-    } catch (error) {
-
-      console.error(
-        "SAVE GROUP RULES ERROR:",
-        error.message
-      );
-
+    if (!ctx.chat || ctx.chat.type === "private") {
       return next();
     }
 
-  });
+    const group = getGroup(ctx.chat.id);
+
+    if (!group) {
+      return next();
+    }
+
+    // اطمینان از وجود بخش اطلاعات گروه
+    ensureGroupInfo(group);
+
+    // اگر به هر دلیل هنوز ساخته نشده بود
+    if (!group.groupInfo) {
+      group.groupInfo = {};
+    }
+
+    if (!group.groupInfo.waitingForRules) {
+      return next();
+    }
+
+    // فقط همان صاحب گروه که تنظیم قوانین را زده
+    if (
+      !ctx.from ||
+      ctx.from.id !== group.groupInfo.waitingForRules
+    ) {
+      return next();
+    }
+
+    const text = ctx.message.text;
+
+    // فرمان‌ها را به عنوان قوانین ذخیره نکن
+    if (
+      /^(تنظیم قوانین|حذف قوانین|قوانین|قوانین گروه)$/i.test(
+        text.trim()
+      )
+    ) {
+      return next();
+    }
+
+    // ذخیره قوانین
+    group.groupInfo.rules = text.trim();
+
+    // پایان حالت انتظار
+    group.groupInfo.waitingForRules = null;
+
+    saveGroupInfo(
+      ctx.chat.id,
+      group
+    );
+
+    await ctx.reply(
+      "قوانین گروه ذخیره شد.",
+      {
+        reply_to_message_id:
+          ctx.message.message_id
+      }
+    );
+
+    return;
+
+  } catch (error) {
+
+    console.error(
+      "SAVE GROUP RULES ERROR:",
+      error.message
+    );
+
+    return next();
+  }
+
+});
 
 
   // =====================================
