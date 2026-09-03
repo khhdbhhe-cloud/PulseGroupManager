@@ -30,12 +30,16 @@ function isGroup(ctx) {
 
 
 // =====================================
-// تشخیص مالک / مدیر
+// تشخیص مالک / مدیر / عضو
 // =====================================
 
 async function getRole(ctx, userId) {
 
   try {
+
+    if (!ctx.chat) {
+      return "member";
+    }
 
     const member =
       await ctx.telegram.getChatMember(
@@ -43,24 +47,17 @@ async function getRole(ctx, userId) {
         userId
       );
 
+    if (!member) {
+      return "member";
+    }
 
-    if (
-      member.status === "creator"
-    ) {
-
+    if (member.status === "creator") {
       return "owner";
-
     }
 
-
-    if (
-      member.status === "administrator"
-    ) {
-
+    if (member.status === "administrator") {
       return "admin";
-
     }
-
 
     return "member";
 
@@ -81,13 +78,17 @@ async function getRole(ctx, userId) {
 
 
 // =====================================
-// آیا کاربر اجازه مدیریت قفل‌ها دارد؟
+// دسترسی مدیریت قفل‌ها
 // =====================================
 
 async function canManageLocks(
   ctx,
   userId
 ) {
+
+  if (!isGroup(ctx)) {
+    return false;
+  }
 
   const role =
     await getRole(
@@ -96,22 +97,16 @@ async function canManageLocks(
     );
 
 
-  // مالک همیشه اجازه دارد
+  // مالک = دسترسی کامل
 
-  if (
-    role === "owner"
-  ) {
-
+  if (role === "owner") {
     return true;
-
   }
 
 
-  // مدیر باید دسترسی locks داشته باشد
+  // مدیر = نیازمند دسترسی locks
 
-  if (
-    role === "admin"
-  ) {
+  if (role === "admin") {
 
     const permissions =
       getPermissions(
@@ -119,8 +114,7 @@ async function canManageLocks(
         userId
       );
 
-
-    return (
+    return Boolean(
       permissions &&
       permissions.locks === true
     );
@@ -134,7 +128,7 @@ async function canManageLocks(
 
 
 // =====================================
-// نام فارسی قفل
+// نام فارسی قفل‌ها
 // =====================================
 
 const LOCK_NAMES = {
@@ -157,14 +151,43 @@ const LOCK_NAMES = {
 
 
 // =====================================
-// ساختار پیش‌فرض قفل‌ها
+// گزینه‌های حد متن بلند
+// =====================================
+
+const LONG_TEXT_LIMITS = [
+
+  100,
+  200,
+  300,
+  400,
+  500,
+  600,
+  700,
+  800,
+  900,
+  1000,
+  2000
+
+];
+
+
+// =====================================
+// حد پیش‌فرض متن بلند
+// =====================================
+
+const DEFAULT_LONG_TEXT_LIMIT = 500;
+
+
+// =====================================
+// ساختار قفل‌های گروه
 // =====================================
 
 function ensureLocks(group) {
 
   if (
     !group.locks ||
-    typeof group.locks !== "object"
+    typeof group.locks !== "object" ||
+    Array.isArray(group.locks)
   ) {
 
     group.locks = {};
@@ -191,6 +214,9 @@ function ensureLocks(group) {
   };
 
 
+  let changed = false;
+
+
   for (
     const key of Object.keys(defaults)
   ) {
@@ -202,8 +228,36 @@ function ensureLocks(group) {
       group.locks[key] =
         defaults[key];
 
+      changed = true;
+
     }
 
+  }
+
+
+  // -------------------------------
+  // حد متن بلند
+  // -------------------------------
+
+  if (
+    !Number.isInteger(
+      group.locks.longTextLimit
+    ) ||
+    !LONG_TEXT_LIMITS.includes(
+      group.locks.longTextLimit
+    )
+  ) {
+
+    group.locks.longTextLimit =
+      DEFAULT_LONG_TEXT_LIMIT;
+
+    changed = true;
+
+  }
+
+
+  if (changed) {
+    saveDB();
   }
 
 }
@@ -218,6 +272,18 @@ function setLock(
   lockType,
   value
 ) {
+
+  if (
+    !Object.prototype.hasOwnProperty.call(
+      LOCK_NAMES,
+      lockType
+    )
+  ) {
+
+    return false;
+
+  }
+
 
   const group =
     getGroup(chatId);
@@ -247,6 +313,18 @@ function getLock(
   lockType
 ) {
 
+  if (
+    !Object.prototype.hasOwnProperty.call(
+      LOCK_NAMES,
+      lockType
+    )
+  ) {
+
+    return false;
+
+  }
+
+
   const group =
     getGroup(chatId);
 
@@ -262,106 +340,145 @@ function getLock(
 
 
 // =====================================
+// دریافت حد متن بلند
+// =====================================
+
+function getLongTextLimit(
+  chatId
+) {
+
+  const group =
+    getGroup(chatId);
+
+
+  ensureLocks(group);
+
+
+  return (
+    group.locks.longTextLimit ||
+    DEFAULT_LONG_TEXT_LIMIT
+  );
+
+}
+
+
+// =====================================
+// تنظیم حد متن بلند
+// =====================================
+
+function setLongTextLimit(
+  chatId,
+  limit
+) {
+
+  const numericLimit =
+    Number(limit);
+
+
+  if (
+    !LONG_TEXT_LIMITS.includes(
+      numericLimit
+    )
+  ) {
+
+    return false;
+
+  }
+
+
+  const group =
+    getGroup(chatId);
+
+
+  ensureLocks(group);
+
+
+  group.locks.longTextLimit =
+    numericLimit;
+
+
+  saveDB();
+
+
+  return numericLimit;
+
+}
+
+
+// =====================================
+// دریافت گزینه‌های حد متن بلند
+// =====================================
+
+function getLongTextLimits() {
+
+  return [
+    ...LONG_TEXT_LIMITS
+  ];
+
+}
+
+
+// =====================================
 // تشخیص نوع پیام
 // =====================================
 
 function detectMediaType(message) {
 
   if (!message) {
-
     return null;
-
   }
 
 
-  // -------------------------------
   // استیکر
-  // -------------------------------
 
-  if (
-    message.sticker
-  ) {
-
+  if (message.sticker) {
     return "sticker";
-
   }
 
 
-  // -------------------------------
   // گیف
-  // -------------------------------
 
-  if (
-    message.animation
-  ) {
-
+  if (message.animation) {
     return "gif";
-
   }
 
 
-  // -------------------------------
   // عکس
-  // -------------------------------
 
-  if (
-    message.photo
-  ) {
-
+  if (message.photo) {
     return "photo";
-
   }
 
 
-  // -------------------------------
   // فیلم
-  // -------------------------------
 
-  if (
-    message.video
-  ) {
-
+  if (message.video) {
     return "video";
-
   }
 
 
-  // -------------------------------
   // ویس
-  // -------------------------------
 
-  if (
-    message.voice
-  ) {
-
+  if (message.voice) {
     return "voice";
-
   }
 
 
-  // -------------------------------
-  // متن بلند
-  // -------------------------------
-
-  if (
-    typeof message.text === "string" &&
-    message.text.length > 500
-  ) {
-
-    return "longText";
-
-  }
-
-
-  // -------------------------------
   // نظرسنجی
-  // -------------------------------
+
+  if (message.poll) {
+    return "poll";
+  }
+
+
+  // متن بلند
+  // حد در checkMediaLock بررسی می‌شود
 
   if (
-    message.poll
+    typeof message.text === "string"
   ) {
 
-    return "poll";
+    return "text";
 
   }
 
@@ -372,7 +489,38 @@ function detectMediaType(message) {
 
 
 // =====================================
-// Reply کردن پاسخ مدیریتی
+// تشخیص اینکه متن بلند است یا نه
+// =====================================
+
+function isLongText(
+  chatId,
+  message
+) {
+
+  if (
+    !message ||
+    typeof message.text !== "string"
+  ) {
+
+    return false;
+
+  }
+
+
+  const limit =
+    getLongTextLimit(
+      chatId
+    );
+
+
+  return (
+    message.text.length >
+    limit
+  );
+
+}// =====================================
+// Reply پاسخ مدیریتی
+// پاسخ روی خود پیام دستور
 // =====================================
 
 async function replyToCommand(
@@ -381,6 +529,16 @@ async function replyToCommand(
 ) {
 
   try {
+
+    if (
+      !ctx.message ||
+      !ctx.message.message_id
+    ) {
+
+      return;
+
+    }
+
 
     await ctx.reply(
       text,
@@ -407,7 +565,7 @@ async function replyToCommand(
 
 
 // =====================================
-// اجرای قفل
+// اجرای دستور قفل
 // =====================================
 
 async function handleLockCommand(
@@ -417,22 +575,7 @@ async function handleLockCommand(
 ) {
 
   if (!isGroup(ctx)) {
-
     return;
-
-  }
-
-
-  // -------------------------------
-  // قفل‌ها فقط با Reply
-  // -------------------------------
-
-  if (
-    !ctx.message.reply_to_message
-  ) {
-
-    return;
-
   }
 
 
@@ -443,12 +586,11 @@ async function handleLockCommand(
     );
 
 
-  // کاربر بدون دسترسی کاملاً ساکت
+  // عضو عادی یا مدیر بدون دسترسی
+  // کاملاً ساکت
 
   if (!allowed) {
-
     return;
-
   }
 
 
@@ -464,11 +606,11 @@ async function handleLockCommand(
     LOCK_NAMES[lockType];
 
 
-  if (enabled) {
+  if (value === true) {
 
     await replyToCommand(
       ctx,
-      `🔒 قفل ${name} فعال شد.\n\nاعضای عادی اجازه ارسال ${name} را ندارند.`
+      `『🔒』 𒌍قفل ${name} فعال شد`
     );
 
   }
@@ -477,7 +619,7 @@ async function handleLockCommand(
 
     await replyToCommand(
       ctx,
-      `🔓 قفل ${name} باز شد.\n\nاعضای عادی دوباره می‌توانند ${name} ارسال کنند.`
+      `『🔓』 𒌍قفل ${name} باز شد`
     );
 
   }
@@ -506,9 +648,9 @@ function parseLockCommand(text) {
       .replace(/\s+/g, " ");
 
 
-  // -------------------------------
+  // ===================================
   // قفل
-  // -------------------------------
+  // ===================================
 
   const lockMatch =
     value.match(
@@ -516,9 +658,7 @@ function parseLockCommand(text) {
     );
 
 
-  if (
-    lockMatch
-  ) {
+  if (lockMatch) {
 
     const name =
       lockMatch[1]
@@ -526,95 +666,58 @@ function parseLockCommand(text) {
         .toLowerCase();
 
 
-    if (
-      name === "استیکر"
-    ) {
+    switch (name) {
 
-      return {
-        type: "sticker",
-        enabled: true
-      };
+      case "استیکر":
+        return {
+          type: "sticker",
+          enabled: true
+        };
 
-    }
+      case "گیف":
+        return {
+          type: "gif",
+          enabled: true
+        };
 
+      case "عکس":
+        return {
+          type: "photo",
+          enabled: true
+        };
 
-    if (
-      name === "گیف"
-    ) {
+      case "فیلم":
+        return {
+          type: "video",
+          enabled: true
+        };
 
-      return {
-        type: "gif",
-        enabled: true
-      };
+      case "ویس":
+        return {
+          type: "voice",
+          enabled: true
+        };
 
-    }
+      case "متن بلند":
+        return {
+          type: "longText",
+          enabled: true
+        };
 
-
-    if (
-      name === "عکس"
-    ) {
-
-      return {
-        type: "photo",
-        enabled: true
-      };
-
-    }
-
-
-    if (
-      name === "فیلم"
-    ) {
-
-      return {
-        type: "video",
-        enabled: true
-      };
-
-    }
-
-
-    if (
-      name === "ویس"
-    ) {
-
-      return {
-        type: "voice",
-        enabled: true
-      };
-
-    }
-
-
-    if (
-      name === "متن بلند"
-    ) {
-
-      return {
-        type: "longText",
-        enabled: true
-      };
-
-    }
-
-
-    if (
-      name === "نظرسنجی"
-    ) {
-
-      return {
-        type: "poll",
-        enabled: true
-      };
+      case "نظرسنجی":
+        return {
+          type: "poll",
+          enabled: true
+        };
 
     }
 
   }
 
 
-  // -------------------------------
+  // ===================================
   // باز کردن
-  // -------------------------------
+  // ===================================
 
   const unlockMatch =
     value.match(
@@ -622,9 +725,7 @@ function parseLockCommand(text) {
     );
 
 
-  if (
-    unlockMatch
-  ) {
+  if (unlockMatch) {
 
     const name =
       unlockMatch[2]
@@ -632,86 +733,49 @@ function parseLockCommand(text) {
         .toLowerCase();
 
 
-    if (
-      name === "استیکر"
-    ) {
+    switch (name) {
 
-      return {
-        type: "sticker",
-        enabled: false
-      };
+      case "استیکر":
+        return {
+          type: "sticker",
+          enabled: false
+        };
 
-    }
+      case "گیف":
+        return {
+          type: "gif",
+          enabled: false
+        };
 
+      case "عکس":
+        return {
+          type: "photo",
+          enabled: false
+        };
 
-    if (
-      name === "گیف"
-    ) {
+      case "فیلم":
+        return {
+          type: "video",
+          enabled: false
+        };
 
-      return {
-        type: "gif",
-        enabled: false
-      };
+      case "ویس":
+        return {
+          type: "voice",
+          enabled: false
+        };
 
-    }
+      case "متن بلند":
+        return {
+          type: "longText",
+          enabled: false
+        };
 
-
-    if (
-      name === "عکس"
-    ) {
-
-      return {
-        type: "photo",
-        enabled: false
-      };
-
-    }
-
-
-    if (
-      name === "فیلم"
-    ) {
-
-      return {
-        type: "video",
-        enabled: false
-      };
-
-    }
-
-
-    if (
-      name === "ویس"
-    ) {
-
-      return {
-        type: "voice",
-        enabled: false
-      };
-
-    }
-
-
-    if (
-      name === "متن بلند"
-    ) {
-
-      return {
-        type: "longText",
-        enabled: false
-      };
-
-    }
-
-
-    if (
-      name === "نظرسنجی"
-    ) {
-
-      return {
-        type: "poll",
-        enabled: false
-      };
+      case "نظرسنجی":
+        return {
+          type: "poll",
+          enabled: false
+        };
 
     }
 
@@ -750,7 +814,7 @@ async function deleteLockedMessage(
 
 
 // =====================================
-// بررسی پیام اعضا
+// بررسی پیام‌های اعضا
 // =====================================
 
 async function checkMediaLock(
@@ -758,51 +822,39 @@ async function checkMediaLock(
 ) {
 
   if (!isGroup(ctx)) {
-
     return;
-
   }
 
+
+  if (!ctx.message) {
+    return;
+  }
+
+
+  // -----------------------------------
+  // پیام‌های مدیریتی قفل را بررسی نکن
+  // -----------------------------------
 
   if (
-    !ctx.message
+    typeof ctx.message.text === "string"
   ) {
 
-    return;
+    const command =
+      parseLockCommand(
+        ctx.message.text
+      );
+
+
+    if (command) {
+      return;
+    }
 
   }
 
 
-  const mediaType =
-    detectMediaType(
-      ctx.message
-    );
-
-
-  if (!mediaType) {
-
-    return;
-
-  }
-
-
-  const locked =
-    getLock(
-      ctx.chat.id,
-      mediaType
-    );
-
-
-  if (!locked) {
-
-    return;
-
-  }
-
-
-  // ---------------------------------
-  // مدیر / مالک حذف نمی‌شود
-  // ---------------------------------
+  // -----------------------------------
+  // مدیر و مالک حذف نمی‌شوند
+  // -----------------------------------
 
   const role =
     await getRole(
@@ -821,9 +873,73 @@ async function checkMediaLock(
   }
 
 
-  // ---------------------------------
-  // عضو عادی = حذف پیام
-  // ---------------------------------
+  // ===================================
+  // متن بلند
+  // ===================================
+
+  if (
+    typeof ctx.message.text === "string"
+  ) {
+
+    const longTextLocked =
+      getLock(
+        ctx.chat.id,
+        "longText"
+      );
+
+
+    if (
+      longTextLocked &&
+      isLongText(
+        ctx.chat.id,
+        ctx.message
+      )
+    ) {
+
+      await deleteLockedMessage(
+        ctx
+      );
+
+      return;
+
+    }
+
+  }
+
+
+  // ===================================
+  // رسانه / نظرسنجی
+  // ===================================
+
+  const mediaType =
+    detectMediaType(
+      ctx.message
+    );
+
+
+  if (
+    !mediaType ||
+    mediaType === "text"
+  ) {
+
+    return;
+
+  }
+
+
+  const locked =
+    getLock(
+      ctx.chat.id,
+      mediaType
+    );
+
+
+  if (!locked) {
+    return;
+  }
+
+
+  // عضو عادی = حذف
 
   await deleteLockedMessage(
     ctx
@@ -838,12 +954,13 @@ async function checkMediaLock(
 
 function registerMediaLocks(bot) {
 
-  // ---------------------------------
-  // دستورات قفل
-  // ---------------------------------
+  // ===================================
+  // قفل کردن
+  // ===================================
 
   bot.hears(
-    /^(قفل)\s+(استیکر|گیف|عکس|فیلم|ویس|متن\s*بلند|نظرسنجی)$/i,
+    /^قفل\s+(استیکر|گیف|عکس|فیلم|ویس|متن\s*بلند|نظرسنجی)$/i,
+
     async ctx => {
 
       const command =
@@ -853,9 +970,7 @@ function registerMediaLocks(bot) {
 
 
       if (!command) {
-
         return;
-
       }
 
 
@@ -866,15 +981,17 @@ function registerMediaLocks(bot) {
       );
 
     }
+
   );
 
 
-  // ---------------------------------
-  // دستورات باز کردن
-  // ---------------------------------
+  // ===================================
+  // باز کردن
+  // ===================================
 
   bot.hears(
     /^(بازکردن|باز کردن|باز)\s+(استیکر|گیف|عکس|فیلم|ویس|متن\s*بلند|نظرسنجی)$/i,
+
     async ctx => {
 
       const command =
@@ -884,9 +1001,7 @@ function registerMediaLocks(bot) {
 
 
       if (!command) {
-
         return;
-
       }
 
 
@@ -897,15 +1012,17 @@ function registerMediaLocks(bot) {
       );
 
     }
+
   );
 
 
-  // ---------------------------------
+  // ===================================
   // بررسی پیام‌های گروه
-  // ---------------------------------
+  // ===================================
 
   bot.on(
     "message",
+
     async ctx => {
 
       try {
@@ -926,11 +1043,197 @@ function registerMediaLocks(bot) {
       }
 
     }
+
   );
 
 
   console.log(
     "MEDIA LOCKS: registered."
+  );
+
+}// =====================================
+// دریافت تمام وضعیت قفل‌ها
+// مخصوص پنل
+// =====================================
+
+function getAllLocks(
+  chatId
+) {
+
+  const group =
+    getGroup(chatId);
+
+
+  ensureLocks(group);
+
+
+  return {
+
+    sticker:
+      Boolean(
+        group.locks.sticker
+      ),
+
+    gif:
+      Boolean(
+        group.locks.gif
+      ),
+
+    photo:
+      Boolean(
+        group.locks.photo
+      ),
+
+    video:
+      Boolean(
+        group.locks.video
+      ),
+
+    voice:
+      Boolean(
+        group.locks.voice
+      ),
+
+    longText:
+      Boolean(
+        group.locks.longText
+      ),
+
+    poll:
+      Boolean(
+        group.locks.poll
+      ),
+
+    longTextLimit:
+      group.locks.longTextLimit
+
+  };
+
+}
+
+
+// =====================================
+// تغییر قفل از پنل
+// =====================================
+
+async function setLockFromPanel(
+  ctx,
+  lockType,
+  enabled
+) {
+
+  if (!isGroup(ctx)) {
+    return false;
+  }
+
+
+  if (
+    !Object.prototype.hasOwnProperty.call(
+      LOCK_NAMES,
+      lockType
+    )
+  ) {
+
+    return false;
+
+  }
+
+
+  const allowed =
+    await canManageLocks(
+      ctx,
+      ctx.from.id
+    );
+
+
+  if (!allowed) {
+    return false;
+  }
+
+
+  return setLock(
+    ctx.chat.id,
+    lockType,
+    enabled
+  );
+
+}
+
+
+// =====================================
+// تنظیم حد متن بلند از پنل
+// =====================================
+
+async function setLongTextLimitFromPanel(
+  ctx,
+  limit
+) {
+
+  if (!isGroup(ctx)) {
+    return false;
+  }
+
+
+  const allowed =
+    await canManageLocks(
+      ctx,
+      ctx.from.id
+    );
+
+
+  if (!allowed) {
+    return false;
+  }
+
+
+  return setLongTextLimit(
+    ctx.chat.id,
+    limit
+  );
+
+}
+
+
+// =====================================
+// وضعیت متن بلند
+// =====================================
+
+function getLongTextSettings(
+  chatId
+) {
+
+  return {
+
+    enabled:
+      getLock(
+        chatId,
+        "longText"
+      ),
+
+    limit:
+      getLongTextLimit(
+        chatId
+      ),
+
+    options:
+      getLongTextLimits()
+
+  };
+
+}
+
+
+// =====================================
+// نام قفل
+// =====================================
+
+function getLockName(
+  lockType
+) {
+
+  return (
+    LOCK_NAMES[lockType] ||
+    lockType
   );
 
 }
@@ -948,6 +1251,28 @@ module.exports = {
 
   setLock,
 
-  detectMediaType
+  getAllLocks,
+
+  setLockFromPanel,
+
+  getLockName,
+
+  detectMediaType,
+
+  canManageLocks,
+
+  getRole,
+
+  getLongTextLimit,
+
+  setLongTextLimit,
+
+  getLongTextLimits,
+
+  setLongTextLimitFromPanel,
+
+  getLongTextSettings,
+
+  isLongText
 
 };
