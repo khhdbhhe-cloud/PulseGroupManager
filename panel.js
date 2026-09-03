@@ -7,6 +7,25 @@ const { Markup } = require("telegraf");
 
 
 // =====================================
+// اتصال دیتابیس
+// =====================================
+
+const {
+  getPermissions
+} = require("./database");
+
+
+// =====================================
+// اتصال قفل‌های رسانه‌ای
+// =====================================
+
+const {
+  getLock,
+  setLock
+} = require("./media-locks");
+
+
+// =====================================
 // متن پنل
 // =====================================
 
@@ -188,7 +207,10 @@ async function getGroupRole(ctx) {
       ctx.chat.type;
 
 
+    // -------------------------------
     // فقط گروه و سوپرگروه
+    // -------------------------------
+
     if (
       chatType !== "group" &&
       chatType !== "supergroup"
@@ -219,7 +241,10 @@ async function getGroupRole(ctx) {
     }
 
 
-    // مالک اصلی گروه
+    // -------------------------------
+    // مالک اصلی
+    // -------------------------------
+
     if (
       member.status === "creator"
     ) {
@@ -232,7 +257,10 @@ async function getGroupRole(ctx) {
     }
 
 
-    // مدیر گروه
+    // -------------------------------
+    // مدیر
+    // -------------------------------
+
     if (
       member.status === "administrator"
     ) {
@@ -245,7 +273,10 @@ async function getGroupRole(ctx) {
     }
 
 
+    // -------------------------------
     // عضو عادی
+    // -------------------------------
+
     return {
       ok: false,
       role: "member"
@@ -297,7 +328,7 @@ async function protectPanel(ctx) {
 
 
   // ===================================
-  // تشخیص نقش واقعی کاربر
+  // تشخیص نقش واقعی
   // ===================================
 
   const role =
@@ -305,7 +336,7 @@ async function protectPanel(ctx) {
 
 
   // ===================================
-  // عضو عادی یا فرد بدون دسترسی
+  // عضو عادی
   // ===================================
 
   if (!role.ok) {
@@ -329,12 +360,8 @@ async function protectPanel(ctx) {
 
 
   // ===================================
-  // مالک اصلی
+  // مالک
   // ===================================
-  //
-  // مالک می‌تواند پنل خودش را باز کند
-  // و همچنین می‌تواند پنل مدیران را مشاهده کند.
-  //
 
   if (
     role.role === "owner"
@@ -348,14 +375,12 @@ async function protectPanel(ctx) {
   // ===================================
   // مدیر
   // ===================================
-  //
-  // مدیر فقط پنلی را می‌تواند کنترل کند
-  // که خودش آن را باز کرده است.
-  //
 
   if (
     role.role === "admin"
   ) {
+
+    // مدیر فقط پنل خودش را کنترل می‌کند
 
     if (
       panelOwnerId !== currentUserId
@@ -385,6 +410,299 @@ async function protectPanel(ctx) {
 
 
   return false;
+
+}
+
+
+// =====================================
+// بررسی اجازه مدیریت قفل‌ها
+// =====================================
+
+async function canManageLocks(ctx) {
+
+  try {
+
+    const role =
+      await getGroupRole(ctx);
+
+
+    // -------------------------------
+    // مالک همیشه اجازه دارد
+    // -------------------------------
+
+    if (
+      role.role === "owner"
+    ) {
+
+      return true;
+
+    }
+
+
+    // -------------------------------
+    // مدیر باید دسترسی locks داشته باشد
+    // -------------------------------
+
+    if (
+      role.role === "admin"
+    ) {
+
+      const permissions =
+        getPermissions(
+          ctx.chat.id,
+          ctx.from.id
+        );
+
+
+      return (
+        permissions &&
+        permissions.locks === true
+      );
+
+    }
+
+
+    return false;
+
+  }
+
+  catch (error) {
+
+    console.log(
+      "PANEL LOCK PERMISSION ERROR:",
+      error.message
+    );
+
+
+    return false;
+
+  }
+
+}
+
+
+// =====================================
+// نام فارسی قفل‌ها
+// =====================================
+
+const MEDIA_LOCK_NAMES = {
+
+  sticker: "استیکر",
+
+  gif: "گیف",
+
+  photo: "عکس",
+
+  video: "فیلم",
+
+  voice: "ویس",
+
+  longText: "پیام بلند",
+
+  poll: "نظرسنجی"
+
+};
+
+
+// =====================================
+// ساخت دکمه قفل رسانه
+// =====================================
+
+function mediaLockButton(
+  title,
+  lockType,
+  ownerId,
+  enabled
+) {
+
+  const symbol =
+    enabled
+      ? "★"
+      : "☆";
+
+
+  return Markup.button.callback(
+    `『𓆩 ${title} ${symbol} 𓆪』`,
+    `media_lock:${lockType}:${ownerId}`
+  );
+
+}
+
+
+// =====================================
+// ساخت صفحه قفل‌های رسانه
+// =====================================
+
+function mediaLocksPanel(
+  ownerId,
+  chatId
+) {
+
+  const sticker =
+    getLock(
+      chatId,
+      "sticker"
+    );
+
+
+  const gif =
+    getLock(
+      chatId,
+      "gif"
+    );
+
+
+  const photo =
+    getLock(
+      chatId,
+      "photo"
+    );
+
+
+  const video =
+    getLock(
+      chatId,
+      "video"
+    );
+
+
+  const voice =
+    getLock(
+      chatId,
+      "voice"
+    );
+
+
+  const longText =
+    getLock(
+      chatId,
+      "longText"
+    );
+
+
+  const poll =
+    getLock(
+      chatId,
+      "poll"
+    );
+
+
+  return Markup.inlineKeyboard([
+
+    [
+      mediaLockButton(
+        "استیکر",
+        "sticker",
+        ownerId,
+        sticker
+      )
+    ],
+
+    [
+      mediaLockButton(
+        "گیف",
+        "gif",
+        ownerId,
+        gif
+      )
+    ],
+
+    [
+      mediaLockButton(
+        "عکس",
+        "photo",
+        ownerId,
+        photo
+      )
+    ],
+
+    [
+      mediaLockButton(
+        "فیلم",
+        "video",
+        ownerId,
+        video
+      )
+    ],
+
+    [
+      mediaLockButton(
+        "ویس",
+        "voice",
+        ownerId,
+        voice
+      )
+    ],
+
+    [
+      mediaLockButton(
+        "پیام بلند",
+        "longText",
+        ownerId,
+        longText
+      )
+    ],
+
+    [
+      mediaLockButton(
+        "نظرسنجی",
+        "poll",
+        ownerId,
+        poll
+      )
+    ],
+
+    [
+      panelButton(
+        "بازگشت",
+        "panel_next",
+        ownerId
+      )
+    ],
+
+    [
+      panelButton(
+        "بستن پنل",
+        "panel_close",
+        ownerId
+      )
+    ]
+
+  ]);
+
+}
+
+
+// =====================================
+// متن وضعیت قفل
+// =====================================
+
+function mediaLockStatusText(
+  lockType,
+  enabled
+) {
+
+  const name =
+    MEDIA_LOCK_NAMES[lockType] ||
+    lockType;
+
+
+  if (enabled) {
+
+    return `『𓆩 قفل ${name} 𓆪』
+
+🔒 وضعیت: فعال
+
+اعضای عادی اجازه ارسال ${name} را ندارند.`;
+
+  }
+
+
+  return `『𓆩 قفل ${name} 𓆪』
+
+🔓 وضعیت: غیرفعال
+
+اعضای عادی می‌توانند ${name} ارسال کنند.`;
 
 }
 
@@ -527,10 +845,7 @@ function nextPanel(ownerId) {
 
   ]);
 
-}
-
-
-// =====================================
+        }// =====================================
 // صفحه یک گزینه
 // =====================================
 
@@ -594,24 +909,37 @@ function registerPanelActions(bot) {
       await ctx.answerCbQuery();
 
 
-      await ctx.editMessageText(
+      try {
 
-        `『𓆩 صفحه بعد 𓆪』
+        await ctx.editMessageText(
+
+          `『𓆩 صفحه بعد 𓆪』
 
 قابلیت‌های بیشتر مدیریت گروه:`,
 
-        nextPanel(
-          ctx.match[1]
-        )
+          nextPanel(
+            ctx.match[1]
+          )
 
-      );
+        );
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "PANEL NEXT ERROR:",
+          error.message
+        );
+
+      }
 
     }
   );
 
 
   // ===================================
-  // بازگشت
+  // بازگشت به صفحه اصلی
   // ===================================
 
   bot.action(
@@ -626,15 +954,28 @@ function registerPanelActions(bot) {
       await ctx.answerCbQuery();
 
 
-      await ctx.editMessageText(
+      try {
 
-        panelText(),
+        await ctx.editMessageText(
 
-        mainPanel(
-          ctx.match[1]
-        )
+          panelText(),
 
-      );
+          mainPanel(
+            ctx.match[1]
+          )
+
+        );
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "PANEL HOME ERROR:",
+          error.message
+        );
+
+      }
 
     }
   );
@@ -656,129 +997,320 @@ function registerPanelActions(bot) {
       await ctx.answerCbQuery();
 
 
-      await ctx.editMessageText(
+      try {
 
-        `『𓆩 قفل گروه 𓆪』
+        await ctx.editMessageText(
+
+          `『𓆩 قفل گروه 𓆪』
 
 قفل‌های مربوط به مدیریت گروه:`,
 
-        Markup.inlineKeyboard([
+          Markup.inlineKeyboard([
 
-          [
-            panelButton(
-              "قفل لینک",
-              "lock_link",
-              ctx.match[1]
-            )
-          ],
+            [
+              panelButton(
+                "قفل لینک",
+                "lock_link",
+                ctx.match[1]
+              )
+            ],
 
-          [
-            panelButton(
-              "قفل فوروارد",
-              "lock_forward",
-              ctx.match[1]
-            )
-          ],
+            [
+              panelButton(
+                "قفل فوروارد",
+                "lock_forward",
+                ctx.match[1]
+              )
+            ],
 
-          [
-            panelButton(
-              "قفل هشتگ",
-              "lock_hashtag",
-              ctx.match[1]
-            )
-          ],
+            [
+              panelButton(
+                "قفل هشتگ",
+                "lock_hashtag",
+                ctx.match[1]
+              )
+            ],
 
-          [
-            panelButton(
-              "قفل منشن",
-              "lock_mention",
-              ctx.match[1]
-            )
-          ],
+            [
+              panelButton(
+                "قفل منشن",
+                "lock_mention",
+                ctx.match[1]
+              )
+            ],
 
-          [
-            panelButton(
-              "قفل پیام بلند",
-              "lock_long_message",
-              ctx.match[1]
-            )
-          ],
+            [
+              panelButton(
+                "قفل پیام بلند",
+                "lock_long_message",
+                ctx.match[1]
+              )
+            ],
 
-          [
-            panelButton(
-              "قفل یوزرنیم",
-              "lock_username",
-              ctx.match[1]
-            )
-          ],
+            [
+              panelButton(
+                "قفل یوزرنیم",
+                "lock_username",
+                ctx.match[1]
+              )
+            ],
 
-          [
-            panelButton(
-              "قفل رسانه",
-              "lock_media",
-              ctx.match[1]
-            )
-          ],
+            [
+              panelButton(
+                "قفل رسانه",
+                "lock_media",
+                ctx.match[1]
+              )
+            ],
 
-          [
-            panelButton(
-              "قفل آیدی",
-              "lock_id",
-              ctx.match[1]
-            )
-          ],
+            [
+              panelButton(
+                "قفل آیدی",
+                "lock_id",
+                ctx.match[1]
+              )
+            ],
 
-          [
-            panelButton(
-              "قفل ممبر دزد",
-              "lock_member_thief",
-              ctx.match[1]
-            )
-          ],
+            [
+              panelButton(
+                "قفل ممبر دزد",
+                "lock_member_thief",
+                ctx.match[1]
+              )
+            ],
 
-          [
-            panelButton(
-              "قفل خیانت",
-              "lock_treason",
-              ctx.match[1]
-            )
-          ],
+            [
+              panelButton(
+                "قفل خیانت",
+                "lock_treason",
+                ctx.match[1]
+              )
+            ],
 
-          [
-            panelButton(
-              "قفل ضد خیانت",
-              "lock_anti_treason",
-              ctx.match[1]
-            )
-          ],
+            [
+              panelButton(
+                "قفل ضد خیانت",
+                "lock_anti_treason",
+                ctx.match[1]
+              )
+            ],
 
-          [
-            panelButton(
-              "قفل دشمن",
-              "lock_enemy",
-              ctx.match[1]
-            )
-          ],
+            [
+              panelButton(
+                "قفل دشمن",
+                "lock_enemy",
+                ctx.match[1]
+              )
+            ],
 
-          [
-            panelButton(
-              "بازگشت",
-              "panel_home",
-              ctx.match[1]
-            )
-          ],
+            [
+              panelButton(
+                "بازگشت",
+                "panel_home",
+                ctx.match[1]
+              )
+            ],
 
-          [
-            panelButton(
-              "بستن پنل",
-              "panel_close",
-              ctx.match[1]
-            )
-          ]
+            [
+              panelButton(
+                "بستن پنل",
+                "panel_close",
+                ctx.match[1]
+              )
+            ]
 
-        ])
+          ])
 
+        );
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "GROUP LOCKS PANEL ERROR:",
+          error.message
+        );
+
+      }
+
+    }
+  );
+
+
+  // ===================================
+  // قفل‌های رسانه‌ای واقعی
+  // ===================================
+
+  bot.action(
+    /^lock_media:(\d+)$/,
+    async ctx => {
+
+      if (
+        !(await protectPanel(ctx))
+      ) return;
+
+
+      await ctx.answerCbQuery();
+
+
+      try {
+
+        await ctx.editMessageText(
+
+          `『𓆩 قفل رسانه 𓆪』
+
+وضعیت قفل‌های رسانه‌ای گروه:
+
+★ فعال
+☆ غیرفعال`,
+
+          mediaLocksPanel(
+            ctx.match[1],
+            ctx.chat.id
+          )
+
+        );
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "MEDIA LOCK PANEL ERROR:",
+          error.message
+        );
+
+      }
+
+    }
+  );
+
+
+  // ===================================
+  // تغییر واقعی قفل رسانه
+  // ===================================
+
+  bot.action(
+    /^media_lock:(sticker|gif|photo|video|voice|longText|poll):(\d+)$/,
+    async ctx => {
+
+      if (
+        !(await protectPanel(ctx))
+      ) return;
+
+
+      const lockType =
+        ctx.match[1];
+
+
+      const ownerId =
+        ctx.match[2];
+
+
+      // --------------------------------
+      // بررسی دسترسی مدیریت قفل
+      // --------------------------------
+
+      const allowed =
+        await canManageLocks(ctx);
+
+
+      if (!allowed) {
+
+        try {
+
+          await ctx.answerCbQuery(
+            "『𓆩 ★ شما دسترسی مدیریت قفل‌ها را ندارید ★ 𓆪』",
+            {
+              show_alert: true
+            }
+          );
+
+        }
+
+        catch {}
+
+        return;
+
+      }
+
+
+      // --------------------------------
+      // وضعیت فعلی
+      // --------------------------------
+
+      const current =
+        getLock(
+          ctx.chat.id,
+          lockType
+        );
+
+
+      // --------------------------------
+      // تغییر وضعیت
+      // --------------------------------
+
+      const newValue =
+        !current;
+
+
+      setLock(
+        ctx.chat.id,
+        lockType,
+        newValue
       );
+
+
+      const name =
+        MEDIA_LOCK_NAMES[lockType];
+
+
+      try {
+
+        await ctx.answerCbQuery(
+
+          newValue
+            ? `قفل ${name} فعال شد.`
+            : `قفل ${name} باز شد.`
+
+        );
+
+      }
+
+      catch {}
+
+
+      // --------------------------------
+      // بازسازی صفحه با وضعیت جدید
+      // --------------------------------
+
+      try {
+
+        await ctx.editMessageText(
+
+          mediaLockStatusText(
+            lockType,
+            newValue
+          ),
+
+          mediaLocksPanel(
+            ownerId,
+            ctx.chat.id
+          )
+
+        );
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "MEDIA LOCK TOGGLE ERROR:",
+          error.message
+        );
+
+      }
 
     }
   );
@@ -800,33 +1332,46 @@ function registerPanelActions(bot) {
       await ctx.answerCbQuery();
 
 
-      await ctx.editMessageText(
+      try {
 
-        `『𓆩 مدیریت کاربران 𓆪』
+        await ctx.editMessageText(
+
+          `『𓆩 مدیریت کاربران 𓆪』
 
 بخش مدیریت کاربران گروه.`,
 
-        Markup.inlineKeyboard([
+          Markup.inlineKeyboard([
 
-          [
-            panelButton(
-              "بازگشت",
-              "panel_home",
-              ctx.match[1]
-            )
-          ],
+            [
+              panelButton(
+                "بازگشت",
+                "panel_home",
+                ctx.match[1]
+              )
+            ],
 
-          [
-            panelButton(
-              "بستن پنل",
-              "panel_close",
-              ctx.match[1]
-            )
-          ]
+            [
+              panelButton(
+                "بستن پنل",
+                "panel_close",
+                ctx.match[1]
+              )
+            ]
 
-        ])
+          ])
 
-      );
+        );
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "USERS PANEL ERROR:",
+          error.message
+        );
+
+      }
 
     }
   );
@@ -848,33 +1393,46 @@ function registerPanelActions(bot) {
       await ctx.answerCbQuery();
 
 
-      await ctx.editMessageText(
+      try {
 
-        `『𓆩 مدیریت پیام‌ها 𓆪』
+        await ctx.editMessageText(
+
+          `『𓆩 مدیریت پیام‌ها 𓆪』
 
 بخش مدیریت پیام‌های گروه.`,
 
-        Markup.inlineKeyboard([
+          Markup.inlineKeyboard([
 
-          [
-            panelButton(
-              "بازگشت",
-              "panel_home",
-              ctx.match[1]
-            )
-          ],
+            [
+              panelButton(
+                "بازگشت",
+                "panel_home",
+                ctx.match[1]
+              )
+            ],
 
-          [
-            panelButton(
-              "بستن پنل",
-              "panel_close",
-              ctx.match[1]
-            )
-          ]
+            [
+              panelButton(
+                "بستن پنل",
+                "panel_close",
+                ctx.match[1]
+              )
+            ]
 
-        ])
+          ])
 
-      );
+        );
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "MESSAGES PANEL ERROR:",
+          error.message
+        );
+
+      }
 
     }
   );
@@ -896,33 +1454,46 @@ function registerPanelActions(bot) {
       await ctx.answerCbQuery();
 
 
-      await ctx.editMessageText(
+      try {
 
-        `『𓆩 سیستم اخطار 𓆪』
+        await ctx.editMessageText(
+
+          `『𓆩 سیستم اخطار 𓆪』
 
 مدیریت سیستم اخطار گروه.`,
 
-        Markup.inlineKeyboard([
+          Markup.inlineKeyboard([
 
-          [
-            panelButton(
-              "بازگشت",
-              "panel_home",
-              ctx.match[1]
-            )
-          ],
+            [
+              panelButton(
+                "بازگشت",
+                "panel_home",
+                ctx.match[1]
+              )
+            ],
 
-          [
-            panelButton(
-              "بستن پنل",
-              "panel_close",
-              ctx.match[1]
-            )
-          ]
+            [
+              panelButton(
+                "بستن پنل",
+                "panel_close",
+                ctx.match[1]
+              )
+            ]
 
-        ])
+          ])
 
-      );
+        );
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "WARNINGS PANEL ERROR:",
+          error.message
+        );
+
+      }
 
     }
   );
@@ -944,41 +1515,51 @@ function registerPanelActions(bot) {
       await ctx.answerCbQuery();
 
 
-      await ctx.editMessageText(
+      try {
 
-        `『𓆩 ورود و خروج 𓆪』
+        await ctx.editMessageText(
+
+          `『𓆩 ورود و خروج 𓆪』
 
 مدیریت ورود و خروج اعضای گروه.`,
 
-        Markup.inlineKeyboard([
+          Markup.inlineKeyboard([
 
-          [
-            panelButton(
-              "بازگشت",
-              "panel_home",
-              ctx.match[1]
-            )
-          ],
+            [
+              panelButton(
+                "بازگشت",
+                "panel_home",
+                ctx.match[1]
+              )
+            ],
 
-          [
-            panelButton(
-              "بستن پنل",
-              "panel_close",
-              ctx.match[1]
-            )
-          ]
+            [
+              panelButton(
+                "بستن پنل",
+                "panel_close",
+                ctx.match[1]
+              )
+            ]
 
-        ])
+          ])
 
-      );
+        );
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "JOINLEAVE PANEL ERROR:",
+          error.message
+        );
+
+      }
 
     }
-  );
-
-
-  // ===================================
-  // قوانین
-  // ===================================
+  );// =====================================
+// قوانین
+// =====================================
 
   bot.action(
     /^rules:(\d+)$/,
@@ -992,41 +1573,54 @@ function registerPanelActions(bot) {
       await ctx.answerCbQuery();
 
 
-      await ctx.editMessageText(
+      try {
 
-        `『𓆩 قوانین 𓆪』
+        await ctx.editMessageText(
+
+          `『𓆩 قوانین 𓆪』
 
 مدیریت قوانین گروه.`,
 
-        Markup.inlineKeyboard([
+          Markup.inlineKeyboard([
 
-          [
-            panelButton(
-              "بازگشت",
-              "panel_home",
-              ctx.match[1]
-            )
-          ],
+            [
+              panelButton(
+                "بازگشت",
+                "panel_home",
+                ctx.match[1]
+              )
+            ],
 
-          [
-            panelButton(
-              "بستن پنل",
-              "panel_close",
-              ctx.match[1]
-            )
-          ]
+            [
+              panelButton(
+                "بستن پنل",
+                "panel_close",
+                ctx.match[1]
+              )
+            ]
 
-        ])
+          ])
 
-      );
+        );
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "RULES PANEL ERROR:",
+          error.message
+        );
+
+      }
 
     }
   );
 
 
-  // ===================================
-  // آمار
-  // ===================================
+// =====================================
+// آمار
+// =====================================
 
   bot.action(
     /^stats:(\d+)$/,
@@ -1040,41 +1634,54 @@ function registerPanelActions(bot) {
       await ctx.answerCbQuery();
 
 
-      await ctx.editMessageText(
+      try {
 
-        `『𓆩 آمار گروه 𓆪』
+        await ctx.editMessageText(
+
+          `『𓆩 آمار گروه 𓆪』
 
 آمار گروه در این بخش نمایش داده خواهد شد.`,
 
-        Markup.inlineKeyboard([
+          Markup.inlineKeyboard([
 
-          [
-            panelButton(
-              "بازگشت",
-              "panel_home",
-              ctx.match[1]
-            )
-          ],
+            [
+              panelButton(
+                "بازگشت",
+                "panel_home",
+                ctx.match[1]
+              )
+            ],
 
-          [
-            panelButton(
-              "بستن پنل",
-              "panel_close",
-              ctx.match[1]
-            )
-          ]
+            [
+              panelButton(
+                "بستن پنل",
+                "panel_close",
+                ctx.match[1]
+              )
+            ]
 
-        ])
+          ])
 
-      );
+        );
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "STATS PANEL ERROR:",
+          error.message
+        );
+
+      }
 
     }
   );
 
 
-  // ===================================
-  // دسترسی‌ها
-  // ===================================
+// =====================================
+// دسترسی‌ها
+// =====================================
 
   bot.action(
     /^permissions:(\d+)$/,
@@ -1088,41 +1695,54 @@ function registerPanelActions(bot) {
       await ctx.answerCbQuery();
 
 
-      await ctx.editMessageText(
+      try {
 
-        `『𓆩 دسترسی‌ها 𓆪』
+        await ctx.editMessageText(
+
+          `『𓆩 دسترسی‌ها 𓆪』
 
 مدیریت دسترسی مدیران گروه.`,
 
-        Markup.inlineKeyboard([
+          Markup.inlineKeyboard([
 
-          [
-            panelButton(
-              "بازگشت",
-              "panel_home",
-              ctx.match[1]
-            )
-          ],
+            [
+              panelButton(
+                "بازگشت",
+                "panel_home",
+                ctx.match[1]
+              )
+            ],
 
-          [
-            panelButton(
-              "بستن پنل",
-              "panel_close",
-              ctx.match[1]
-            )
-          ]
+            [
+              panelButton(
+                "بستن پنل",
+                "panel_close",
+                ctx.match[1]
+              )
+            ]
 
-        ])
+          ])
 
-      );
+        );
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "PERMISSIONS PANEL ERROR:",
+          error.message
+        );
+
+      }
 
     }
   );
 
 
-  // ===================================
-  // گزینه‌های صفحه دوم
-  // ===================================
+// =====================================
+// گزینه‌های صفحه دوم
+// =====================================
 
   const options = [
 
@@ -1199,6 +1819,10 @@ function registerPanelActions(bot) {
   ];
 
 
+// =====================================
+// ثبت گزینه‌های صفحه دوم
+// =====================================
+
   for (
     const [action, title]
     of options
@@ -1220,19 +1844,32 @@ function registerPanelActions(bot) {
         await ctx.answerCbQuery();
 
 
-        await ctx.editMessageText(
+        try {
 
-          `『𓆩 ${title} 𓆪』
+          await ctx.editMessageText(
+
+            `『𓆩 ${title} 𓆪』
 
 وضعیت این گزینه در این مرحله فقط نمایشی است.`,
 
-          optionPanel(
-            title,
-            action,
-            ctx.match[1]
-          )
+            optionPanel(
+              title,
+              action,
+              ctx.match[1]
+            )
 
-        );
+          );
+
+        }
+
+        catch (error) {
+
+          console.log(
+            "OPTION PANEL ERROR:",
+            error.message
+          );
+
+        }
 
       }
 
@@ -1241,9 +1878,9 @@ function registerPanelActions(bot) {
   }
 
 
-  // ===================================
-  // گزینه‌های قفل گروه
-  // ===================================
+// =====================================
+// گزینه‌های قفل گروه
+// =====================================
 
   const lockOptions = [
 
@@ -1310,6 +1947,10 @@ function registerPanelActions(bot) {
   ];
 
 
+// =====================================
+// ثبت گزینه‌های قفل گروه
+// =====================================
+
   for (
     const [action, title]
     of lockOptions
@@ -1331,17 +1972,30 @@ function registerPanelActions(bot) {
         await ctx.answerCbQuery();
 
 
-        await ctx.editMessageText(
+        try {
 
-          `『𓆩 قفل ${title} 𓆪』`,
+          await ctx.editMessageText(
 
-          optionPanel(
-            title,
-            action,
-            ctx.match[1]
-          )
+            `『𓆩 قفل ${title} 𓆪』`,
 
-        );
+            optionPanel(
+              title,
+              action,
+              ctx.match[1]
+            )
+
+          );
+
+        }
+
+        catch (error) {
+
+          console.log(
+            "GROUP LOCK OPTION ERROR:",
+            error.message
+          );
+
+        }
 
       }
 
@@ -1350,9 +2004,699 @@ function registerPanelActions(bot) {
   }
 
 
-  // ===================================
-  // بستن پنل
-  // ===================================
+// =====================================
+// قفل رسانه‌های صفحه دوم
+// =====================================
+
+  bot.action(
+    /^sticker_lock:(\d+)$/,
+    async ctx => {
+
+      if (
+        !(await protectPanel(ctx))
+      ) return;
+
+
+      const allowed =
+        await canManageLocks(ctx);
+
+
+      if (!allowed) {
+
+        try {
+
+          await ctx.answerCbQuery(
+            "『𓆩 ★ شما دسترسی مدیریت قفل‌ها را ندارید ★ 𓆪』",
+            {
+              show_alert: true
+            }
+          );
+
+        }
+
+        catch {}
+
+        return;
+
+      }
+
+
+      const current =
+        getLock(
+          ctx.chat.id,
+          "sticker"
+        );
+
+
+      const newValue =
+        !current;
+
+
+      setLock(
+        ctx.chat.id,
+        "sticker",
+        newValue
+      );
+
+
+      try {
+
+        await ctx.answerCbQuery(
+          newValue
+            ? "قفل استیکر فعال شد."
+            : "قفل استیکر باز شد."
+        );
+
+      }
+
+      catch {}
+
+
+      try {
+
+        await ctx.editMessageText(
+
+          mediaLockStatusText(
+            "sticker",
+            newValue
+          ),
+
+          mediaLocksPanel(
+            ctx.match[1],
+            ctx.chat.id
+          )
+
+        );
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "STICKER LOCK ERROR:",
+          error.message
+        );
+
+      }
+
+    }
+  );
+
+
+// =====================================
+// قفل گیف صفحه دوم
+// =====================================
+
+  bot.action(
+    /^gif_lock:(\d+)$/,
+    async ctx => {
+
+      if (
+        !(await protectPanel(ctx))
+      ) return;
+
+
+      const allowed =
+        await canManageLocks(ctx);
+
+
+      if (!allowed) {
+
+        try {
+
+          await ctx.answerCbQuery(
+            "『𓆩 ★ شما دسترسی مدیریت قفل‌ها را ندارید ★ 𓆪』",
+            {
+              show_alert: true
+            }
+          );
+
+        }
+
+        catch {}
+
+        return;
+
+      }
+
+
+      const current =
+        getLock(
+          ctx.chat.id,
+          "gif"
+        );
+
+
+      const newValue =
+        !current;
+
+
+      setLock(
+        ctx.chat.id,
+        "gif",
+        newValue
+      );
+
+
+      try {
+
+        await ctx.answerCbQuery(
+          newValue
+            ? "قفل گیف فعال شد."
+            : "قفل گیف باز شد."
+        );
+
+      }
+
+      catch {}
+
+
+      try {
+
+        await ctx.editMessageText(
+
+          mediaLockStatusText(
+            "gif",
+            newValue
+          ),
+
+          mediaLocksPanel(
+            ctx.match[1],
+            ctx.chat.id
+          )
+
+        );
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "GIF LOCK ERROR:",
+          error.message
+        );
+
+      }
+
+    }
+  );
+
+
+// =====================================
+// قفل فیلم صفحه دوم
+// =====================================
+
+  bot.action(
+    /^video_lock:(\d+)$/,
+    async ctx => {
+
+      if (
+        !(await protectPanel(ctx))
+      ) return;
+
+
+      const allowed =
+        await canManageLocks(ctx);
+
+
+      if (!allowed) {
+
+        try {
+
+          await ctx.answerCbQuery(
+            "『𓆩 ★ شما دسترسی مدیریت قفل‌ها را ندارید ★ 𓆪』",
+            {
+              show_alert: true
+            }
+          );
+
+        }
+
+        catch {}
+
+        return;
+
+      }
+
+
+      const current =
+        getLock(
+          ctx.chat.id,
+          "video"
+        );
+
+
+      const newValue =
+        !current;
+
+
+      setLock(
+        ctx.chat.id,
+        "video",
+        newValue
+      );
+
+
+      try {
+
+        await ctx.answerCbQuery(
+          newValue
+            ? "قفل فیلم فعال شد."
+            : "قفل فیلم باز شد."
+        );
+
+      }
+
+      catch {}
+
+
+      try {
+
+        await ctx.editMessageText(
+
+          mediaLockStatusText(
+            "video",
+            newValue
+          ),
+
+          mediaLocksPanel(
+            ctx.match[1],
+            ctx.chat.id
+          )
+
+        );
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "VIDEO LOCK ERROR:",
+          error.message
+        );
+
+      }
+
+    }
+  );
+
+
+// =====================================
+// قفل ویس صفحه دوم
+// =====================================
+
+  bot.action(
+    /^voice_lock:(\d+)$/,
+    async ctx => {
+
+      if (
+        !(await protectPanel(ctx))
+      ) return;
+
+
+      const allowed =
+        await canManageLocks(ctx);
+
+
+      if (!allowed) {
+
+        try {
+
+          await ctx.answerCbQuery(
+            "『𓆩 ★ شما دسترسی مدیریت قفل‌ها را ندارید ★ 𓆪』",
+            {
+              show_alert: true
+            }
+          );
+
+        }
+
+        catch {}
+
+        return;
+
+      }
+
+
+      const current =
+        getLock(
+          ctx.chat.id,
+          "voice"
+        );
+
+
+      const newValue =
+        !current;
+
+
+      setLock(
+        ctx.chat.id,
+        "voice",
+        newValue
+      );
+
+
+      try {
+
+        await ctx.answerCbQuery(
+          newValue
+            ? "قفل ویس فعال شد."
+            : "قفل ویس باز شد."
+        );
+
+      }
+
+      catch {}
+
+
+      try {
+
+        await ctx.editMessageText(
+
+          mediaLockStatusText(
+            "voice",
+            newValue
+          ),
+
+          mediaLocksPanel(
+            ctx.match[1],
+            ctx.chat.id
+          )
+
+        );
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "VOICE LOCK ERROR:",
+          error.message
+        );
+
+      }
+
+    }
+  );// =====================================
+// قفل نظرسنجی صفحه دوم
+// =====================================
+
+  bot.action(
+    /^poll_lock:(\d+)$/,
+    async ctx => {
+
+      if (
+        !(await protectPanel(ctx))
+      ) return;
+
+
+      const allowed =
+        await canManageLocks(ctx);
+
+
+      if (!allowed) {
+
+        try {
+
+          await ctx.answerCbQuery(
+            "『𓆩 ★ شما دسترسی مدیریت قفل‌ها را ندارید ★ 𓆪』",
+            {
+              show_alert: true
+            }
+          );
+
+        }
+
+        catch {}
+
+        return;
+
+      }
+
+
+      const current =
+        getLock(
+          ctx.chat.id,
+          "poll"
+        );
+
+
+      const newValue =
+        !current;
+
+
+      setLock(
+        ctx.chat.id,
+        "poll",
+        newValue
+      );
+
+
+      try {
+
+        await ctx.answerCbQuery(
+          newValue
+            ? "قفل نظرسنجی فعال شد."
+            : "قفل نظرسنجی باز شد."
+        );
+
+      }
+
+      catch {}
+
+
+      try {
+
+        await ctx.editMessageText(
+
+          mediaLockStatusText(
+            "poll",
+            newValue
+          ),
+
+          mediaLocksPanel(
+            ctx.match[1],
+            ctx.chat.id
+          )
+
+        );
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "POLL LOCK ERROR:",
+          error.message
+        );
+
+      }
+
+    }
+  );
+
+
+// =====================================
+// قفل پیام بلند صفحه دوم
+// =====================================
+
+  bot.action(
+    /^long_message:(\d+)$/,
+    async ctx => {
+
+      if (
+        !(await protectPanel(ctx))
+      ) return;
+
+
+      const allowed =
+        await canManageLocks(ctx);
+
+
+      if (!allowed) {
+
+        try {
+
+          await ctx.answerCbQuery(
+            "『𓆩 ★ شما دسترسی مدیریت قفل‌ها را ندارید ★ 𓆪』",
+            {
+              show_alert: true
+            }
+          );
+
+        }
+
+        catch {}
+
+        return;
+
+      }
+
+
+      const current =
+        getLock(
+          ctx.chat.id,
+          "longText"
+        );
+
+
+      const newValue =
+        !current;
+
+
+      setLock(
+        ctx.chat.id,
+        "longText",
+        newValue
+      );
+
+
+      try {
+
+        await ctx.answerCbQuery(
+          newValue
+            ? "قفل پیام بلند فعال شد."
+            : "قفل پیام بلند باز شد."
+        );
+
+      }
+
+      catch {}
+
+
+      try {
+
+        await ctx.editMessageText(
+
+          mediaLockStatusText(
+            "longText",
+            newValue
+          ),
+
+          mediaLocksPanel(
+            ctx.match[1],
+            ctx.chat.id
+          )
+
+        );
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "LONG MESSAGE LOCK ERROR:",
+          error.message
+        );
+
+      }
+
+    }
+  );
+
+
+// =====================================
+// قفل عکس
+// =====================================
+
+  bot.action(
+    /^media_photo:(\d+)$/,
+    async ctx => {
+
+      if (
+        !(await protectPanel(ctx))
+      ) return;
+
+
+      const allowed =
+        await canManageLocks(ctx);
+
+
+      if (!allowed) {
+
+        try {
+
+          await ctx.answerCbQuery(
+            "『𓆩 ★ شما دسترسی مدیریت قفل‌ها را ندارید ★ 𓆪』",
+            {
+              show_alert: true
+            }
+          );
+
+        }
+
+        catch {}
+
+        return;
+
+      }
+
+
+      const current =
+        getLock(
+          ctx.chat.id,
+          "photo"
+        );
+
+
+      const newValue =
+        !current;
+
+
+      setLock(
+        ctx.chat.id,
+        "photo",
+        newValue
+      );
+
+
+      try {
+
+        await ctx.answerCbQuery(
+          newValue
+            ? "قفل عکس فعال شد."
+            : "قفل عکس باز شد."
+        );
+
+      }
+
+      catch {}
+
+
+      try {
+
+        await ctx.editMessageText(
+
+          mediaLockStatusText(
+            "photo",
+            newValue
+          ),
+
+          mediaLocksPanel(
+            ctx.match[1],
+            ctx.chat.id
+          )
+
+        );
+
+      }
+
+      catch (error) {
+
+        console.log(
+          "PHOTO LOCK ERROR:",
+          error.message
+        );
+
+      }
+
+    }
+  );
+
+
+// =====================================
+// بستن پنل
+// =====================================
 
   bot.action(
     /^panel_close:(\d+)$/,
@@ -1363,7 +2707,13 @@ function registerPanelActions(bot) {
       ) return;
 
 
-      await ctx.answerCbQuery();
+      try {
+
+        await ctx.answerCbQuery();
+
+      }
+
+      catch {}
 
 
       try {
@@ -1388,6 +2738,15 @@ function registerPanelActions(bot) {
     }
   );
 
+
+  // ===================================
+  // ثبت موفق پنل
+  // ===================================
+
+  console.log(
+    "PANEL ACTIONS: registered."
+  );
+
 }
 
 
@@ -1398,9 +2757,13 @@ function registerPanelActions(bot) {
 module.exports = {
 
   registerPanelActions,
+
   mainPanel,
+
   panelText,
+
   protectPanel,
+
   getGroupRole
 
 };
