@@ -32,9 +32,7 @@ function loadDB() {
 
   try {
 
-    if (
-      fs.existsSync(DB_FILE)
-    ) {
+    if (fs.existsSync(DB_FILE)) {
 
       const data =
         fs.readFileSync(
@@ -67,9 +65,14 @@ function loadDB() {
   }
 
 
+  // -----------------------------------
+  // اطمینان از سالم بودن ساختار دیتابیس
+  // -----------------------------------
+
   if (
     !DB ||
-    typeof DB !== "object"
+    typeof DB !== "object" ||
+    Array.isArray(DB)
   ) {
 
     DB = {
@@ -81,7 +84,8 @@ function loadDB() {
 
   if (
     !DB.groups ||
-    typeof DB.groups !== "object"
+    typeof DB.groups !== "object" ||
+    Array.isArray(DB.groups)
   ) {
 
     DB.groups = {};
@@ -124,7 +128,34 @@ function saveDB() {
 
 
 // =====================================
-// ساخت گروه
+// ساختار پیش‌فرض قفل‌ها
+// =====================================
+
+function createDefaultLocks() {
+
+  return {
+
+    sticker: false,
+
+    gif: false,
+
+    photo: false,
+
+    video: false,
+
+    voice: false,
+
+    longText: false,
+
+    poll: false
+
+  };
+
+}
+
+
+// =====================================
+// ساختار پیش‌فرض گروه
 // =====================================
 
 function createDefaultGroup(
@@ -136,11 +167,13 @@ function createDefaultGroup(
     id:
       String(chatId),
 
-    // -------------------------------
+
+    // ---------------------------------
     // اخطارها
-    // -------------------------------
+    // ---------------------------------
 
     warns: {},
+
 
     warningSettings: {
 
@@ -152,9 +185,10 @@ function createDefaultGroup(
 
     },
 
-    // -------------------------------
+
+    // ---------------------------------
     // تنظیمات گروه
-    // -------------------------------
+    // ---------------------------------
 
     settings: {
 
@@ -168,25 +202,255 @@ function createDefaultGroup(
 
     },
 
-    // -------------------------------
+
+    // ---------------------------------
     // کاربران
-    // -------------------------------
+    // ---------------------------------
 
     users: {},
 
-    // -------------------------------
+
+    // ---------------------------------
     // دسترسی‌ها
-    // -------------------------------
+    // ---------------------------------
 
     permissions: {},
 
-    // -------------------------------
-    // قفل‌ها
-    // -------------------------------
 
-    locks: {}
+    // ---------------------------------
+    // قفل‌های گروه
+    // ---------------------------------
+
+    locks:
+      createDefaultLocks()
 
   };
+
+}
+
+
+// =====================================
+// اطمینان از وجود تمام بخش‌های گروه
+// =====================================
+
+function ensureGroupStructure(
+  group,
+  chatId
+) {
+
+  if (
+    !group ||
+    typeof group !== "object"
+  ) {
+
+    return createDefaultGroup(
+      chatId
+    );
+
+  }
+
+
+  // ---------------------------------
+  // شناسه گروه
+  // ---------------------------------
+
+  if (!group.id) {
+
+    group.id =
+      String(chatId);
+
+  }
+
+
+  // ---------------------------------
+  // اخطارها
+  // ---------------------------------
+
+  if (
+    !group.warns ||
+    typeof group.warns !== "object"
+  ) {
+
+    group.warns = {};
+
+  }
+
+
+  // ---------------------------------
+  // تنظیمات اخطار
+  // ---------------------------------
+
+  if (
+    !group.warningSettings ||
+    typeof group.warningSettings !== "object"
+  ) {
+
+    group.warningSettings = {
+
+      maxWarnings: 3,
+
+      punishment: "mute",
+
+      duration: 60
+
+    };
+
+  }
+
+
+  if (
+    typeof group.warningSettings.maxWarnings !==
+    "number"
+  ) {
+
+    group.warningSettings.maxWarnings = 3;
+
+  }
+
+
+  if (
+    typeof group.warningSettings.punishment !==
+    "string"
+  ) {
+
+    group.warningSettings.punishment =
+      "mute";
+
+  }
+
+
+  if (
+    typeof group.warningSettings.duration !==
+    "number"
+  ) {
+
+    group.warningSettings.duration =
+      60;
+
+  }
+
+
+  // ---------------------------------
+  // تنظیمات گروه
+  // ---------------------------------
+
+  if (
+    !group.settings ||
+    typeof group.settings !== "object"
+  ) {
+
+    group.settings = {};
+
+  }
+
+
+  if (
+    typeof group.settings.welcome !==
+    "boolean"
+  ) {
+
+    group.settings.welcome = true;
+
+  }
+
+
+  if (
+    typeof group.settings.botReply !==
+    "boolean"
+  ) {
+
+    group.settings.botReply = true;
+
+  }
+
+
+  if (
+    typeof group.settings.rules !==
+    "string"
+  ) {
+
+    group.settings.rules = "";
+
+  }
+
+
+  if (
+    typeof group.settings.nickname !==
+    "boolean"
+  ) {
+
+    group.settings.nickname = true;
+
+  }
+
+
+  // ---------------------------------
+  // کاربران
+  // ---------------------------------
+
+  if (
+    !group.users ||
+    typeof group.users !== "object"
+  ) {
+
+    group.users = {};
+
+  }
+
+
+  // ---------------------------------
+  // دسترسی‌ها
+  // ---------------------------------
+
+  if (
+    !group.permissions ||
+    typeof group.permissions !== "object"
+  ) {
+
+    group.permissions = {};
+
+  }
+
+
+  // ---------------------------------
+  // قفل‌ها
+  // ---------------------------------
+
+  if (
+    !group.locks ||
+    typeof group.locks !== "object"
+  ) {
+
+    group.locks =
+      createDefaultLocks();
+
+  }
+
+
+  const defaultLocks =
+    createDefaultLocks();
+
+
+  for (
+    const lockName of Object.keys(
+      defaultLocks
+    )
+  ) {
+
+    if (
+      typeof group.locks[lockName] !==
+      "boolean"
+    ) {
+
+      group.locks[lockName] =
+        defaultLocks[lockName];
+
+    }
+
+  }
+
+
+  return group;
 
 }
 
@@ -215,6 +479,33 @@ function getGroup(
   }
 
 
+  else {
+
+    const oldGroup =
+      DB.groups[id];
+
+
+    const fixedGroup =
+      ensureGroupStructure(
+        oldGroup,
+        id
+      );
+
+
+    if (
+      fixedGroup !== oldGroup
+    ) {
+
+      DB.groups[id] =
+        fixedGroup;
+
+      saveDB();
+
+    }
+
+  }
+
+
   return DB.groups[id];
 
 }
@@ -232,7 +523,7 @@ function getDB() {
 
 
 // =====================================
-// تنظیم کاربر
+// دریافت اطلاعات کاربر
 // =====================================
 
 function getUser(
@@ -262,6 +553,7 @@ function getUser(
 
     };
 
+
     saveDB();
 
   }
@@ -273,7 +565,7 @@ function getUser(
 
 
 // =====================================
-// تنظیم مقدار کاربر
+// تنظیم اطلاعات کاربر
 // =====================================
 
 function setUser(
@@ -303,10 +595,17 @@ function setUser(
   }
 
 
-  Object.assign(
-    group.users[id],
-    data
-  );
+  if (
+    data &&
+    typeof data === "object"
+  ) {
+
+    Object.assign(
+      group.users[id],
+      data
+    );
+
+  }
 
 
   saveDB();
@@ -357,6 +656,7 @@ function getPermissions(
 
     };
 
+
     saveDB();
 
   }
@@ -393,10 +693,17 @@ function setPermissions(
   }
 
 
-  Object.assign(
-    group.permissions[id],
-    permissions
-  );
+  if (
+    permissions &&
+    typeof permissions === "object"
+  ) {
+
+    Object.assign(
+      group.permissions[id],
+      permissions
+    );
+
+  }
 
 
   saveDB();
@@ -408,7 +715,7 @@ function setPermissions(
 
 
 // =====================================
-// بارگذاری اولیه
+// مقداردهی اولیه دیتابیس
 // =====================================
 
 loadDB();
