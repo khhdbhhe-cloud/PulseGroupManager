@@ -1756,6 +1756,9 @@ async function showStatsPanel(ctx) {
   await ctx.reply(
     statsPanelText(),
     {
+      reply_to_message_id:
+        ctx.message.message_id,
+
       reply_markup:
         statsKeyboard().reply_markup
     }
@@ -1775,6 +1778,153 @@ async function statsClose(ctx) {
     await ctx.deleteMessage();
 
   } catch (_) {}
+
+}
+
+
+// =====================================
+// ساخت آمار کاربر
+// =====================================
+
+async function buildUserStats(
+  ctx,
+  group,
+  user
+) {
+
+  if (!user) {
+    return "آمار کاربر یافت نشد.";
+  }
+
+  ensureGroupInfo(group);
+  resetDailyStats(group);
+
+  const statsUser =
+    ensureStatsUser(
+      group,
+      user
+    );
+
+  if (!statsUser) {
+    return "آمار کاربر یافت نشد.";
+  }
+
+  let role =
+    "فرد عادی";
+
+  try {
+
+    const member =
+      await ctx.telegram.getChatMember(
+        ctx.chat.id,
+        user.id
+      );
+
+    if (
+      member.status === "creator"
+    ) {
+
+      role = "صاحب گروه";
+
+    } else if (
+      member.status === "administrator"
+    ) {
+
+      role = "مدیر گروه";
+
+    }
+
+  } catch (_) {}
+
+  const name =
+    user.username
+      ? `@${user.username}`
+      : getUserDisplayName(user);
+
+  const daily =
+    statsUser.daily || {};
+
+  const lines = [];
+
+  lines.push(
+    `◄ آمار کاربر : ${clickableUser(user.id, name)}`
+  );
+
+  lines.push("");
+
+  lines.push(
+    `◂ مقام کاربر : ${escapeHTML(role)}`
+  );
+
+  lines.push(
+    `◂ پیام های امروز : ${toPersianNumber(statsUser.dailyMessages || 0)}`
+  );
+
+  lines.push(
+    `◂ پیام های کل : ${toPersianNumber(statsUser.totalMessages || 0)}`
+  );
+
+  lines.push(
+    `◂ اد های امروز : ${toPersianNumber(statsUser.dailyAdds || 0)}`
+  );
+
+  lines.push(
+    `◂ اد های کل : ${toPersianNumber(statsUser.totalAdds || 0)}`
+  );
+
+  lines.push("");
+
+  lines.push(
+    "─┅━ جزئیات پیام های امروز ━┅─"
+  );
+
+  lines.push("");
+
+  lines.push(
+    `◂ متن : ${toPersianNumber(daily.text || 0)}`
+  );
+
+  lines.push(
+    `◂ فروارد : ${toPersianNumber(daily.forwarded || 0)}`
+  );
+
+  lines.push(
+    `◂ استیکر : ${toPersianNumber(daily.sticker || 0)}`
+  );
+
+  lines.push(
+    `◂ استیکر متحرک : ${toPersianNumber(daily.animatedSticker || 0)}`
+  );
+
+  lines.push(
+    `◂ گیف : ${toPersianNumber(daily.gif || 0)}`
+  );
+
+  lines.push(
+    `◂ عکس : ${toPersianNumber(daily.photo || 0)}`
+  );
+
+  lines.push(
+    `◂ ویس : ${toPersianNumber(daily.voice || 0)}`
+  );
+
+  lines.push(
+    `◂ موزیک : ${toPersianNumber(daily.music || 0)}`
+  );
+
+  lines.push(
+    `◂ فیلم : ${toPersianNumber(daily.video || 0)}`
+  );
+
+  lines.push(
+    `◂ فیلم سلفی : ${toPersianNumber(daily.videoNote || 0)}`
+  );
+
+  lines.push(
+    `◂ فایل : ${toPersianNumber(daily.document || 0)}`
+  );
+
+  return lines.join("\n");
 
 }
 
@@ -1968,7 +2118,7 @@ function registerGroupInfo(bot) {
   // =====================================
   // قوانین
   // هر کاربر می‌تواند ببیند
-  // Reply روی پیام خودش
+  // ربات روی پیام قوانین Reply می‌کند
   // =====================================
 
   bot.hears(
@@ -2054,7 +2204,6 @@ function registerGroupInfo(bot) {
             ctx.from.id
           );
 
-        // فقط Owner
         if (
           member.status !== "creator"
         ) {
@@ -2070,13 +2219,11 @@ function registerGroupInfo(bot) {
 
         ensureGroupInfo(group);
 
-        // فعال کردن انتظار متن قوانین
         group.info.waitingForRules =
           ctx.from.id;
 
         saveGroupInfo();
 
-        // ربات روی همان پیام فرمان Reply می‌کند
         await ctx.reply(
           "قوانین را ارسال کنید.",
           {
@@ -2130,12 +2277,10 @@ function registerGroupInfo(bot) {
         const waiting =
           group.info.waitingForRules;
 
-        // هیچکس منتظر ارسال قوانین نیست
         if (!waiting) {
           return next();
         }
 
-        // فقط همان صاحب گروه
         if (
           !ctx.from ||
           String(ctx.from.id) !==
@@ -2154,7 +2299,6 @@ function registerGroupInfo(bot) {
           return next();
         }
 
-        // فرمان‌ها را به عنوان قوانین ذخیره نکن
         if (
           /^(تنظیم قوانین|حذف قوانین|قوانین|قوانین گروه)$/i.test(
             text.trim()
@@ -2163,17 +2307,14 @@ function registerGroupInfo(bot) {
           return next();
         }
 
-        // ذخیره قوانین
         group.info.rules =
           text.trim();
 
-        // پایان حالت انتظار
         group.info.waitingForRules =
           null;
 
         saveGroupInfo();
 
-        // ربات روی پیام متن قوانین Reply می‌کند
         await ctx.reply(
           "قوانین گروه ذخیره شد.",
           {
@@ -2196,12 +2337,7 @@ function registerGroupInfo(bot) {
       }
 
     }
-  );
-
-
-// =====================================
-// پایان قسمت ۳
-// =====================================  // =====================================
+  );  // =====================================
   // حذف قوانین
   // فقط صاحب گروه
   // با Reply
@@ -2223,7 +2359,6 @@ function registerGroupInfo(bot) {
           return;
         }
 
-        // بدون Reply = سکوت
         if (
           !ctx.message.reply_to_message
         ) {
@@ -2236,7 +2371,6 @@ function registerGroupInfo(bot) {
             ctx.from.id
           );
 
-        // فقط Owner
         if (
           member.status !== "creator"
         ) {
@@ -2284,7 +2418,8 @@ function registerGroupInfo(bot) {
   // =====================================
   // دستور آمار
   // فقط Owner / Admin
-  // حتماً Reply
+  // بدون Reply = آمار گروه
+  // با Reply = آمار همان کاربر
   // =====================================
 
   bot.hears(
@@ -2303,13 +2438,6 @@ function registerGroupInfo(bot) {
           return;
         }
 
-        // بدون Reply = سکوت
-        if (
-          !ctx.message.reply_to_message
-        ) {
-          return;
-        }
-
         const member =
           await ctx.telegram.getChatMember(
             ctx.chat.id,
@@ -2322,7 +2450,6 @@ function registerGroupInfo(bot) {
         const isAdmin =
           member.status === "administrator";
 
-        // کاربر عادی = سکوت
         if (
           !isOwner &&
           !isAdmin
@@ -2341,6 +2468,44 @@ function registerGroupInfo(bot) {
         resetDailyStats(group);
 
         saveGroupInfo();
+
+        // =====================================
+        // اگر Reply باشد:
+        // آمار همان کاربر
+        // =====================================
+
+        if (
+          ctx.message.reply_to_message &&
+          ctx.message.reply_to_message.from
+        ) {
+
+          const targetUser =
+            ctx.message.reply_to_message.from;
+
+          const text =
+            await buildUserStats(
+              ctx,
+              group,
+              targetUser
+            );
+
+          await ctx.reply(
+            text,
+            {
+              parse_mode: "HTML",
+              reply_to_message_id:
+                ctx.message.message_id
+            }
+          );
+
+          return;
+
+        }
+
+        // =====================================
+        // بدون Reply:
+        // آمار کامل گروه
+        // =====================================
 
         await showStatsPanel(ctx);
 
@@ -2393,7 +2558,6 @@ function registerGroupInfo(bot) {
         const isAdmin =
           member.status === "administrator";
 
-        // فقط Owner / Admin
         if (
           !isOwner &&
           !isAdmin
@@ -2423,10 +2587,6 @@ function registerGroupInfo(bot) {
           ctx.callbackQuery.data;
 
 
-        // =====================================
-        // بستن
-        // =====================================
-
         if (
           action ===
           "ginfo_stats_close"
@@ -2440,10 +2600,6 @@ function registerGroupInfo(bot) {
 
         }
 
-
-        // =====================================
-        // برگشت
-        // =====================================
 
         if (
           action ===
@@ -2465,10 +2621,6 @@ function registerGroupInfo(bot) {
 
         }
 
-
-        // =====================================
-        // آمار اد روزانه
-        // =====================================
 
         if (
           action ===
@@ -2495,10 +2647,6 @@ function registerGroupInfo(bot) {
         }
 
 
-        // =====================================
-        // آمار کل
-        // =====================================
-
         if (
           action ===
           "ginfo_stats_total"
@@ -2523,10 +2671,6 @@ function registerGroupInfo(bot) {
 
         }
 
-
-        // =====================================
-        // آمار فعالیت‌ها
-        // =====================================
 
         if (
           action ===
@@ -2556,10 +2700,6 @@ function registerGroupInfo(bot) {
         }
 
 
-        // =====================================
-        // آمار روزانه
-        // =====================================
-
         if (
           action ===
           "ginfo_stats_daily"
@@ -2586,10 +2726,6 @@ function registerGroupInfo(bot) {
 
         }
 
-
-        // =====================================
-        // آمار های دیگر
-        // =====================================
 
         if (
           action ===
@@ -2644,10 +2780,6 @@ function registerGroupInfo(bot) {
         }
 
 
-        // =====================================
-        // آمار اد کل
-        // =====================================
-
         if (
           action ===
           "ginfo_stats_total_adds"
@@ -2672,10 +2804,6 @@ function registerGroupInfo(bot) {
 
         }
 
-
-        // =====================================
-        // آمار روزانه مدیران
-        // =====================================
 
         if (
           action ===
@@ -2705,10 +2833,6 @@ function registerGroupInfo(bot) {
 
         }
 
-
-        // =====================================
-        // آمار کل مدیران
-        // =====================================
 
         if (
           action ===
