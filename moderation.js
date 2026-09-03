@@ -5,314 +5,810 @@
 // =====================================
 
 const {
-  checkBotPermissions,
-  isUserAdmin,
-  isOwner
-} = require('./permissions');
-
-const {
   getGroup,
-  saveGroup
-} = require('./database');
+  getPermissions,
+  saveDB
+} = require("./database");
+
 
 // =====================================
 // ابزارهای عمومی
 // =====================================
 
-function getTargetId(ctx) {
-  if (!ctx.message || !ctx.message.reply_to_message) {
-    return null;
-  }
+function isGroup(ctx) {
+  return !!(
+    ctx &&
+    ctx.chat &&
+    (
+      ctx.chat.type === "group" ||
+      ctx.chat.type === "supergroup"
+    )
+  );
+}
 
-  return (
+
+// =====================================
+// فقط با ریپلای
+// =====================================
+
+function hasReply(ctx) {
+  return !!(
+    ctx &&
+    ctx.message &&
+    ctx.message.reply_to_message &&
     ctx.message.reply_to_message.from &&
     ctx.message.reply_to_message.from.id
   );
 }
 
-function getTargetName(ctx) {
-  if (
-    !ctx.message ||
-    !ctx.message.reply_to_message ||
-    !ctx.message.reply_to_message.from
-  ) {
-    return 'کاربر';
+
+// =====================================
+// دریافت کاربر هدف
+// =====================================
+
+function getTarget(ctx) {
+  if (!hasReply(ctx)) {
+    return null;
   }
 
-  const user =
-    ctx.message.reply_to_message.from;
+  return ctx.message.reply_to_message.from;
+}
+
+
+// =====================================
+// نام کاربر هدف
+// =====================================
+
+function getTargetName(ctx) {
+  const user = getTarget(ctx);
+
+  if (!user) {
+    return "کاربر";
+  }
+
+  if (user.first_name && user.last_name) {
+    return `${user.first_name} ${user.last_name}`;
+  }
 
   if (user.first_name) {
     return user.first_name;
   }
 
   if (user.username) {
-    return '@' + user.username;
+    return `@${user.username}`;
   }
 
-  return 'کاربر';
+  return "کاربر";
 }
 
+
 // =====================================
-// فقط با ریپلای
+// پاسخ حتماً روی پیام هدف
 // =====================================
 
-function requireReply(ctx) {
+async function replyToTarget(ctx, text) {
+  if (!hasReply(ctx)) {
+    return null;
+  }
+
+  try {
+    return await ctx.reply(text, {
+      reply_parameters: {
+        message_id: ctx.message.reply_to_message.message_id
+      }
+    });
+  } catch (error) {
+    console.error(
+      "MODERATION REPLY ERROR:",
+      error.message
+    );
+    return null;
+  }
+}
+
+
+// =====================================
+// گرفتن اطلاعات عضو
+// =====================================
+
+async function getMember(ctx, userId) {
+  try {
+    return await ctx.telegram.getChatMember(
+      ctx.chat.id,
+      userId
+    );
+  } catch (error) {
+    return null;
+  }
+}
+
+
+// =====================================
+// تشخیص مالک
+// =====================================
+
+async function isOwner(ctx, userId) {
+  const member = await getMember(ctx, userId);
+
   return !!(
-    ctx.message &&
-    ctx.message.reply_to_message &&
-    ctx.message.reply_to_message.from
+    member &&
+    member.status === "creator"
   );
 }
 
+
 // =====================================
-// پاسخ به همان پیام هدف
+// تشخیص مدیر
 // =====================================
 
-async function replyToTarget(
-  ctx,
-  text
-) {
-  if (
-    !ctx.message ||
-    !ctx.message.reply_to_message
-  ) {
-    return;
-  }
+async function isAdmin(ctx, userId) {
+  const member = await getMember(ctx, userId);
 
-  return ctx.reply(
-    text,
-    {
-      reply_to_message_id:
-        ctx.message.reply_to_message.message_id
-    }
+  return !!(
+    member &&
+    (
+      member.status === "creator" ||
+      member.status === "administrator"
+    )
   );
 }
 
+
 // =====================================
-// بررسی امکان مدیریت
+// اطلاعات ربات
 // =====================================
 
-async function canModerate(ctx) {
-  if (!ctx.chat || ctx.chat.type === 'private') {
+async function getBotMember(ctx) {
+  try {
+    const me = await ctx.telegram.getMe();
+
+    return await ctx.telegram.getChatMember(
+      ctx.chat.id,
+      me.id
+    );
+  } catch (error) {
+    console.error(
+      "BOT MEMBER ERROR:",
+      error.message
+    );
+
+    return null;
+  }
+}
+
+
+// =====================================
+// بررسی مدیر بودن ربات
+// =====================================
+
+async function checkBotAdmin(ctx) {
+  const member = await getBotMember(ctx);
+
+  if (!member) {
     return false;
   }
 
-  const userId = ctx.from.id;
-  const chatId = ctx.chat.id;
+  return (
+    member.status === "administrator" ||
+    member.status === "creator"
+  );
+}
 
-  const group = getGroup(chatId);
 
-  if (!group) {
+// =====================================
+// بررسی دسترسی خود ربات
+// =====================================
+
+async function checkBotPermission(ctx, permission) {
+  const member = await getBotMember(ctx);
+
+  if (!member) {
     return false;
   }
 
-  // مالک همیشه اجازه دارد
-  if (isOwner(userId, group)) {
+  if (member.status === "creator") {
     return true;
   }
 
-  // مدیر گروه
-  if (!isUserAdmin(ctx, userId)) {
+  if (member.status !== "administrator") {
     return false;
   }
 
-  // دسترسی مدیریتی مدیریت کاربران
-  if (
-    group.permissions &&
-    group.permissions[userId] &&
-    group.permissions[userId].moderation === false
-  ) {
+  return member[permission] === true;
+}
+
+
+// =====================================
+// بررسی دسترسی مدیری که فرمان داده
+// =====================================
+
+async function hasManagementPermission(ctx, permission) {
+  if (!isGroup(ctx)) {
+    return false;
+  }
+
+  const senderId = ctx.from && ctx.from.id;
+
+  if (!senderId) {
+    return false;
+  }
+
+  // مالک همیشه دسترسی کامل دارد
+  if (await isOwner(ctx, senderId)) {
+    return true;
+  }
+
+  // فقط مدیر می‌تواند از دسترسی‌های مدیریتی استفاده کند
+  if (!(await isAdmin(ctx, senderId))) {
+    return false;
+  }
+
+  const permissions = getPermissions(
+    ctx.chat.id,
+    senderId
+  );
+
+  return permissions && permissions[permission] === true;
+}
+
+
+// =====================================
+// جلوگیری از مدیریت مالک و مدیر
+// =====================================
+
+async function canModerateTarget(ctx, targetId) {
+  if (!targetId) {
+    return false;
+  }
+
+  const targetMember = await getMember(
+    ctx,
+    targetId
+  );
+
+  if (!targetMember) {
+    return false;
+  }
+
+  // مالک قابل مدیریت نیست
+  if (targetMember.status === "creator") {
+    return false;
+  }
+
+  // مدیر گروه قابل مدیریت نیست
+  if (targetMember.status === "administrator") {
     return false;
   }
 
   return true;
 }
 
+
 // =====================================
-// بررسی ربات
+// پیام خطای دسترسی
+// فقط برای مدیر دارای ریپلای
 // =====================================
 
-async function checkModerationBot(ctx) {
-  try {
-    const permissions =
-      await checkBotPermissions(
-        ctx,
-        [
-          'can_restrict_members'
-        ]
-      );
+async function permissionDenied(ctx) {
+  if (!hasReply(ctx)) {
+    return;
+  }
 
-    return !!permissions;
-  } catch (error) {
-    console.error(
-      'Moderation bot permission error:',
-      error
+  await replyToTarget(
+    ctx,
+    "⛔ شما دسترسی انجام این عملیات را ندارید."
+  );
+}
+
+
+// =====================================
+// بررسی اولیه فرمان مدیریت
+// =====================================
+
+async function prepareModeration(ctx, permission) {
+  if (!isGroup(ctx)) {
+    return false;
+  }
+
+  // تمام فرمان‌های این فایل فقط با ریپلای
+  if (!hasReply(ctx)) {
+    return false;
+  }
+
+  // بررسی دسترسی مدیر
+  const allowed = await hasManagementPermission(
+    ctx,
+    permission
+  );
+
+  if (!allowed) {
+    // کاربر عادی یا مدیر بدون دسترسی کاملاً ساکت
+    const senderId = ctx.from && ctx.from.id;
+
+    if (
+      senderId &&
+      (await isOwner(ctx, senderId) ||
+        await isAdmin(ctx, senderId))
+    ) {
+      await permissionDenied(ctx);
+    }
+
+    return false;
+  }
+
+  const target = getTarget(ctx);
+
+  if (!target) {
+    return false;
+  }
+
+  // جلوگیری از مدیریت مدیر/مالک
+  const targetAllowed = await canModerateTarget(
+    ctx,
+    target.id
+  );
+
+  if (!targetAllowed) {
+    await replyToTarget(
+      ctx,
+      "⛔ این کاربر قابل مدیریت نیست."
     );
 
     return false;
   }
+
+  return true;
 }
 
+
 // =====================================
-// BAN — بن
+// بررسی توانایی بن کردن ربات
 // =====================================
 
-async function handleBan(
+async function canBotBan(ctx) {
+  return await checkBotPermission(
+    ctx,
+    "can_restrict_members"
+  );
+}
+
+
+// =====================================
+// بررسی توانایی محدود کردن ربات
+// =====================================
+
+async function canBotRestrict(ctx) {
+  return await checkBotPermission(
+    ctx,
+    "can_restrict_members"
+  );
+}
+
+
+// =====================================
+// بررسی توانایی حذف پیام
+// =====================================
+
+async function canBotDelete(ctx) {
+  return await checkBotPermission(
+    ctx,
+    "can_delete_messages"
+  );
+}
+
+
+// =====================================
+// بررسی دسترسی‌های لازم ربات
+// =====================================
+
+async function requireBotPermission(
   ctx,
-  group,
-  targetId,
-  targetName
+  permission,
+  message
 ) {
-  if (!targetId) return;
+  const ok = await checkBotPermission(
+    ctx,
+    permission
+  );
 
-  const chatId = ctx.chat.id;
-
-  try {
-    await ctx.telegram.banChatMember(
-      chatId,
-      targetId
-    );
-
-    return replyToTarget(
+  if (!ok) {
+    await replyToTarget(
       ctx,
-      `🚫 کاربر ${targetName} بن شد.`
-    );
-  } catch (error) {
-    console.error(
-      'Ban error:',
-      error
+      message
     );
 
-    return replyToTarget(
-      ctx,
-      '❌ ربات نتوانست کاربر را بن کند.'
-    );
+    return false;
+  }
+
+  return true;
+}
+
+
+// =====================================
+// ساختار سکوت‌ها
+// =====================================
+
+function ensureMutes(group) {
+  if (!group.mutes || typeof group.mutes !== "object") {
+    group.mutes = {};
+  }
+
+  return group.mutes;
+}
+
+
+// =====================================
+// پاک کردن سکوت‌های منقضی
+// =====================================
+
+function cleanExpiredMutes(group) {
+  const mutes = ensureMutes(group);
+  const now = Date.now();
+
+  for (const userId of Object.keys(mutes)) {
+    const mute = mutes[userId];
+
+    if (
+      !mute ||
+      !mute.until ||
+      mute.until <= now
+    ) {
+      delete mutes[userId];
+    }
   }
 }
 
+
 // =====================================
-// SIK — سیک
+// ثبت سکوت
 // =====================================
 
-async function handleSik(
-  ctx,
-  group,
-  targetId,
-  targetName
-) {
-  if (!targetId) return;
+function setMute(group, userId, until) {
+  const mutes = ensureMutes(group);
 
-  const chatId = ctx.chat.id;
-
-  try {
-    await ctx.telegram.banChatMember(
-      chatId,
-      targetId
-    );
-
-    await ctx.telegram.unbanChatMember(
-      chatId,
-      targetId,
-      {
-        only_if_banned: true
-      }
-    );
-
-    return replyToTarget(
-      ctx,
-      `🚫 کاربر ${targetName} سیک شد.`
-    );
-  } catch (error) {
-    console.error(
-      'Sik error:',
-      error
-    );
-
-    return replyToTarget(
-      ctx,
-      '❌ ربات نتوانست کاربر را سیک کند.'
-    );
-  }
+  mutes[String(userId)] = {
+    until
+  };
 }
 
+
 // =====================================
-// KICK — اخراج
+// حذف سکوت
 // =====================================
 
-async function handleKick(
-  ctx,
-  group,
-  targetId,
-  targetName
-) {
-  if (!targetId) return;
+function removeMute(group, userId) {
+  const mutes = ensureMutes(group);
 
-  const chatId = ctx.chat.id;
+  delete mutes[String(userId)];
+}
 
-  try {
-    await ctx.telegram.banChatMember(
-      chatId,
-      targetId
-    );
 
-    await ctx.telegram.unbanChatMember(
-      chatId,
-      targetId,
-      {
-        only_if_banned: true
-      }
-    );
+// =====================================
+// دریافت وضعیت سکوت
+// =====================================
 
-    return replyToTarget(
-      ctx,
-      `👢 کاربر ${targetName} اخراج شد.`
-    );
-  } catch (error) {
-    console.error(
-      'Kick error:',
-      error
-    );
+function getMute(group, userId) {
+  const mutes = ensureMutes(group);
 
-    return replyToTarget(
-      ctx,
-      '❌ ربات نتوانست کاربر را اخراج کند.'
-    );
+  const mute = mutes[String(userId)];
+
+  if (!mute) {
+    return null;
   }
+
+  if (
+    mute.until &&
+    mute.until <= Date.now()
+  ) {
+    delete mutes[String(userId)];
+    return null;
+  }
+
+  return mute;
+}
+
+
+// =====================================
+// تبدیل عدد فارسی به انگلیسی
+// =====================================
+
+function normalizeNumbers(text) {
+  if (!text) {
+    return "";
+  }
+
+  return String(text)
+    .replace(/۰/g, "0")
+    .replace(/۱/g, "1")
+    .replace(/۲/g, "2")
+    .replace(/۳/g, "3")
+    .replace(/۴/g, "4")
+    .replace(/۵/g, "5")
+    .replace(/۶/g, "6")
+    .replace(/۷/g, "7")
+    .replace(/۸/g, "8")
+    .replace(/۹/g, "9");
+}
+
+
+// =====================================
+// تبدیل عدد فارسی/انگلیسی
+// =====================================
+
+function parseNumber(value) {
+  const normalized = normalizeNumbers(value);
+
+  if (!/^\d+$/.test(normalized)) {
+    return null;
+  }
+
+  const number = Number(normalized);
+
+  if (!Number.isSafeInteger(number)) {
+    return null;
+  }
+
+  return number;
 }// =====================================
-// MUTE — سکوت
+// PulseGroupManager
+// MODERATION.JS
+// قسمت ۲ از ۴
 // =====================================
 
-async function handleMute(
-  ctx,
-  group,
-  targetId,
-  targetName,
-  hours = 1
-) {
-  if (!targetId) return;
 
-  const chatId = ctx.chat.id;
+// =====================================
+// محدودیت‌های سکوت
+// =====================================
+
+const MIN_MUTE_HOURS = 1;
+const MAX_MUTE_HOURS = 24;
+
+
+// =====================================
+// اجرای بن
+// =====================================
+
+async function handleBan(ctx) {
+
+  if (!(await prepareModeration(ctx, "ban"))) {
+    return;
+  }
+
+  const target = getTarget(ctx);
+
+  if (!target) {
+    return;
+  }
+
+  const botCanBan = await canBotBan(ctx);
+
+  if (!botCanBan) {
+    await replyToTarget(
+      ctx,
+      "⛔ ربات دسترسی لازم برای بن کردن کاربر را ندارد."
+    );
+    return;
+  }
 
   try {
-    hours = Number(hours);
 
-    if (!Number.isFinite(hours) || hours <= 0) {
-      hours = 1;
-    }
+    await ctx.telegram.banChatMember(
+      ctx.chat.id,
+      target.id
+    );
 
-    // محدودیت حداکثر مدت سکوت
-    if (hours > 24) {
-      hours = 24;
-    }
+    await replyToTarget(
+      ctx,
+      `🚫 کاربر ${getTargetName(ctx)} بن شد.`
+    );
 
-    const until =
-      Date.now() +
-      hours * 60 * 60 * 1000;
+    saveDB();
+
+  } catch (error) {
+
+    console.error(
+      "BAN ERROR:",
+      error.message
+    );
+
+    await replyToTarget(
+      ctx,
+      "❌ انجام بن کردن کاربر ممکن نشد."
+    );
+  }
+}
+
+
+// =====================================
+// اجرای سیک
+// =====================================
+
+async function handleSik(ctx) {
+
+  if (!(await prepareModeration(ctx, "kick"))) {
+    return;
+  }
+
+  const target = getTarget(ctx);
+
+  if (!target) {
+    return;
+  }
+
+  const botCanBan = await canBotBan(ctx);
+
+  if (!botCanBan) {
+    await replyToTarget(
+      ctx,
+      "⛔ ربات دسترسی لازم برای سیک کردن کاربر را ندارد."
+    );
+    return;
+  }
+
+  try {
+
+    // سیک:
+    // ابتدا کاربر از گروه حذف می‌شود
+    // سپس اجازه ورود مجدد دارد.
+    await ctx.telegram.banChatMember(
+      ctx.chat.id,
+      target.id
+    );
+
+    await ctx.telegram.unbanChatMember(
+      ctx.chat.id,
+      target.id,
+      {
+        only_if_banned: true
+      }
+    );
+
+    await replyToTarget(
+      ctx,
+      `👢 کاربر ${getTargetName(ctx)} سیک شد.`
+    );
+
+    saveDB();
+
+  } catch (error) {
+
+    console.error(
+      "SIK ERROR:",
+      error.message
+    );
+
+    await replyToTarget(
+      ctx,
+      "❌ انجام سیک کردن کاربر ممکن نشد."
+    );
+  }
+}
+
+
+// =====================================
+// اجرای اخراج
+// =====================================
+
+async function handleKick(ctx) {
+
+  if (!(await prepareModeration(ctx, "kick"))) {
+    return;
+  }
+
+  const target = getTarget(ctx);
+
+  if (!target) {
+    return;
+  }
+
+  const botCanKick = await canBotBan(ctx);
+
+  if (!botCanKick) {
+    await replyToTarget(
+      ctx,
+      "⛔ ربات دسترسی لازم برای اخراج کاربر را ندارد."
+    );
+    return;
+  }
+
+  try {
+
+    await ctx.telegram.banChatMember(
+      ctx.chat.id,
+      target.id
+    );
+
+    await ctx.telegram.unbanChatMember(
+      ctx.chat.id,
+      target.id,
+      {
+        only_if_banned: true
+      }
+    );
+
+    await replyToTarget(
+      ctx,
+      `👢 کاربر ${getTargetName(ctx)} اخراج شد.`
+    );
+
+    saveDB();
+
+  } catch (error) {
+
+    console.error(
+      "KICK ERROR:",
+      error.message
+    );
+
+    await replyToTarget(
+      ctx,
+      "❌ انجام اخراج کاربر ممکن نشد."
+    );
+  }
+}
+
+
+// =====================================
+// اجرای سکوت
+// =====================================
+
+async function handleMute(ctx, hours) {
+
+  if (!(await prepareModeration(ctx, "mute"))) {
+    return;
+  }
+
+  const target = getTarget(ctx);
+
+  if (!target) {
+    return;
+  }
+
+  const botCanMute = await canBotRestrict(ctx);
+
+  if (!botCanMute) {
+    await replyToTarget(
+      ctx,
+      "⛔ ربات دسترسی لازم برای سکوت کردن کاربر را ندارد."
+    );
+    return;
+  }
+
+  let muteHours = hours;
+
+  if (!muteHours) {
+    muteHours = 1;
+  }
+
+  muteHours = parseNumber(muteHours);
+
+  if (!muteHours) {
+    return;
+  }
+
+  if (
+    muteHours < MIN_MUTE_HOURS ||
+    muteHours > MAX_MUTE_HOURS
+  ) {
+    await replyToTarget(
+      ctx,
+      `⛔ مدت سکوت باید بین ${MIN_MUTE_HOURS} تا ${MAX_MUTE_HOURS} ساعت باشد.`
+    );
+    return;
+  }
+
+  const durationSeconds =
+    muteHours * 60 * 60;
+
+  const untilDate =
+    Math.floor(Date.now() / 1000) +
+    durationSeconds;
+
+  try {
 
     await ctx.telegram.restrictChatMember(
-      chatId,
-      targetId,
+      ctx.chat.id,
+      target.id,
       {
         permissions: {
           can_send_messages: false,
@@ -324,77 +820,77 @@ async function handleMute(
           can_send_voice_notes: false,
           can_send_polls: false,
           can_send_other_messages: false,
-          can_add_web_page_previews: false
+          can_add_web_page_previews: false,
+          can_change_info: false,
+          can_invite_users: false,
+          can_pin_messages: false,
+          can_manage_topics: false
         },
-        until_date: Math.floor(
-          until / 1000
-        )
+        until_date: untilDate
       }
     );
 
-    if (!group.moderation) {
-      group.moderation = {};
-    }
+    const group = getGroup(ctx.chat.id);
 
-    if (
-      !Array.isArray(
-        group.moderation.mutes
-      )
-    ) {
-      group.moderation.mutes = [];
-    }
-
-    // حذف سکوت قبلی همین کاربر
-    group.moderation.mutes =
-      group.moderation.mutes.filter(
-        mute =>
-          String(mute.userId) !==
-          String(targetId)
-      );
-
-    // ثبت سکوت جدید
-    group.moderation.mutes.push({
-      userId: targetId,
-      until: until
-    });
-
-    saveGroup(chatId, group);
-
-    return replyToTarget(
-      ctx,
-      `🔇 کاربر ${targetName} ${hours} ساعت سکوت شد.`
+    setMute(
+      group,
+      target.id,
+      Date.now() + (muteHours * 60 * 60 * 1000)
     );
+
+    saveDB();
+
+    await replyToTarget(
+      ctx,
+      `🔇 کاربر ${getTargetName(ctx)} ${muteHours} ساعت سکوت شد.`
+    );
+
   } catch (error) {
+
     console.error(
-      'Mute error:',
-      error
+      "MUTE ERROR:",
+      error.message
     );
 
-    return replyToTarget(
+    await replyToTarget(
       ctx,
-      '❌ ربات نتوانست کاربر را سکوت کند.'
+      "❌ انجام سکوت کاربر ممکن نشد."
     );
   }
 }
 
+
 // =====================================
-// UNMUTE — رفع سکوت
+// رفع سکوت
 // =====================================
 
-async function handleUnmute(
-  ctx,
-  group,
-  targetId,
-  targetName
-) {
-  if (!targetId) return;
+async function handleUnmute(ctx) {
 
-  const chatId = ctx.chat.id;
+  if (!(await prepareModeration(ctx, "mute"))) {
+    return;
+  }
+
+  const target = getTarget(ctx);
+
+  if (!target) {
+    return;
+  }
+
+  const botCanMute = await canBotRestrict(ctx);
+
+  if (!botCanMute) {
+    await replyToTarget(
+      ctx,
+      "⛔ ربات دسترسی لازم برای رفع سکوت را ندارد."
+    );
+    return;
+  }
 
   try {
+
     await ctx.telegram.restrictChatMember(
-      chatId,
-      targetId,
+      ctx.chat.id,
+      target.id,
       {
         permissions: {
           can_send_messages: true,
@@ -406,849 +902,1208 @@ async function handleUnmute(
           can_send_voice_notes: true,
           can_send_polls: true,
           can_send_other_messages: true,
-          can_add_web_page_previews: true
+          can_add_web_page_previews: true,
+          can_change_info: false,
+          can_invite_users: true,
+          can_pin_messages: false,
+          can_manage_topics: false
         }
       }
     );
 
-    if (!group.moderation) {
-      group.moderation = {};
-    }
+    const group = getGroup(ctx.chat.id);
 
-    if (
-      !Array.isArray(
-        group.moderation.mutes
-      )
-    ) {
-      group.moderation.mutes = [];
-    }
-
-    const before =
-      group.moderation.mutes.length;
-
-    group.moderation.mutes =
-      group.moderation.mutes.filter(
-        mute =>
-          String(mute.userId) !==
-          String(targetId)
-      );
-
-    if (
-      group.moderation.mutes.length ===
-      before
-    ) {
-      return replyToTarget(
-        ctx,
-        `ℹ️ کاربر ${targetName} در حال حاضر سکوت نیست.`
-      );
-    }
-
-    saveGroup(chatId, group);
-
-    return replyToTarget(
-      ctx,
-      `🔊 سکوت کاربر ${targetName} برداشته شد.`
+    removeMute(
+      group,
+      target.id
     );
+
+    saveDB();
+
+    await replyToTarget(
+      ctx,
+      `🔊 سکوت کاربر ${getTargetName(ctx)} برداشته شد.`
+    );
+
   } catch (error) {
+
     console.error(
-      'Unmute error:',
-      error
+      "UNMUTE ERROR:",
+      error.message
     );
 
-    return replyToTarget(
+    await replyToTarget(
       ctx,
-      '❌ ربات نتوانست سکوت کاربر را بردارد.'
+      "❌ رفع سکوت کاربر ممکن نشد."
     );
   }
 }
 
+
 // =====================================
-// بررسی وضعیت سکوت
+// بررسی وضعیت سکوت کاربر
 // =====================================
 
-function isUserMuted(
-  group,
-  userId
-) {
-  if (
-    !group ||
-    !group.moderation ||
-    !Array.isArray(
-      group.moderation.mutes
-    )
-  ) {
-    return false;
-  }
+function isUserMuted(group, userId) {
 
-  const now = Date.now();
+  cleanExpiredMutes(group);
 
-  const mute =
-    group.moderation.mutes.find(
-      item =>
-        String(item.userId) ===
-        String(userId)
-    );
-
-  if (!mute) {
-    return false;
-  }
-
-  if (
-    Number(mute.until) <= now
-  ) {
-    return false;
-  }
-
-  return true;
+  return !!getMute(
+    group,
+    userId
+  );
 }
 
+
 // =====================================
-// پاک‌سازی سکوت‌های منقضی‌شده
+// پاکسازی سکوت‌های منقضی
 // =====================================
 
-function cleanExpiredMutes(
-  group
-) {
-  if (
-    !group ||
-    !group.moderation ||
-    !Array.isArray(
-      group.moderation.mutes
-    )
-  ) {
+function cleanupMutes() {
+
+  const db = require("./database").getDB();
+
+  if (!db || !db.groups) {
     return;
   }
 
-  const now = Date.now();
+  let changed = false;
 
-  group.moderation.mutes =
-    group.moderation.mutes.filter(
-      mute =>
-        Number(mute.until) > now
-    );
-}
+  for (const chatId of Object.keys(db.groups)) {
 
-// =====================================
-// آماده‌سازی سیستم اخطار
-// =====================================
+    const group = db.groups[chatId];
 
-function ensureWarningSystem(
-  group
-) {
-  if (!group.moderation) {
-    group.moderation = {};
-  }
-
-  if (
-    !Array.isArray(
-      group.moderation.warnings
-    )
-  ) {
-    group.moderation.warnings = [];
-  }
-
-  if (
-    !group.moderation.maxWarnings
-  ) {
-    group.moderation.maxWarnings = 3;
-  }
-
-  if (
-    !group.moderation.warningPunishment
-  ) {
-    group.moderation.warningPunishment =
-      'mute';
-  }
-
-  if (
-    !group.moderation.warningMuteDuration
-  ) {
-    group.moderation.warningMuteDuration =
-      1;
-  }
-}// =====================================
-// WARN — اخطار
-// =====================================
-
-async function handleWarn(
-  ctx,
-  group,
-  targetId,
-  targetName,
-  amount = 1
-) {
-  if (!targetId) return;
-
-  const chatId = ctx.chat.id;
-
-  try {
-    ensureWarningSystem(group);
-
-    amount = Number(amount);
-
-    if (
-      !Number.isFinite(amount) ||
-      amount < 1
-    ) {
-      amount = 1;
+    if (!group) {
+      continue;
     }
 
-    amount = Math.floor(amount);
+    const before =
+      group.mutes
+        ? Object.keys(group.mutes).length
+        : 0;
 
-    const existing =
-      group.moderation.warnings.find(
-        warning =>
-          String(warning.userId) ===
-          String(targetId)
-      );
+    cleanExpiredMutes(group);
 
-    if (existing) {
-      existing.count =
-        Number(existing.count || 0) +
-        amount;
+    const after =
+      group.mutes
+        ? Object.keys(group.mutes).length
+        : 0;
 
-      existing.updatedAt = Date.now();
-    } else {
-      group.moderation.warnings.push({
-        userId: targetId,
-        count: amount,
-        updatedAt: Date.now()
-      });
+    if (before !== after) {
+      changed = true;
     }
+  }
 
-    const warning =
-      group.moderation.warnings.find(
-        item =>
-          String(item.userId) ===
-          String(targetId)
-      );
-
-    const max =
-      Number(
-        group.moderation.maxWarnings
-      ) || 3;
-
-    // هنوز به حد اخطار نرسیده
-    if (warning.count < max) {
-      saveGroup(chatId, group);
-
-      return replyToTarget(
-        ctx,
-        `⚠️ به کاربر ${targetName} اخطار داده شد.\n\n` +
-        `📊 تعداد اخطار: ${warning.count} از ${max}`
-      );
-    }
-
-    // =================================
-    // رسیدن به حداکثر اخطار
-    // =================================
-
-    const punishment =
-      group.moderation.warningPunishment ||
-      'mute';
-
-    // =================================
-    // مجازات: بن
-    // =================================
-
-    if (punishment === 'ban') {
-      try {
-        await ctx.telegram.banChatMember(
-          chatId,
-          targetId
-        );
-
-        warning.count = 0;
-        warning.updatedAt = Date.now();
-
-        saveGroup(chatId, group);
-
-        return replyToTarget(
-          ctx,
-          `🚫 کاربر ${targetName} به دلیل رسیدن به ${max} اخطار بن شد.`
-        );
-      } catch (error) {
-        console.error(
-          'Warning ban error:',
-          error
-        );
-
-        saveGroup(chatId, group);
-
-        return replyToTarget(
-          ctx,
-          `⚠️ تعداد اخطار ${targetName} به ${max} رسید، اما ربات نتوانست او را بن کند.`
-        );
-      }
-    }
-
-    // =================================
-    // مجازات: سکوت
-    // =================================
-
-    if (punishment === 'mute') {
-      const duration =
-        Number(
-          group.moderation
-            .warningMuteDuration
-        ) || 1;
-
-      const until =
-        Date.now() +
-        duration * 60 * 60 * 1000;
-
-      try {
-        await ctx.telegram.restrictChatMember(
-          chatId,
-          targetId,
-          {
-            permissions: {
-              can_send_messages: false,
-              can_send_audios: false,
-              can_send_documents: false,
-              can_send_photos: false,
-              can_send_videos: false,
-              can_send_video_notes: false,
-              can_send_voice_notes: false,
-              can_send_polls: false,
-              can_send_other_messages: false,
-              can_add_web_page_previews: false
-            },
-            until_date: Math.floor(
-              until / 1000
-            )
-          }
-        );
-
-        if (
-          !Array.isArray(
-            group.moderation.mutes
-          )
-        ) {
-          group.moderation.mutes = [];
-        }
-
-        // سکوت قبلی حذف شود
-        group.moderation.mutes =
-          group.moderation.mutes.filter(
-            mute =>
-              String(mute.userId) !==
-              String(targetId)
-          );
-
-        // سکوت جدید ثبت شود
-        group.moderation.mutes.push({
-          userId: targetId,
-          until: until
-        });
-
-        warning.count = 0;
-        warning.updatedAt = Date.now();
-
-        saveGroup(chatId, group);
-
-        return replyToTarget(
-          ctx,
-          `🔇 کاربر ${targetName} به دلیل رسیدن به ${max} اخطار، ${duration} ساعت سکوت شد.`
-        );
-      } catch (error) {
-        console.error(
-          'Warning mute error:',
-          error
-        );
-
-        saveGroup(chatId, group);
-
-        return replyToTarget(
-          ctx,
-          `⚠️ تعداد اخطار ${targetName} به ${max} رسید، اما ربات نتوانست او را سکوت کند.`
-        );
-      }
-    }
-
-    // =================================
-    // مجازات پیش‌فرض
-    // =================================
-
-    warning.count = 0;
-    warning.updatedAt = Date.now();
-
-    saveGroup(chatId, group);
-
-    return replyToTarget(
-      ctx,
-      `⚠️ تعداد اخطار ${targetName} به ${max} رسید.`
-    );
-
-  } catch (error) {
-    console.error(
-      'Warn error:',
-      error
-    );
-
-    return replyToTarget(
-      ctx,
-      '❌ خطایی هنگام ثبت اخطار رخ داد.'
-    );
+  if (changed) {
+    saveDB();
   }
 }
 
+
 // =====================================
-// دریافت تعداد اخطار کاربر
+// ساختار اخطار
 // =====================================
 
-function getWarningCount(
-  group,
-  userId
-) {
+function ensureWarnings(group) {
+
   if (
-    !group ||
-    !group.moderation ||
-    !Array.isArray(
-      group.moderation.warnings
-    )
+    !group.warns ||
+    typeof group.warns !== "object"
   ) {
-    return 0;
+    group.warns = {};
   }
 
-  const warning =
-    group.moderation.warnings.find(
-      item =>
-        String(item.userId) ===
-        String(userId)
-    );
-
-  if (!warning) {
-    return 0;
+  if (
+    !group.warningSettings ||
+    typeof group.warningSettings !== "object"
+  ) {
+    group.warningSettings = {
+      maxWarnings: 3,
+      punishment: "mute",
+      duration: 60
+    };
   }
+
+  if (
+    typeof group.warningSettings.maxWarnings !==
+    "number"
+  ) {
+    group.warningSettings.maxWarnings = 3;
+  }
+
+  if (
+    !group.warningSettings.punishment
+  ) {
+    group.warningSettings.punishment = "mute";
+  }
+
+  if (
+    typeof group.warningSettings.duration !==
+    "number"
+  ) {
+    group.warningSettings.duration = 60;
+  }
+}
+
+
+// =====================================
+// دریافت تعداد اخطار
+// =====================================
+
+function getWarningCount(group, userId) {
+
+  ensureWarnings(group);
 
   return Number(
-    warning.count || 0
+    group.warns[String(userId)] || 0
   );
 }
+
+
+// =====================================
+// ثبت اخطار
+// =====================================
+
+function setWarningCount(
+  group,
+  userId,
+  count
+) {
+
+  ensureWarnings(group);
+
+  group.warns[String(userId)] =
+    Math.max(
+      0,
+      Number(count) || 0
+    );
+}
+
 
 // =====================================
 // پاک کردن اخطارهای کاربر
 // =====================================
 
-function clearWarnings(
+function clearWarningsForUser(
   group,
   userId
 ) {
-  if (
-    !group ||
-    !group.moderation ||
-    !Array.isArray(
-      group.moderation.warnings
-    )
-  ) {
-    return;
-  }
 
-  group.moderation.warnings =
-    group.moderation.warnings.filter(
-      warning =>
-        String(warning.userId) !==
-        String(userId)
-    );
+  ensureWarnings(group);
+
+  delete group.warns[
+    String(userId)
+  ];
 }
+
 
 // =====================================
 // تنظیم تعداد اخطار
 // =====================================
 
-function setMaxWarnings(
+function setMaxWarningsValue(
   group,
-  amount
+  value
 ) {
-  if (!group.moderation) {
-    group.moderation = {};
-  }
 
-  amount = Number(amount);
+  ensureWarnings(group);
 
-  if (
-    !Number.isFinite(amount) ||
-    amount < 1
-  ) {
-    amount = 3;
-  }
-
-  group.moderation.maxWarnings =
-    Math.floor(amount);
+  group.warningSettings.maxWarnings =
+    value;
 }
+
 
 // =====================================
 // تنظیم مجازات اخطار
 // =====================================
 
-function setWarningPunishment(
+function setWarningPunishmentValue(
   group,
   punishment
 ) {
-  if (!group.moderation) {
-    group.moderation = {};
-  }
 
-  const allowed = [
-    'mute',
-    'ban'
-  ];
+  ensureWarnings(group);
 
-  if (
-    !allowed.includes(punishment)
-  ) {
-    punishment = 'mute';
-  }
-
-  group.moderation.warningPunishment =
+  group.warningSettings.punishment =
     punishment;
 }
 
+
 // =====================================
-// تنظیم مدت سکوت اخطار
+// تنظیم مدت مجازات اخطار
+// duration = دقیقه
 // =====================================
 
-function setWarningMuteDuration(
+function setWarningDurationValue(
   group,
-  hours
+  duration
 ) {
-  if (!group.moderation) {
-    group.moderation = {};
-  }
 
-  hours = Number(hours);
+  ensureWarnings(group);
+
+  group.warningSettings.duration =
+    duration;
+}// =====================================
+// PulseGroupManager
+// MODERATION.JS
+// قسمت ۳ از ۴
+// سیستم اخطار و مجازات خودکار
+// =====================================
+
+
+// =====================================
+// اجرای مجازات اخطار
+// =====================================
+
+async function applyWarningPunishment(
+  ctx,
+  target,
+  group
+) {
+
+  ensureWarnings(group);
+
+  const punishment =
+    String(
+      group.warningSettings.punishment || "mute"
+    ).toLowerCase();
+
+  const duration =
+    Number(
+      group.warningSettings.duration || 60
+    );
+
+  // ===================================
+  // مجازات = بن
+  // ===================================
 
   if (
-    !Number.isFinite(hours) ||
-    hours <= 0
+    punishment === "ban" ||
+    punishment === "بن"
   ) {
-    hours = 1;
-  }
 
-  group.moderation.warningMuteDuration =
-    Math.floor(hours);
-  }// =====================================
-// PARSE MODERATION COMMAND
-// تشخیص فرمان‌های فارسی
-// =====================================
+    const botCanBan =
+      await canBotBan(ctx);
 
-function parseModerationCommand(text) {
-  if (!text) {
-    return null;
-  }
+    if (!botCanBan) {
 
-  const value =
-    String(text).trim();
-
-  // بن
-  if (/^بن$/i.test(value)) {
-    return {
-      command: 'ban'
-    };
-  }
-
-  // سیک
-  if (/^سیک$/i.test(value)) {
-    return {
-      command: 'sik'
-    };
-  }
-
-  // اخراج
-  if (/^اخراج$/i.test(value)) {
-    return {
-      command: 'kick'
-    };
-  }
-
-  // سکوت
-  if (/^سکوت$/i.test(value)) {
-    return {
-      command: 'mute',
-      amount: 1
-    };
-  }
-
-  // سکوت با تعداد ساعت
-  const muteMatch =
-    value.match(/^سکوت\s+(\d+)$/i);
-
-  if (muteMatch) {
-    return {
-      command: 'mute',
-      amount: Number(muteMatch[1])
-    };
-  }
-
-  // رفع سکوت
-  if (
-    /^رفع\s+سکوت$/i.test(value) ||
-    /^بازکردن\s+سکوت$/i.test(value)
-  ) {
-    return {
-      command: 'unmute'
-    };
-  }
-
-  // اخطار
-  if (/^اخطار$/i.test(value)) {
-    return {
-      command: 'warn',
-      amount: 1
-    };
-  }
-
-  // اخطار با تعداد
-  const warnMatch =
-    value.match(/^اخطار\s+(\d+)$/i);
-
-  if (warnMatch) {
-    return {
-      command: 'warn',
-      amount: Number(warnMatch[1])
-    };
-  }
-
-  return null;
-}
-
-// =====================================
-// HANDLER اصلی مدیریت
-// =====================================
-
-async function handleModeration(
-  ctx
-) {
-  try {
-    if (
-      !ctx ||
-      !ctx.message ||
-      !ctx.chat
-    ) {
-      return;
-    }
-
-    // فقط گروه
-    if (
-      ctx.chat.type !== 'group' &&
-      ctx.chat.type !== 'supergroup'
-    ) {
-      return;
-    }
-
-    const text =
-      ctx.message.text;
-
-    if (!text) {
-      return;
-    }
-
-    const parsed =
-      parseModerationCommand(text);
-
-    if (!parsed) {
-      return;
-    }
-
-    // تمام فرمان‌های مدیریت فقط با ریپلای
-    if (!requireReply(ctx)) {
-      return;
-    }
-
-    const chatId =
-      ctx.chat.id;
-
-    const targetId =
-      getTargetId(ctx);
-
-    const targetName =
-      getTargetName(ctx);
-
-    if (!targetId) {
-      return;
-    }
-
-    const group =
-      getGroup(chatId);
-
-    if (!group) {
-      return;
-    }
-
-    // مدیر اجراکننده
-    const executorId =
-      ctx.from &&
-      ctx.from.id;
-
-    if (!executorId) {
-      return;
-    }
-
-    // بررسی دسترسی مدیر
-    const allowed =
-      await canModerate(ctx);
-
-    if (!allowed) {
-      // کاربر عادی کاملاً ساکت
-      return;
-    }
-
-    // ربات باید دسترسی مدیریت اعضا داشته باشد
-    const botAllowed =
-      await checkModerationBot(ctx);
-
-    if (!botAllowed) {
-      return replyToTarget(
+      await replyToTarget(
         ctx,
-        '❌ ربات دسترسی لازم برای مدیریت اعضا را ندارد.'
+        "⛔ ربات دسترسی لازم برای بن کردن کاربر را ندارد."
       );
-    }
 
-    // =================================
-    // جلوگیری از مدیریت مالک
-    // =================================
+      return false;
+    }
 
     try {
-      const targetMember =
-        await ctx.telegram.getChatMember(
-          chatId,
-          targetId
-        );
 
-      if (
-        targetMember &&
-        (
-          targetMember.status ===
-            'creator' ||
-          targetMember.status ===
-            'administrator'
-        )
-      ) {
-        return replyToTarget(
-          ctx,
-          '❌ امکان اجرای این عملیات روی مدیران گروه وجود ندارد.'
-        );
-      }
-    } catch (error) {
-      console.error(
-        'Target member check error:',
-        error
+      await ctx.telegram.banChatMember(
+        ctx.chat.id,
+        target.id
       );
+
+      clearWarningsForUser(
+        group,
+        target.id
+      );
+
+      saveDB();
+
+      await replyToTarget(
+        ctx,
+        `🚫 حد اخطار تکمیل شد؛ کاربر ${getTargetName(ctx)} بن شد.`
+      );
+
+      return true;
+
+    } catch (error) {
+
+      console.error(
+        "WARNING BAN ERROR:",
+        error.message
+      );
+
+      await replyToTarget(
+        ctx,
+        "❌ مجازات اخطار انجام نشد."
+      );
+
+      return false;
     }
+  }
 
-    // =================================
-    // اجرای فرمان
-    // =================================
 
-    switch (parsed.command) {
-      case 'ban':
-        return handleBan(
-          ctx,
-          group,
-          targetId,
-          targetName
-        );
+  // ===================================
+  // مجازات = سکوت
+  // duration بر حسب دقیقه
+  // ===================================
 
-      case 'sik':
-        return handleSik(
-          ctx,
-          group,
-          targetId,
-          targetName
-        );
+  const botCanMute =
+    await canBotRestrict(ctx);
 
-      case 'kick':
-        return handleKick(
-          ctx,
-          group,
-          targetId,
-          targetName
-        );
+  if (!botCanMute) {
 
-      case 'mute':
-        return handleMute(
-          ctx,
-          group,
-          targetId,
-          targetName,
-          parsed.amount
-        );
-
-      case 'unmute':
-        return handleUnmute(
-          ctx,
-          group,
-          targetId,
-          targetName
-        );
-
-      case 'warn':
-        return handleWarn(
-          ctx,
-          group,
-          targetId,
-          targetName,
-          parsed.amount
-        );
-
-      default:
-        return;
-    }
-
-  } catch (error) {
-    console.error(
-      'Moderation handler error:',
-      error
+    await replyToTarget(
+      ctx,
+      "⛔ ربات دسترسی لازم برای سکوت کردن کاربر را ندارد."
     );
-  }
-}
 
-// =====================================
-// CLEANUP
-// =====================================
-
-function cleanupModeration(
-  group
-) {
-  if (!group) {
-    return;
+    return false;
   }
 
-  if (!group.moderation) {
-    group.moderation = {};
-  }
+  const safeDuration =
+    Math.max(
+      1,
+      Math.min(
+        10080,
+        duration
+      )
+    );
 
-  cleanExpiredMutes(group);
-}
+  const untilDate =
+    Math.floor(Date.now() / 1000) +
+    (safeDuration * 60);
 
-// =====================================
-// SAVE CHANGES
-// =====================================
-
-function saveChanges(
-  chatId,
-  group
-) {
   try {
-    cleanupModeration(group);
-    saveGroup(chatId, group);
+
+    await ctx.telegram.restrictChatMember(
+      ctx.chat.id,
+      target.id,
+      {
+        permissions: {
+          can_send_messages: false,
+          can_send_audios: false,
+          can_send_documents: false,
+          can_send_photos: false,
+          can_send_videos: false,
+          can_send_video_notes: false,
+          can_send_voice_notes: false,
+          can_send_polls: false,
+          can_send_other_messages: false,
+          can_add_web_page_previews: false,
+          can_change_info: false,
+          can_invite_users: false,
+          can_pin_messages: false,
+          can_manage_topics: false
+        },
+        until_date: untilDate
+      }
+    );
+
+    setMute(
+      group,
+      target.id,
+      Date.now() +
+      (safeDuration * 60 * 1000)
+    );
+
+    clearWarningsForUser(
+      group,
+      target.id
+    );
+
+    saveDB();
+
+    await replyToTarget(
+      ctx,
+      `🔇 حد اخطار تکمیل شد؛ کاربر ${getTargetName(ctx)} به مدت ${safeDuration} دقیقه سکوت شد.`
+    );
+
     return true;
+
   } catch (error) {
+
     console.error(
-      'Moderation save error:',
-      error
+      "WARNING MUTE ERROR:",
+      error.message
+    );
+
+    await replyToTarget(
+      ctx,
+      "❌ مجازات اخطار انجام نشد."
     );
 
     return false;
   }
 }
 
+
 // =====================================
-// EXPORTS
+// اجرای اخطار
+// =====================================
+
+async function handleWarn(ctx, requestedCount) {
+
+  if (!(await prepareModeration(ctx, "warn"))) {
+    return;
+  }
+
+  const target = getTarget(ctx);
+
+  if (!target) {
+    return;
+  }
+
+  const group =
+    getGroup(ctx.chat.id);
+
+  ensureWarnings(group);
+
+  let count =
+    getWarningCount(
+      group,
+      target.id
+    );
+
+  let amount = 1;
+
+  if (
+    requestedCount !== undefined &&
+    requestedCount !== null &&
+    requestedCount !== ""
+  ) {
+
+    amount =
+      parseNumber(requestedCount);
+
+    if (!amount || amount < 1) {
+
+      await replyToTarget(
+        ctx,
+        "⛔ تعداد اخطار نامعتبر است."
+      );
+
+      return;
+    }
+  }
+
+  count += amount;
+
+  const maxWarnings =
+    Math.max(
+      1,
+      Number(
+        group.warningSettings.maxWarnings || 3
+      )
+    );
+
+  // ===================================
+  // اگر تعداد اخطار به حد مجاز رسید
+  // ===================================
+
+  if (count >= maxWarnings) {
+
+    setWarningCount(
+      group,
+      target.id,
+      count
+    );
+
+    saveDB();
+
+    await applyWarningPunishment(
+      ctx,
+      target,
+      group
+    );
+
+    return;
+  }
+
+  // ===================================
+  // ثبت اخطار عادی
+  // ===================================
+
+  setWarningCount(
+    group,
+    target.id,
+    count
+  );
+
+  saveDB();
+
+  await replyToTarget(
+    ctx,
+    `⚠️ به کاربر ${getTargetName(ctx)} اخطار داده شد.\n\n📌 تعداد اخطار: ${count} از ${maxWarnings}`
+  );
+}
+
+
+// =====================================
+// دریافت تنظیمات اخطار
+// =====================================
+
+function getWarningSettings(ctx) {
+
+  const group =
+    getGroup(ctx.chat.id);
+
+  ensureWarnings(group);
+
+  return group.warningSettings;
+}
+
+
+// =====================================
+// فرمان «تعداد اخطار»
+// مثال:
+// تعداد اخطار 3
+// =====================================
+
+async function handleSetMaxWarnings(
+  ctx,
+  value
+) {
+
+  if (!(await hasManagementPermission(
+    ctx,
+    "warn"
+  ))) {
+    return;
+  }
+
+  const number =
+    parseNumber(value);
+
+  if (
+    !number ||
+    number < 1 ||
+    number > 100
+  ) {
+
+    await ctx.reply(
+      "⛔ تعداد اخطار باید بین ۱ تا ۱۰۰ باشد."
+    );
+
+    return;
+  }
+
+  const group =
+    getGroup(ctx.chat.id);
+
+  setMaxWarningsValue(
+    group,
+    number
+  );
+
+  saveDB();
+
+  await ctx.reply(
+    `✅ حد اخطار روی ${number} تنظیم شد.`
+  );
+}
+
+
+// =====================================
+// فرمان «تنظیم اخطار»
+// =====================================
+
+async function handleSetWarningPunishment(
+  ctx,
+  value
+) {
+
+  if (!(await hasManagementPermission(
+    ctx,
+    "warn"
+  ))) {
+    return;
+  }
+
+  if (!value) {
+    return;
+  }
+
+  const normalized =
+    String(value)
+      .trim()
+      .toLowerCase();
+
+  let punishment = null;
+
+  if (
+    normalized === "بن" ||
+    normalized === "ban"
+  ) {
+    punishment = "ban";
+  }
+
+  if (
+    normalized === "سکوت" ||
+    normalized === "mute" ||
+    normalized === "محدود"
+  ) {
+    punishment = "mute";
+  }
+
+  if (!punishment) {
+
+    await ctx.reply(
+      "⛔ مجازات نامعتبر است.\n\nگزینه‌ها: بن یا سکوت"
+    );
+
+    return;
+  }
+
+  const group =
+    getGroup(ctx.chat.id);
+
+  setWarningPunishmentValue(
+    group,
+    punishment
+  );
+
+  saveDB();
+
+  const text =
+    punishment === "ban"
+      ? "بن"
+      : "سکوت";
+
+  await ctx.reply(
+    `✅ مجازات اخطار روی «${text}» تنظیم شد.`
+  );
+}
+
+
+// =====================================
+// فرمان تنظیم مدت مجازات اخطار
+// این مقدار بر حسب دقیقه است
+// =====================================
+
+async function handleSetWarningDuration(
+  ctx,
+  value
+) {
+
+  if (!(await hasManagementPermission(
+    ctx,
+    "warn"
+  ))) {
+    return;
+  }
+
+  const duration =
+    parseNumber(value);
+
+  if (
+    !duration ||
+    duration < 1 ||
+    duration > 10080
+  ) {
+
+    await ctx.reply(
+      "⛔ مدت مجازات باید بین ۱ تا ۱۰۰۸۰ دقیقه باشد."
+    );
+
+    return;
+  }
+
+  const group =
+    getGroup(ctx.chat.id);
+
+  setWarningDurationValue(
+    group,
+    duration
+  );
+
+  saveDB();
+
+  await ctx.reply(
+    `✅ مدت مجازات اخطار روی ${duration} دقیقه تنظیم شد.`
+  );
+}
+
+
+// =====================================
+// نمایش تنظیمات اخطار
+// =====================================
+
+async function handleWarningSettings(ctx) {
+
+  if (!(await hasManagementPermission(
+    ctx,
+    "warn"
+  ))) {
+    return;
+  }
+
+  const settings =
+    getWarningSettings(ctx);
+
+  const punishmentText =
+    settings.punishment === "ban"
+      ? "بن"
+      : "سکوت";
+
+  await ctx.reply(
+    [
+      "⚙️ تنظیمات اخطار",
+      "",
+      `⚠️ حد اخطار: ${settings.maxWarnings}`,
+      `🔨 مجازات: ${punishmentText}`,
+      `⏱ مدت سکوت: ${settings.duration} دقیقه`
+    ].join("\n")
+  );
+}
+
+
+// =====================================
+// پاک کردن اخطارهای یک کاربر
+// فقط با ریپلای
+// =====================================
+
+async function handleClearWarnings(ctx) {
+
+  if (!(await prepareModeration(ctx, "warn"))) {
+    return;
+  }
+
+  const target =
+    getTarget(ctx);
+
+  if (!target) {
+    return;
+  }
+
+  const group =
+    getGroup(ctx.chat.id);
+
+  clearWarningsForUser(
+    group,
+    target.id
+  );
+
+  saveDB();
+
+  await replyToTarget(
+    ctx,
+    `✅ تمام اخطارهای ${getTargetName(ctx)} پاک شد.`
+  );
+}
+
+
+// =====================================
+// نمایش تعداد اخطار کاربر
+// فقط با ریپلای
+// =====================================
+
+async function handleWarningCount(ctx) {
+
+  if (!(await prepareModeration(ctx, "warn"))) {
+    return;
+  }
+
+  const target =
+    getTarget(ctx);
+
+  if (!target) {
+    return;
+  }
+
+  const group =
+    getGroup(ctx.chat.id);
+
+  const count =
+    getWarningCount(
+      group,
+      target.id
+    );
+
+  ensureWarnings(group);
+
+  const maxWarnings =
+    group.warningSettings.maxWarnings;
+
+  await replyToTarget(
+    ctx,
+    `⚠️ تعداد اخطارهای ${getTargetName(ctx)}: ${count} از ${maxWarnings}`
+  );
+}
+
+
+// =====================================
+// ذخیره نهایی تغییرات اخطار
+// =====================================
+
+function saveModerationChanges() {
+  saveDB();
+    }// =====================================
+// PulseGroupManager
+// MODERATION.JS
+// قسمت ۴ از ۴
+// فرمان‌ها + ثبت ربات + Export
+// =====================================
+
+
+// =====================================
+// پردازش فرمان‌های مدیریت
+// =====================================
+
+async function handleModeration(ctx) {
+
+  if (!isGroup(ctx)) {
+    return;
+  }
+
+  if (!ctx.message || !ctx.message.text) {
+    return;
+  }
+
+  const text =
+    String(ctx.message.text).trim();
+
+  if (!text) {
+    return;
+  }
+
+
+  // ===================================
+  // بن
+  // فقط با ریپلای
+  // ===================================
+
+  if (/^بن$/iu.test(text)) {
+    await handleBan(ctx);
+    return;
+  }
+
+
+  // ===================================
+  // سیک
+  // فقط با ریپلای
+  // ===================================
+
+  if (/^سیک$/iu.test(text)) {
+    await handleSik(ctx);
+    return;
+  }
+
+
+  // ===================================
+  // اخراج
+  // فقط با ریپلای
+  // ===================================
+
+  if (/^اخراج$/iu.test(text)) {
+    await handleKick(ctx);
+    return;
+  }
+
+
+  // ===================================
+  // سکوت
+  // سکوت
+  // سکوت 1
+  // سکوت ۲
+  // ===================================
+
+  let match =
+    text.match(/^سکوت(?:\s+(.+))?$/iu);
+
+  if (match) {
+
+    const value =
+      match[1]
+        ? match[1].trim()
+        : null;
+
+    // بدون عدد = یک ساعت
+    await handleMute(
+      ctx,
+      value || 1
+    );
+
+    return;
+  }
+
+
+  // ===================================
+  // رفع سکوت
+  // ===================================
+
+  if (
+    /^رفع\s+سکوت$/iu.test(text) ||
+    /^رفع‌سکوت$/iu.test(text)
+  ) {
+    await handleUnmute(ctx);
+    return;
+  }
+
+
+  // ===================================
+  // اخطار
+  // اخطار
+  // اخطار 3
+  // اخطار ۳
+  // ===================================
+
+  match =
+    text.match(/^اخطار(?:\s+(.+))?$/iu);
+
+  if (match) {
+
+    const value =
+      match[1]
+        ? match[1].trim()
+        : null;
+
+    await handleWarn(
+      ctx,
+      value
+    );
+
+    return;
+  }
+
+
+  // ===================================
+  // پاک کردن اخطار
+  // فقط با ریپلای
+  // ===================================
+
+  if (
+    /^پاک\s+کردن\s+اخطار$/iu.test(text) ||
+    /^پاک\s+اخطار$/iu.test(text) ||
+    /^حذف\s+اخطار$/iu.test(text)
+  ) {
+    await handleClearWarnings(ctx);
+    return;
+  }
+
+
+  // ===================================
+  // تعداد اخطار کاربر
+  // فقط با ریپلای
+  // ===================================
+
+  if (
+    /^تعداد\s+اخطار$/iu.test(text)
+  ) {
+    await handleWarningCount(ctx);
+    return;
+  }
+
+
+  // ===================================
+  // تعداد اخطار 3
+  // تعداد اخطار ۳
+  // ===================================
+
+  match =
+    text.match(
+      /^تعداد\s+اخطار\s+(.+)$/iu
+    );
+
+  if (match) {
+
+    await handleSetMaxWarnings(
+      ctx,
+      match[1].trim()
+    );
+
+    return;
+  }
+
+
+  // ===================================
+  // تنظیم اخطار بن
+  // تنظیم اخطار سکوت
+  // ===================================
+
+  match =
+    text.match(
+      /^تنظیم\s+اخطار\s+(.+)$/iu
+    );
+
+  if (match) {
+
+    const value =
+      match[1].trim();
+
+    // اگر کاربر «بن» یا «سکوت» زده باشد
+    if (
+      /^بن$/iu.test(value) ||
+      /^ban$/iu.test(value) ||
+      /^سکوت$/iu.test(value) ||
+      /^mute$/iu.test(value)
+    ) {
+
+      await handleSetWarningPunishment(
+        ctx,
+        value
+      );
+
+      return;
+    }
+
+    // اگر عدد داده شده باشد:
+    // تنظیم اخطار 60
+    const duration =
+      parseNumber(value);
+
+    if (duration) {
+
+      await handleSetWarningDuration(
+        ctx,
+        value
+      );
+
+      return;
+    }
+
+    await handleSetWarningPunishment(
+      ctx,
+      value
+    );
+
+    return;
+  }
+
+
+  // ===================================
+  // مدت اخطار
+  // مدت اخطار 60
+  // ===================================
+
+  match =
+    text.match(
+      /^مدت\s+اخطار\s+(.+)$/iu
+    );
+
+  if (match) {
+
+    await handleSetWarningDuration(
+      ctx,
+      match[1].trim()
+    );
+
+    return;
+  }
+
+
+  // ===================================
+  // تنظیمات اخطار
+  // ===================================
+
+  if (
+    /^تنظیمات\s+اخطار$/iu.test(text) ||
+    /^تنظیم\s+اخطار$/iu.test(text)
+  ) {
+
+    // «تنظیم اخطار» بدون مقدار،
+    // فقط در صورتی نمایش تنظیمات می‌دهد
+    // که ریپلای وجود داشته باشد یا مدیر مالک باشد.
+    //
+    // برای جلوگیری از پیام ناخواسته،
+    // فقط مدیر دارای دسترسی پاسخ می‌گیرد.
+
+    if (
+      await hasManagementPermission(
+        ctx,
+        "warn"
+      )
+    ) {
+      await handleWarningSettings(ctx);
+    }
+
+    return;
+  }
+}
+
+
+// =====================================
+// ثبت Listener اصلی مدیریت
+// =====================================
+
+function registerModeration(bot) {
+
+  if (!bot) {
+    throw new Error(
+      "MODERATION: bot is required"
+    );
+  }
+
+  // ===================================
+  // تمام فرمان‌های moderation
+  // از طریق hears
+  // ===================================
+
+  bot.on(
+    "text",
+    async (ctx, next) => {
+
+      try {
+
+        await handleModeration(ctx);
+
+      } catch (error) {
+
+        console.error(
+          "MODERATION HANDLER ERROR:",
+          error
+        );
+      }
+
+      // اجازه بده سایر بخش‌های ربات
+      // مثل links / locks / panel
+      // نیز پیام را بررسی کنند.
+      if (typeof next === "function") {
+        return next();
+      }
+    }
+  );
+
+
+  // ===================================
+  // پاکسازی دوره‌ای سکوت‌ها
+  // ===================================
+
+  const cleanupInterval =
+    setInterval(
+      () => {
+
+        try {
+          cleanupMutes();
+        } catch (error) {
+          console.error(
+            "MODERATION CLEANUP ERROR:",
+            error.message
+          );
+        }
+
+      },
+      60 * 1000
+    );
+
+
+  // ===================================
+  // جلوگیری از نگه داشتن تایمر در
+  // بعضی محیط‌های Hosting
+  // ===================================
+
+  if (
+    cleanupInterval &&
+    typeof cleanupInterval.unref === "function"
+  ) {
+    cleanupInterval.unref();
+  }
+
+  return {
+    cleanup: cleanupMutes
+  };
+}
+
+
+// =====================================
+// Export
 // =====================================
 
 module.exports = {
+  registerModeration,
+
+  handleModeration,
+
   handleBan,
   handleSik,
   handleKick,
@@ -1258,22 +2113,24 @@ module.exports = {
 
   handleWarn,
 
+  handleClearWarnings,
+  handleWarningCount,
+
+  handleSetMaxWarnings,
+  handleSetWarningPunishment,
+  handleSetWarningDuration,
+
+  handleWarningSettings,
+
   getWarningCount,
-  clearWarnings,
-
-  setMaxWarnings,
-  setWarningPunishment,
-  setWarningMuteDuration,
-
   isUserMuted,
-  cleanExpiredMutes,
 
-  parseModerationCommand,
-  handleModeration,
+  cleanupMutes,
 
-  saveChanges
+  saveModerationChanges
 };
 
+
 // =====================================
-// END OF MODERATION.JS
+// پایان moderation.js
 // =====================================
