@@ -622,7 +622,9 @@ function nextPanel(ownerId) {
       )
     ]
   ]);
-}// =====================================
+}
+
+// =====================================
 // صفحه تنظیم حد پیام بلند
 // =====================================
 
@@ -706,6 +708,163 @@ function optionPanel(
 }
 
 // =====================================
+// صفحه عملیات مدیریتی
+// =====================================
+
+function moderationPanel(ownerId) {
+  return Markup.inlineKeyboard([
+    [
+      panelButton(
+        "بن",
+        "moderation_help:ban",
+        ownerId
+      )
+    ],
+
+    [
+      panelButton(
+        "اخراج",
+        "moderation_help:kick",
+        ownerId
+      )
+    ],
+
+    [
+      panelButton(
+        "سیک",
+        "moderation_help:sik",
+        ownerId
+      )
+    ],
+
+    [
+      panelButton(
+        "سکوت",
+        "moderation_help:mute",
+        ownerId
+      )
+    ],
+
+    [
+      panelButton(
+        "خفه",
+        "moderation_help:khafe",
+        ownerId
+      )
+    ],
+
+    [
+      panelButton(
+        "اخطار",
+        "moderation_help:warn",
+        ownerId
+      )
+    ],
+
+    [
+      panelButton(
+        "بازگشت",
+        "users",
+        ownerId
+      )
+    ],
+
+    [
+      panelButton(
+        "بستن پنل",
+        "panel_close",
+        ownerId
+      )
+    ]
+  ]);
+}
+
+// =====================================
+// توضیح عملیات مدیریتی
+// =====================================
+
+const MODERATION_HELP = {
+  ban:
+    `برای بن کردن کاربر:
+
+داخل گروه روی پیام کاربر ریپلای کن و «بن» بفرست.
+
+ربات همان کاربر را بن می‌کند.`,
+
+  kick:
+    `برای اخراج کاربر:
+
+داخل گروه روی پیام کاربر ریپلای کن و «اخراج» بفرست.
+
+ربات همان کاربر را اخراج می‌کند.`,
+
+  sik:
+    `برای اجرای سیک:
+
+داخل گروه روی پیام کاربر ریپلای کن و «سیک» بفرست.
+
+ربات همان کاربر را اخراج می‌کند.`,
+
+  mute:
+    `برای سکوت کاربر:
+
+داخل گروه روی پیام کاربر ریپلای کن و مثلاً «سکوت 1» بفرست.
+
+عدد، مدت سکوت را مشخص می‌کند.`,
+
+  khafe:
+    `برای خفه کردن کاربر:
+
+داخل گروه روی پیام کاربر ریپلای کن و مثلاً «خفه 1» بفرست.
+
+عدد، مدت خفه را مشخص می‌کند.`,
+
+  warn:
+    `برای اخطار دادن:
+
+داخل گروه روی پیام کاربر ریپلای کن و «اخطار» یا «اخطار 3» بفرست.
+
+عدد، تعداد اخطارها را مشخص می‌کند.`
+};
+
+// =====================================
+// صفحه توضیح یک عملیات مدیریتی
+// =====================================
+
+function moderationHelpPanel(
+  ownerId,
+  type
+) {
+  const texts = {
+    ban: "بن",
+    kick: "اخراج",
+    sik: "سیک",
+    mute: "سکوت",
+    khafe: "خفه",
+    warn: "اخطار"
+  };
+
+  const title =
+    texts[type] || "عملیات مدیریتی";
+
+  return Markup.inlineKeyboard([
+    [
+      panelButton(
+        "بازگشت",
+        "moderation_panel",
+        ownerId
+      )
+    ],
+
+    [
+      panelButton(
+        "بستن پنل",
+        "panel_close",
+        ownerId
+      )
+    ]
+  ]);
+      }// =====================================
 // نمایش صفحه ساده
 // =====================================
 
@@ -1514,6 +1673,14 @@ ${settings.enabled ? "★ فعال" : "☆ غیرفعال"}
           Markup.inlineKeyboard([
             [
               panelButton(
+                "عملیات مدیریتی",
+                "moderation_panel",
+                ctx.match[1]
+              )
+            ],
+
+            [
+              panelButton(
                 "بازگشت",
                 "panel_home",
                 ctx.match[1]
@@ -1532,6 +1699,102 @@ ${settings.enabled ? "★ فعال" : "☆ غیرفعال"}
       } catch (error) {
         console.log(
           "USERS PANEL ERROR:",
+          error.message
+        );
+      }
+    }
+  );
+
+// =====================================
+// صفحه عملیات مدیریتی
+// =====================================
+
+  bot.action(
+    /^moderation_panel:(\d+)$/,
+    async ctx => {
+
+      if (!(await protectPanel(ctx))) {
+        return;
+      }
+
+      try {
+        await ctx.answerCbQuery();
+      } catch {}
+
+      try {
+        await ctx.editMessageText(
+          `『𓆩 عملیات مدیریتی 𓆪』
+
+عملیات مدیریت کاربران را انتخاب کنید.
+
+★ فرمان‌ها داخل گروه اجرا می‌شوند.
+★ برای اجرای عملیات روی پیام کاربر ریپلای کنید.`,
+
+          moderationPanel(
+            ctx.match[1]
+          )
+        );
+      } catch (error) {
+        console.log(
+          "MODERATION PANEL ERROR:",
+          error.message
+        );
+      }
+    }
+  );
+
+// =====================================
+// توضیح عملیات مدیریتی
+// =====================================
+
+  bot.action(
+    /^moderation_help:(ban|kick|sik|mute|khafe|warn):(\d+)$/,
+    async ctx => {
+
+      if (!(await protectPanel(ctx))) {
+        return;
+      }
+
+      const type =
+        ctx.match[1];
+
+      const ownerId =
+        ctx.match[2];
+
+      const text =
+        MODERATION_HELP[type];
+
+      if (!text) {
+        return;
+      }
+
+      const titles = {
+        ban: "بن",
+        kick: "اخراج",
+        sik: "سیک",
+        mute: "سکوت",
+        khafe: "خفه",
+        warn: "اخطار"
+      };
+
+      try {
+        await ctx.answerCbQuery();
+      } catch {}
+
+      try {
+        await ctx.editMessageText(
+          `『𓆩 ${titles[type]} 𓆪』
+
+${text}`,
+
+          moderationHelpPanel(
+            ownerId,
+            type
+          )
+        );
+      } catch (error) {
+        console.log(
+          "MODERATION HELP ERROR:",
           error.message
         );
       }
@@ -2027,9 +2290,7 @@ ${settings.enabled ? "★ فعال" : "☆ غیرفعال"}
         }
       }
     );
-  }
-
-// =====================================
+              }// =====================================
 // باز کردن قفل رسانه از صفحه دوم
 // =====================================
 
@@ -2313,7 +2574,9 @@ ${settings.limit} کاراکتر`,
         );
       }
     }
-  );// =====================================
+  );
+
+// =====================================
 // بازگشت به صفحه قفل رسانه
 // =====================================
 
